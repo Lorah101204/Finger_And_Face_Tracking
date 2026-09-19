@@ -36,7 +36,11 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  reporter: [['list'], ['json', { outputFile: 'reports/deploy.json' }]],
+  reporter: [
+    ['list'],
+    ...(process.env.GITHUB_ACTIONS ? [['github'] as const] : []),
+    ['json', { outputFile: 'reports/deploy.json' }],
+  ],
   use: {
     baseURL: `${ORIGIN}${BASE}`,
     trace: 'retain-on-failure',

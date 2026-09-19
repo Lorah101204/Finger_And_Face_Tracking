@@ -22,7 +22,12 @@ export default defineConfig({
   // Playwright xóa thư mục đó đầu mỗi lần chạy).
   workers: process.env.CI ? 2 : 6,
   retries: process.env.CI ? 1 : 0,
-  reporter: [['list'], ['json', { outputFile: 'reports/e2e.json' }]],
+  // REL-01: trong GitHub Actions thêm reporter github để ca đỏ thành annotation của check run (đọc được không cần log).
+  reporter: [
+    ['list'],
+    ...(process.env.GITHUB_ACTIONS ? [['github'] as const] : []),
+    ['json', { outputFile: 'reports/e2e.json' }],
+  ],
   use: {
     baseURL: 'http://127.0.0.1:5174',
     permissions: ['camera'],

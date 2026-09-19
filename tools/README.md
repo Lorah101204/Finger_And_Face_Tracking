@@ -1,5 +1,6 @@
 # tools
 
+- `fetch-spike-assets.mjs` (REL-01): tải lại `public/spike-assets/` (không commit): ảnh mẫu công khai của MediaPipe dùng cho e2e cục bộ và spike (`face.png` = business-person.png, `hands.jpg` = woman_hands.jpg, `thumbs_up.jpg`, `pointing_up.jpg`; sha256 pin trong script), `--all` thêm `mobilenetv2-12.onnx` của ONNX model zoo cho S6; WebM cho S4, S5 tạo bằng `tools/spikes/make-webm.mjs`. Chạy: `npm run spikes:fetch`.
 - `fetch-models.mjs` (SETUP-00, REL-01): tải model `.task`, copy wasm của `@mediapipe/tasks-vision` (chỉ `wasm.files`: loader module + SIMD) và loader ORT (`ort.files`: cặp asyncify và jsep) vào `public/models` theo `public/models/models.json`, xóa file không còn trong manifest, sinh model stub. Chạy: `npm run models:fetch`.
 - `spikes/` (SPIKE-00): trang spike `s1.html` đến `s6.html` chạy trên dev server; `mp.worker.ts` và `mp.classic.worker.js` là hai kiểu worker MediaPipe đã thử; `make-webm.mjs` tạo WebM mẫu; `run-spike.mjs` chạy một trang trong Chromium headless và ghi `docs/spikes/raw/`. Kết quả: `docs/spikes.md`.
 - `make_test_clips.py` (TEST-00): tạo clip y4m tổng hợp cho Playwright.

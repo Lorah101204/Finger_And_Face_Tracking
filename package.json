@@ -24,7 +24,8 @@
     "bench:report": "node tools/benchmark-report.mjs",
     "screenshots": "node tools/screenshots.mjs",
     "check:invariants": "node tools/check-invariants.mjs",
-    "models:fetch": "node tools/fetch-models.mjs"
+    "models:fetch": "node tools/fetch-models.mjs",
+    "spikes:fetch": "node tools/fetch-spike-assets.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",
