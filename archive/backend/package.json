@@ -1,0 +1,58 @@
+{
+  "name": "finger-and-face-tracking",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Web Camera Tracking: màn pixel trắng, cửa sổ vuông mở bằng bốn đầu ngón tay, face tracking chỉ trong vùng mở",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "lint:boundaries": "eslint -c eslint.boundaries.config.js \"src/face/**/*.ts\" \"src/classify/**/*.ts\"",
+    "format": "prettier --write .",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "models:fetch": "node tools/fetch-models.mjs",
+    "dev:server": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env --import tsx --watch server/src/index.ts --port=3000 --host=127.0.0.1",
+    "dev:all": "concurrently -n web,api -c cyan,magenta \"npm:dev\" \"npm:dev:server\"",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env dist-server/server/src/index.js"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/static": "^10.1.3",
+    "@mediapipe/tasks-vision": "^1.0.1",
+    "fastify": "^5.12.5",
+    "onnxruntime-web": "^1.30.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^8.4.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.12.0",
+    "mermaid": "^12.0.0",
+    "prettier": "^3.9.7",
+    "tsx": "^4.23.13",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  }
+}
