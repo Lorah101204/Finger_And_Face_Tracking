@@ -71,21 +71,52 @@ const server = createServer((req, res) => {
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
 const { port } = server.address()
 
-const browser = await chromium.launch({ headless: true })
-const page = await browser.newPage()
-page.on('pageerror', (e) => console.log('[pageerror]', e.message))
-page.on('requestfailed', (r) => console.log('[requestfailed]', r.url(), r.failure()?.errorText))
-await page.goto(`http://127.0.0.1:${port}/check.html`)
-await page.waitForFunction(
-  () => document.getElementById('out').textContent.includes('DONE'),
-  null,
-  {
-    timeout: 60000,
-  },
-)
-const text = await page.locator('#out').textContent()
-await browser.close()
+/**
+ * REL-01: trong GitHub Actions, in thêm lệnh workflow `::error` để thông điệp lỗi thành annotation của check run (đọc
+ * được qua API công khai, không cần tải log). Xuống dòng mã hóa %0A theo quy ước của Actions.
+ */
+function annotate(message) {
+  if (!process.env.GITHUB_ACTIONS) return
+  const one = message.replace(/\r?\n/g, '%0A').slice(0, 4000)
+  console.log(`::error title=check-mermaid ${file}::${one}`)
+}
+
+const logs = []
+let text = ''
+try {
+  const browser = await chromium.launch({ headless: true })
+  const page = await browser.newPage()
+  page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`))
+  page.on('console', (m) => {
+    if (m.type() === 'error' || m.type() === 'warning')
+      logs.push(`[console.${m.type()}] ${m.text()}`)
+  })
+  page.on('requestfailed', (r) => logs.push(`[requestfailed] ${r.url()} ${r.failure()?.errorText}`))
+  await page.goto(`http://127.0.0.1:${port}/check.html`)
+  await page.waitForFunction(
+    () => document.getElementById('out').textContent.includes('DONE'),
+    null,
+    { timeout: 120000 },
+  )
+  text = await page.locator('#out').textContent()
+  await browser.close()
+} catch (err) {
+  const msg = `${file}: không render được: ${err?.message ?? err}\n${logs.join('\n')}`
+  console.error(msg)
+  annotate(msg)
+  server.close()
+  process.exit(1)
+}
 server.close()
+for (const l of logs) console.log(l)
 console.log(`${file}: ${blocks.length} sơ đồ`)
 console.log(text)
-process.exit(text.includes('ERROR') ? 1 : 0)
+if (text.includes('ERROR')) {
+  annotate(
+    text
+      .split('\n')
+      .filter((l) => l.startsWith('ERROR'))
+      .join('\n') + (logs.length ? '\n' + logs.join('\n') : ''),
+  )
+  process.exit(1)
+}
