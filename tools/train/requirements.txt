@@ -1,0 +1,8 @@
+# CLS-02: môi trường huấn luyện và export (không cần cho app hay CI; metrics.py và test_metrics.py chỉ dùng thư viện chuẩn).
+# python -m venv .venv && .venv/Scripts/pip install -r tools/train/requirements.txt
+torch>=2.3
+torchvision>=0.18
+Pillow>=10
+numpy>=1.26
+onnx>=1.16
+onnxruntime>=1.18

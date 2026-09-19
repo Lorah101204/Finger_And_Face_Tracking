@@ -1,0 +1,174 @@
+{
+  "spike": "S2",
+  "source": "1280x720 canvas, ảnh tay tĩnh letterbox + dấu đỏ chuyển động; không có webcam thật",
+  "frames": 300,
+  "blankFrames": 100,
+  "wasmBase": "/models/wasm",
+  "mainGPU": {
+    "initMs": 229,
+    "withHands": {
+      "detect": {
+        "n": 300,
+        "p50": 69.5,
+        "p95": 76.5,
+        "mean": 69.16,
+        "min": 61.2,
+        "max": 83.8
+      },
+      "hands": 2
+    },
+    "blank": {
+      "detect": {
+        "n": 100,
+        "p50": 20.8,
+        "p95": 21.5,
+        "mean": 21.33,
+        "min": 19.8,
+        "max": 70
+      },
+      "hands": 0
+    }
+  },
+  "mainCPU": {
+    "initMs": 130,
+    "withHands": {
+      "detect": {
+        "n": 300,
+        "p50": 53.9,
+        "p95": 59.3,
+        "mean": 53.28,
+        "min": 47.1,
+        "max": 72.4
+      },
+      "hands": 2
+    },
+    "blank": {
+      "detect": {
+        "n": 100,
+        "p50": 34.8,
+        "p95": 38.9,
+        "mean": 35.27,
+        "min": 31.4,
+        "max": 55.6
+      },
+      "hands": 0
+    }
+  },
+  "workerModuleGPU": {
+    "error": "Error: TypeError: Failed to fetch dynamically imported module: http://localhost:5173/models/wasm/vision_wasm_internal.js?import"
+  },
+  "workerClassicGPU": {
+    "initMs": 132,
+    "withHands": {
+      "createImageBitmap": {
+        "n": 300,
+        "p50": 0.1,
+        "p95": 0.2,
+        "mean": 0.09,
+        "min": 0,
+        "max": 0.3
+      },
+      "roundTrip": {
+        "n": 300,
+        "p50": 62.4,
+        "p95": 69.6,
+        "mean": 62.25,
+        "min": 54.9,
+        "max": 70.2
+      },
+      "detectInWorker": {
+        "n": 300,
+        "p50": 62.2,
+        "p95": 69.5,
+        "mean": 62.04,
+        "min": 54.6,
+        "max": 70.1
+      },
+      "hands": 2
+    },
+    "blank": {
+      "createImageBitmap": {
+        "n": 100,
+        "p50": 0.1,
+        "p95": 0.1,
+        "mean": 0.07,
+        "min": 0,
+        "max": 0.2
+      },
+      "roundTrip": {
+        "n": 100,
+        "p50": 20.5,
+        "p95": 21.5,
+        "mean": 19.32,
+        "min": 13.6,
+        "max": 62.1
+      },
+      "detectInWorker": {
+        "n": 100,
+        "p50": 20.3,
+        "p95": 21.3,
+        "mean": 19.12,
+        "min": 13.3,
+        "max": 61.9
+      },
+      "hands": 0
+    }
+  },
+  "workerClassicCPU": {
+    "initMs": 163,
+    "withHands": {
+      "createImageBitmap": {
+        "n": 300,
+        "p50": 0.1,
+        "p95": 0.2,
+        "mean": 0.08,
+        "min": 0,
+        "max": 0.3
+      },
+      "roundTrip": {
+        "n": 300,
+        "p50": 49.1,
+        "p95": 56.9,
+        "mean": 49.78,
+        "min": 41.1,
+        "max": 72.5
+      },
+      "detectInWorker": {
+        "n": 300,
+        "p50": 48.9,
+        "p95": 56.7,
+        "mean": 49.55,
+        "min": 41,
+        "max": 70.5
+      },
+      "hands": 2
+    },
+    "blank": {
+      "createImageBitmap": {
+        "n": 100,
+        "p50": 0.1,
+        "p95": 0.2,
+        "mean": 0.07,
+        "min": 0,
+        "max": 0.3
+      },
+      "roundTrip": {
+        "n": 100,
+        "p50": 27.7,
+        "p95": 30,
+        "mean": 28.1,
+        "min": 25.3,
+        "max": 45.2
+      },
+      "detectInWorker": {
+        "n": 100,
+        "p50": 27.5,
+        "p95": 29.8,
+        "mean": 27.88,
+        "min": 25.2,
+        "max": 45
+      },
+      "hands": 0
+    }
+  }
+}

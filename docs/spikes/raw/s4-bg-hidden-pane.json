@@ -1,0 +1,19 @@
+{
+  "spike": "S4",
+  "phase": "bg",
+  "note": "Thử đo tab nền trong pane trình duyệt tích hợp của Claude desktop khi pane bị ẩn (document.visibilityState = hidden, rAF = 0/s). Nguồn WebM 16 s nạp xong (readyState 4, không lỗi) nhưng video.play() không bao giờ resolve: host tạm dừng media khi pane ẩn, khác với tab nền của Chrome thường (muted video vẫn phát). Vì vậy không đo được rVFC/MSTP khi tab nền ở đây; cần kiểm tra thủ công 10 s trên Chrome thật với webcam (xem spikes.md). Bài học cho CAM-01: ngoài visibilitychange, cần watchdog 'không có FrameStamp quá N ms' để đóng vùng, vì host có thể dừng media mà không đổi visibilityState kịp thời.",
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Claude/2.110.0 Chrome/152.0.7977.76 Safari/537.36 MSIX",
+  "visibilityAtStart": "hidden",
+  "hasRvfc": true,
+  "hasMSTP": true,
+  "video": {
+    "src": "/spike-assets/test.webm",
+    "readyState": 4,
+    "networkState": 1,
+    "error": null,
+    "paused": true,
+    "currentTime": 0,
+    "muted": true
+  },
+  "rafPerSecWhileHidden": 0
+}

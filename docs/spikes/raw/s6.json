@@ -1,0 +1,56 @@
+{
+  "spike": "S6",
+  "note": "Chạy trong trình duyệt tích hợp (Chrome 152, pane ẩn). mobilenetv2-12.onnx của ONNX model zoo có input cố định 1x3x224x224 nên 128 px lỗi; model tự huấn luyện ở CLS-02 sẽ export đúng kích thước input mong muốn. wasm đơn luồng vì crossOriginIsolated=false. Loader ORT được phục vụ từ node_modules qua Vite khi dev vì Vite dev không cho import() file trong public/.",
+  "ortVersions": {
+    "common": "1.30.0",
+    "web": "1.30.0"
+  },
+  "hardwareConcurrency": 16,
+  "crossOriginIsolated": false,
+  "hasWebGPU": true,
+  "wasm_128": {
+    "initMs": 1078,
+    "inputNames": [
+      "input"
+    ],
+    "error": "Error: failed to call OrtRun(). ERROR_CODE: 2, ERROR_MESSAGE: Got invalid dimensions for input: input for the following indices\n index: 2 Got: 128 Expected: 224\n index: 3 Got: 128 Expected: 224\n Please fix either the inputs/outputs or the model."
+  },
+  "wasm_224": {
+    "initMs": 238,
+    "inputNames": [
+      "input"
+    ],
+    "firstRunMs": 139,
+    "run": {
+      "n": 30,
+      "p50": 59.3,
+      "p95": 66.1,
+      "mean": 59.2,
+      "min": 51.3,
+      "max": 71.9
+    }
+  },
+  "webgpuEntry": "onnxruntime-web/webgpu",
+  "webgpu_128": {
+    "initMs": 1311,
+    "inputNames": [
+      "input"
+    ],
+    "error": "Error: failed to call OrtRun(). ERROR_CODE: 2, ERROR_MESSAGE: Got invalid dimensions for input: input for the following indices\n index: 2 Got: 128 Expected: 224\n index: 3 Got: 128 Expected: 224\n Please fix either the inputs/outputs or the model."
+  },
+  "webgpu_224": {
+    "initMs": 385,
+    "inputNames": [
+      "input"
+    ],
+    "firstRunMs": 428,
+    "run": {
+      "n": 30,
+      "p50": 19,
+      "p95": 27.2,
+      "mean": 19.03,
+      "min": 11.5,
+      "max": 28.1
+    }
+  }
+}

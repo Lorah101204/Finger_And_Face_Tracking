@@ -1,0 +1,225 @@
+{
+  "spike": "S1",
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Claude/2.110.0 Chrome/152.0.7977.76 Safari/537.36 MSIX",
+  "webgl": {
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+    "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Laptop GPU (0x000025A2) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "vendor": "Google Inc. (NVIDIA)"
+  },
+  "image": {
+    "w": 958,
+    "h": 1358
+  },
+  "sizes": [
+    64,
+    128,
+    256
+  ],
+  "iterations": 40,
+  "faceCrop": {
+    "found": true,
+    "sx": 295,
+    "sy": 122,
+    "side": 392
+  },
+  "workerModuleGPU": {
+    "error": "Error: TypeError: Failed to fetch dynamically imported module: http://localhost:5173/models/wasm/vision_wasm_internal.js?import"
+  },
+  "workerModuleCPU": {
+    "error": "Error: TypeError: Failed to fetch dynamically imported module: http://localhost:5173/models/wasm/vision_wasm_internal.js?import"
+  },
+  "workerClassicGPU": {
+    "initMs": 162,
+    "warmMs": 203,
+    "px64": {
+      "detect": {
+        "n": 40,
+        "p50": 15.2,
+        "p95": 22.1,
+        "mean": 16,
+        "min": 12.5,
+        "max": 28.4
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 15.5,
+        "p95": 22.3,
+        "mean": 16.34,
+        "min": 12.7,
+        "max": 30.1
+      },
+      "faces": 1
+    },
+    "px128": {
+      "detect": {
+        "n": 40,
+        "p50": 14.3,
+        "p95": 17,
+        "mean": 14.53,
+        "min": 12.1,
+        "max": 20.2
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 14.6,
+        "p95": 17.3,
+        "mean": 14.88,
+        "min": 12.4,
+        "max": 20.8
+      },
+      "faces": 1
+    },
+    "px256": {
+      "detect": {
+        "n": 40,
+        "p50": 14.4,
+        "p95": 16.1,
+        "mean": 14.42,
+        "min": 12.2,
+        "max": 16.6
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 14.9,
+        "p95": 16.8,
+        "mean": 14.84,
+        "min": 12.4,
+        "max": 20
+      },
+      "faces": 1
+    }
+  },
+  "workerClassicCPU": {
+    "initMs": 145,
+    "warmMs": 71,
+    "px64": {
+      "detect": {
+        "n": 40,
+        "p50": 40,
+        "p95": 44.5,
+        "mean": 39.99,
+        "min": 35.3,
+        "max": 49.4
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 40.7,
+        "p95": 44.7,
+        "mean": 40.56,
+        "min": 35.8,
+        "max": 49.8
+      },
+      "faces": 1
+    },
+    "px128": {
+      "detect": {
+        "n": 40,
+        "p50": 39.1,
+        "p95": 44.2,
+        "mean": 39.54,
+        "min": 30,
+        "max": 47.2
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 39.5,
+        "p95": 44.5,
+        "mean": 39.89,
+        "min": 30.3,
+        "max": 47.4
+      },
+      "faces": 1
+    },
+    "px256": {
+      "detect": {
+        "n": 40,
+        "p50": 38.9,
+        "p95": 43.6,
+        "mean": 39.22,
+        "min": 35,
+        "max": 46
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 39.3,
+        "p95": 44,
+        "mean": 39.57,
+        "min": 35.3,
+        "max": 46.2
+      },
+      "faces": 1
+    }
+  },
+  "mainGPU": {
+    "initMs": 136,
+    "px64": {
+      "detect": {
+        "n": 40,
+        "p50": 14.8,
+        "p95": 19.5,
+        "mean": 20.13,
+        "min": 12,
+        "max": 213.8
+      },
+      "faces": 1
+    },
+    "px128": {
+      "detect": {
+        "n": 40,
+        "p50": 14.4,
+        "p95": 16,
+        "mean": 14.03,
+        "min": 11.4,
+        "max": 16.1
+      },
+      "faces": 1
+    },
+    "px256": {
+      "detect": {
+        "n": 40,
+        "p50": 13.8,
+        "p95": 16.3,
+        "mean": 13.85,
+        "min": 10.1,
+        "max": 16.8
+      },
+      "faces": 1
+    }
+  },
+  "mainCPU": {
+    "initMs": 136,
+    "px64": {
+      "detect": {
+        "n": 40,
+        "p50": 39.6,
+        "p95": 45,
+        "mean": 40.65,
+        "min": 34.7,
+        "max": 71.2
+      },
+      "faces": 1
+    },
+    "px128": {
+      "detect": {
+        "n": 40,
+        "p50": 38.5,
+        "p95": 45,
+        "mean": 39.63,
+        "min": 33,
+        "max": 47.1
+      },
+      "faces": 1
+    },
+    "px256": {
+      "detect": {
+        "n": 40,
+        "p50": 38.9,
+        "p95": 44,
+        "mean": 39.32,
+        "min": 34.7,
+        "max": 45.6
+      },
+      "faces": 1
+    }
+  }
+}

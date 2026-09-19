@@ -1,0 +1,59 @@
+{
+  "note": "Model chạy tại chỗ, không phụ thuộc CDN. Tải bằng `npm run models:fetch` (tools/fetch-models.mjs). sha256 được pin ở lần tải đầu.",
+  "models": [
+    {
+      "name": "hand_landmarker",
+      "file": "hand_landmarker.task",
+      "version": "float16/1",
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "source": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      "docs": "https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker"
+    },
+    {
+      "name": "face_landmarker",
+      "file": "face_landmarker.task",
+      "version": "float16/1",
+      "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+      "source": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+      "docs": "https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker"
+    }
+  ],
+  "wasm": {
+    "package": "@mediapipe/tasks-vision",
+    "version": "1.0.1",
+    "dest": "wasm/",
+    "note": "REL-01 (D-050): chỉ copy loader module + SIMD mà FilesetResolver.forVisionTasks(base, useModuleLoader=true) xin; các biến thể classic và nosimd không dùng.",
+    "files": [
+      "vision_wasm_module_internal.js",
+      "vision_wasm_module_internal.wasm"
+    ]
+  },
+  "ort": {
+    "note": "CLS-02 (D-013), REL-01 (D-050): loader wasm của onnxruntime-web cho build tĩnh (dev dùng node_modules). Bundle webgpu (onnxruntime-web/webgpu) xin cặp asyncify, bundle wasm (onnxruntime-web) xin cặp jsep; unit tests/unit/ortLoaderFiles.test.ts đối chiếu với node_modules.",
+    "package": "onnxruntime-web",
+    "version": "1.30.0",
+    "dest": "ort/",
+    "files": [
+      "ort-wasm-simd-threaded.asyncify.mjs",
+      "ort-wasm-simd-threaded.asyncify.wasm",
+      "ort-wasm-simd-threaded.jsep.mjs",
+      "ort-wasm-simd-threaded.jsep.wasm"
+    ]
+  },
+  "classifier": {
+    "note": "CLS-02 (D-044): chưa có model huấn luyện; classifier-stub.onnx do tools/make-stub-classifier.mjs sinh (person = G - (R + B) / 2). Model thật: tools/train/export_onnx.py -> classifier.onnx, ghi sha256 vào đây.",
+    "stub": "classifier-stub.onnx",
+    "file": "classifier.onnx",
+    "sha256": "",
+    "inputSize": 128,
+    "labels": [
+      "person",
+      "mannequin"
+    ],
+    "norm": {
+      "mean": 0.45,
+      "std": 0.225
+    },
+    "opset": 17
+  }
+}

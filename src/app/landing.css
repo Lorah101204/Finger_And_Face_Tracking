@@ -1,0 +1,372 @@
+/*
+ * UX-02 (D-023): màn hình bắt đầu. Mọi màu, chữ, khoảng cách lấy từ biến trong app.css (dùng chung với sân khấu).
+ * Một màn ở 1280 × 720 trở lên: hai cột (chữ và minh họa) căn giữa theo chiều dọc, không cuộn; dưới 900 px một cột.
+ * Không tải font hay ảnh ngoài (I9): minh họa là canvas vẽ tại chỗ (LandingPreview, UX-03).
+ * UX-03 (D-049): dòng eyebrow, stepper ngang có nối, hộp đồng ý viền accent khi đã tích, nút Bắt đầu 44 px; chế độ
+ * kiosk (.kiosk, ?mode=present): lưới phủ cả màn, thẻ đồng ý nổi, nút 56 px.
+ */
+.landing {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 6fr);
+  align-items: center;
+  gap: clamp(24px, 4vw, 64px);
+  box-sizing: border-box;
+  min-height: 100vh;
+  min-height: 100dvh;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vh, 40px) clamp(16px, 4vw, 48px);
+}
+
+.landing-copy {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 600px;
+}
+
+/* Dòng eyebrow: cam kết ngắn nhất, nền ok-soft, chữ 4,6:1. */
+.landing .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: 100%;
+  height: 26px;
+  margin: 0;
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: #137333;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.landing .eyebrow .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.landing h1 {
+  margin: 0;
+  font-size: clamp(28px, 3.2vw, 42px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.landing .lead {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* Ba dòng cam kết riêng tư: dấu tích vẽ bằng CSS, không dùng ảnh. */
+.landing .pledges {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.landing .pledges li {
+  position: relative;
+  padding-left: 28px;
+}
+
+.landing .pledges li::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 0;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.landing .pledges li::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 6px;
+  width: 5px;
+  height: 8px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(45deg);
+}
+
+/* Hộp đồng ý và nút Bắt đầu: cấu trúc form của WEB-00 giữ nguyên (label chứa checkbox, nút submit). */
+.landing .consent-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4) 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.landing .consent-card.agreed {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.landing label.consent {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.landing label.consent input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.landing .consent-card .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.landing .consent-card button[type='submit'] {
+  height: 44px;
+  padding: 0 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.landing .small {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* Ba bước (stepper ngang có nối), cùng nhãn với lớp hướng dẫn trên sân khấu (UX-01). */
+.landing .steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.landing .steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.landing .steps li + li::before {
+  content: '';
+  width: 22px;
+  height: 1px;
+  margin-right: 2px;
+  background: var(--line);
+}
+
+.landing .steps .num {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Minh họa động: canvas 16:9, viền và bóng nhẹ; chỉ trong cửa sổ có hình. */
+.landing-art {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  margin: 0;
+  min-width: 0;
+}
+
+.landing-art canvas {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 40px rgba(25, 103, 210, 0.1);
+}
+
+.landing-art figcaption {
+  font-size: 13px;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+/* Kiosk (?mode=present): lưới phủ cả màn (canvas nền), thẻ đồng ý nổi lệch trái để khuôn mặt mẫu bên phải không bị che. */
+.landing.kiosk {
+  position: fixed;
+  inset: 0;
+  display: block;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.landing.kiosk .kiosk-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.landing.kiosk .kiosk-card {
+  position: absolute;
+  top: 50%;
+  left: 31%;
+  display: grid;
+  gap: var(--space-4);
+  justify-items: center;
+  box-sizing: border-box;
+  width: min(620px, calc(100% - 32px));
+  padding: 32px 36px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18);
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+.landing.kiosk .kiosk-card .lead {
+  font-size: 16px;
+  max-width: 44ch;
+}
+
+.landing.kiosk .pledges.compact {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.landing.kiosk .pledges.compact li {
+  padding-left: 22px;
+}
+
+.landing.kiosk .pledges.compact li::before {
+  top: 1px;
+  width: 16px;
+  height: 16px;
+}
+
+.landing.kiosk .pledges.compact li::after {
+  top: 4px;
+  left: 5.5px;
+  width: 4px;
+  height: 7px;
+}
+
+.landing.kiosk .consent-card {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  justify-items: center;
+}
+
+.landing.kiosk .consent-card.agreed {
+  box-shadow: none;
+}
+
+.landing.kiosk label.consent {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.landing.kiosk .consent-card .actions {
+  justify-content: center;
+}
+
+.landing.kiosk .consent-card button[type='submit'] {
+  height: 56px;
+  padding: 0 40px;
+  border-radius: 14px;
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(25, 103, 210, 0.3);
+}
+
+.landing.kiosk .consent-card button[type='submit']:disabled {
+  box-shadow: none;
+}
+
+.landing.kiosk .steps {
+  justify-content: center;
+}
+
+.landing .kiosk-corner {
+  position: absolute;
+  right: 20px;
+  bottom: 16px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .consent-card {
+    transition: none;
+  }
+}
+
+@media (max-width: 899px) {
+  .landing {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    min-height: 0;
+  }
+
+  .landing-art {
+    order: -1;
+  }
+
+  .landing-art canvas {
+    max-width: 420px;
+  }
+
+  .landing.kiosk .kiosk-card {
+    left: 50%;
+  }
+}

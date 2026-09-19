@@ -1,0 +1,96 @@
+{
+  "spike": "S3",
+  "note": "Ảnh chưa mirror = tương đương frame webcam thô. Đối chiếu bằng mắt: pointing_up = tay TRÁI người mẫu (giơ bên phải khung, lòng bàn tay hướng camera); hands.jpg: tay phía trên bên phải khung = tay PHẢI (cánh tay từ vai phải vắt qua trán), tay phía dưới bên trái khung = tay TRÁI; thumbs_up = tay PHẢI (người quay nghiêng). Nhãn MediaPipe 1.0.1 trên ảnh chưa mirror TRÙNG với tay giải phẫu; lật ngang thì nhãn đảo.",
+  "images": {
+    "/spike-assets/hands.jpg": {
+      "raw": [
+        {
+          "label": "Left",
+          "score": 0.94,
+          "wristX": 0.396,
+          "thumbTipX": 0.159,
+          "pinkyTipX": 0.087,
+          "thumbSideInImage": "phải ảnh",
+          "centerX": 0.158
+        },
+        {
+          "label": "Right",
+          "score": 0.96,
+          "wristX": 0.473,
+          "thumbTipX": 0.667,
+          "pinkyTipX": 0.664,
+          "thumbSideInImage": "phải ảnh",
+          "centerX": 0.643
+        }
+      ],
+      "mirrored": [
+        {
+          "label": "Right",
+          "score": 0.99,
+          "wristX": 0.612,
+          "thumbTipX": 0.842,
+          "pinkyTipX": 0.915,
+          "thumbSideInImage": "trái ảnh",
+          "centerX": 0.843
+        },
+        {
+          "label": "Left",
+          "score": 0.95,
+          "wristX": 0.532,
+          "thumbTipX": 0.332,
+          "pinkyTipX": 0.34,
+          "thumbSideInImage": "trái ảnh",
+          "centerX": 0.36
+        }
+      ]
+    },
+    "/spike-assets/thumbs_up.jpg": {
+      "raw": [
+        {
+          "label": "Right",
+          "score": 0.98,
+          "wristX": 0.622,
+          "thumbTipX": 0.648,
+          "pinkyTipX": 0.701,
+          "thumbSideInImage": "trái ảnh",
+          "centerX": 0.691
+        }
+      ],
+      "mirrored": [
+        {
+          "label": "Left",
+          "score": 0.91,
+          "wristX": 0.378,
+          "thumbTipX": 0.35,
+          "pinkyTipX": 0.296,
+          "thumbSideInImage": "phải ảnh",
+          "centerX": 0.31
+        }
+      ]
+    },
+    "/spike-assets/pointing_up.jpg": {
+      "raw": [
+        {
+          "label": "Left",
+          "score": 0.99,
+          "wristX": 0.798,
+          "thumbTipX": 0.753,
+          "pinkyTipX": 0.802,
+          "thumbSideInImage": "trái ảnh",
+          "centerX": 0.771
+        }
+      ],
+      "mirrored": [
+        {
+          "label": "Right",
+          "score": 0.99,
+          "wristX": 0.209,
+          "thumbTipX": 0.246,
+          "pinkyTipX": 0.196,
+          "thumbSideInImage": "phải ảnh",
+          "centerX": 0.23
+        }
+      ]
+    }
+  }
+}

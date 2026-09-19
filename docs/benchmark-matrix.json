@@ -1,0 +1,763 @@
+[
+  {
+    "startedAt": "2026-09-18T17:52:33.043Z",
+    "seconds": 20,
+    "project": "chrome",
+    "browser": {
+      "name": "chromium",
+      "version": "153.0.8010.52",
+      "channel": "chrome",
+      "headless": true,
+      "playwrightVersion": "1.63.0",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36"
+    },
+    "machine": {
+      "os": "Windows_NT 10.0.26200 (x64)",
+      "cpu": "12th Gen Intel(R) Core(TM) i5-12500H",
+      "threads": 16,
+      "memGB": 16,
+      "node": "v24.11.0",
+      "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU"
+    },
+    "env": {
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+      "browser": {
+        "name": "Chrome",
+        "version": "153"
+      },
+      "platform": "Win32",
+      "threads": 16,
+      "deviceMemoryGB": 16,
+      "dpr": 1,
+      "secureContext": true,
+      "crossOriginIsolated": false,
+      "webgl": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Laptop GPU (0x000025A2) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "features": {
+        "rvfc": true,
+        "offscreenCanvas": true,
+        "moduleWorker": true,
+        "imageBitmap": true,
+        "webgpu": true,
+        "wasmSimd": true,
+        "sharedArrayBuffer": false,
+        "fullscreen": true,
+        "directoryPicker": true,
+        "getUserMedia": true
+      }
+    },
+    "adapter": {
+      "vendor": "nvidia",
+      "architecture": "ampere",
+      "description": ""
+    },
+    "faceWorker": {
+      "delegate": "GPU",
+      "initMs": 376.5,
+      "warmupMs": 2708.0999999940395
+    },
+    "mouse": {
+      "scene": "face.png",
+      "seconds": 20,
+      "samples": 20,
+      "fpsMedian": 143.94242303046607,
+      "fpsMin": 139.51620997733193,
+      "faceHzMedian": 11.495401839238609,
+      "faceP50Median": 32.20000000298023,
+      "faceP95Max": 72.79999999701977,
+      "facePendingMax": 1,
+      "handHzMedian": 0,
+      "handP50Median": 0,
+      "handP95Median": 0,
+      "handP95Max": 0,
+      "clsHzMedian": 3.993809595124581,
+      "renderP95Max": 0.4000000059604645,
+      "tickP95Max": 0.9000000059604645,
+      "faceInterval": {
+        "p50": 88.70000000298023,
+        "p95": 103.90000000596046,
+        "max": 125.10000000149012,
+        "n": 230
+      },
+      "handInterval": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 0
+      },
+      "clsInterval": {
+        "p50": 259.6000000014901,
+        "p95": 272.1000000014901,
+        "max": 278,
+        "n": 76
+      },
+      "faceAge": {
+        "p50": 53.5,
+        "p95": 73,
+        "max": 113.10000000149012,
+        "n": 231
+      },
+      "clsAge": {
+        "p50": 37.099999994039536,
+        "p95": 61,
+        "max": 69.20000000298023,
+        "n": 77
+      },
+      "tipJitterPx": null,
+      "tipFrames": 0,
+      "faceAccepted": 237,
+      "faceStale": 0,
+      "facesSeen": 1,
+      "cls": {
+        "ep": "webgpu",
+        "initMs": 931.3999999985099,
+        "warmupMs": 102.5,
+        "p50": 18.700000002980232,
+        "p95": 29,
+        "results": 80,
+        "accepted": 79,
+        "stale": 0
+      }
+    },
+    "clsWasm": {
+      "ep": "wasm",
+      "initMs": 706.7000000029802,
+      "warmupMs": 11.799999997019768,
+      "p50": 4.899999998509884,
+      "p95": 8.600000001490116,
+      "hz": 3.997801209331889
+    },
+    "hands": {
+      "CPU": {
+        "seconds": 20,
+        "samples": 20,
+        "fpsMedian": 143.920843535948,
+        "fpsMin": 126.75283197773786,
+        "faceHzMedian": 11.500575028760007,
+        "faceP50Median": 13.199999995529652,
+        "faceP95Max": 27.5,
+        "facePendingMax": 1,
+        "handHzMedian": 11.492529855610979,
+        "handP50Median": 83.19999999552965,
+        "handP95Median": 88.29999999701977,
+        "handP95Max": 102.90000000596046,
+        "clsHzMedian": 3.997401688908166,
+        "renderP95Max": 0.4000000059604645,
+        "tickP95Max": 0.8999999985098839,
+        "faceInterval": {
+          "p50": 89.30000000447035,
+          "p95": 97.89999999850988,
+          "max": 105.69999999552965,
+          "n": 229
+        },
+        "handInterval": {
+          "p50": 90,
+          "p95": 97.10000000149012,
+          "max": 113.19999999552965,
+          "n": 227
+        },
+        "clsInterval": {
+          "p50": 258,
+          "p95": 271.3999999985099,
+          "max": 278.20000000298023,
+          "n": 73
+        },
+        "faceAge": {
+          "p50": 33.599999994039536,
+          "p95": 50.19999999552965,
+          "max": 65,
+          "n": 230
+        },
+        "clsAge": {
+          "p50": 40.599999994039536,
+          "p95": 57.20000000298023,
+          "max": 64.80000000447035,
+          "n": 74
+        },
+        "tipJitterPx": 0.0406452328822071,
+        "tipFrames": 229,
+        "requested": "CPU",
+        "delegate": "CPU",
+        "initMs": 676,
+        "warmupMs": 133.70000000298023,
+        "results": 241,
+        "openFraction": 1,
+        "tipJitterCells": 0.0020322616441103554
+      },
+      "GPU": {
+        "seconds": 20,
+        "samples": 20,
+        "fpsMedian": 143.8992705107497,
+        "fpsMin": 88.56199339531074,
+        "faceHzMedian": 11.503451035276301,
+        "faceP50Median": 16.299999997019768,
+        "faceP95Max": 32,
+        "facePendingMax": 1,
+        "handHzMedian": 28.94500449140164,
+        "handP50Median": 26.099999994039536,
+        "handP95Median": 39,
+        "handP95Max": 48,
+        "clsHzMedian": 3.9968025579506614,
+        "renderP95Max": 0.3999999985098839,
+        "tickP95Max": 0.8999999985098839,
+        "faceInterval": {
+          "p50": 87.5,
+          "p95": 97.70000000298023,
+          "max": 138.70000000298023,
+          "n": 229
+        },
+        "handInterval": {
+          "p50": 34.399999998509884,
+          "p95": 49,
+          "max": 76.59999999403954,
+          "n": 578
+        },
+        "clsInterval": {
+          "p50": 263.69999999552965,
+          "p95": 277.29999999701977,
+          "max": 285.30000000447035,
+          "n": 73
+        },
+        "faceAge": {
+          "p50": 35.600000001490116,
+          "p95": 53.5,
+          "max": 62.70000000298023,
+          "n": 230
+        },
+        "clsAge": {
+          "p50": 43.30000000447035,
+          "p95": 58.900000005960464,
+          "max": 63.900000005960464,
+          "n": 74
+        },
+        "tipJitterPx": 0.12267238996270342,
+        "tipFrames": 580,
+        "requested": "GPU",
+        "delegate": "GPU",
+        "initMs": 691.1999999955297,
+        "warmupMs": 3666.7999999970198,
+        "results": 607,
+        "openFraction": 1,
+        "tipJitterCells": 0.006133619498135171
+      }
+    },
+    "config": {
+      "pointMaxAgeMs": 150,
+      "pointMaxAgeMsCpu": 250,
+      "faceResultMaxAgeMs": 250,
+      "classifierResultMaxAgeMs": 600,
+      "labelMaxAgeMs": 1500,
+      "hysteresisCells": 0.25,
+      "handsDelegate": "auto",
+      "handsDelegateResolved": "GPU",
+      "faceDelegate": "GPU",
+      "faceTargetHz": 12,
+      "classifierTargetHz": 4
+    }
+  },
+  {
+    "startedAt": "2026-09-18T17:50:53.380Z",
+    "seconds": 20,
+    "project": "chromium",
+    "browser": {
+      "name": "chromium",
+      "version": "153.0.8010.12",
+      "channel": null,
+      "headless": true,
+      "playwrightVersion": "1.63.0",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36"
+    },
+    "machine": {
+      "os": "Windows_NT 10.0.26200 (x64)",
+      "cpu": "12th Gen Intel(R) Core(TM) i5-12500H",
+      "threads": 16,
+      "memGB": 16,
+      "node": "v24.11.0",
+      "gpu": "SwiftShader (CPU)"
+    },
+    "env": {
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+      "browser": {
+        "name": "Chrome",
+        "version": "153"
+      },
+      "platform": "Win32",
+      "threads": 16,
+      "deviceMemoryGB": 16,
+      "dpr": 1,
+      "secureContext": true,
+      "crossOriginIsolated": false,
+      "webgl": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "features": {
+        "rvfc": true,
+        "offscreenCanvas": true,
+        "moduleWorker": true,
+        "imageBitmap": true,
+        "webgpu": true,
+        "wasmSimd": true,
+        "sharedArrayBuffer": false,
+        "fullscreen": true,
+        "directoryPicker": true,
+        "getUserMedia": true
+      }
+    },
+    "adapter": null,
+    "faceWorker": {
+      "delegate": "GPU",
+      "initMs": 423.70000000298023,
+      "warmupMs": 1600.1999999955297
+    },
+    "mouse": {
+      "scene": "face.png",
+      "seconds": 20,
+      "samples": 20,
+      "fpsMedian": 59.98500374906273,
+      "fpsMin": 58.44739734226132,
+      "faceHzMedian": 7.493256069520682,
+      "faceP50Median": 112,
+      "faceP95Max": 141.60000000149012,
+      "facePendingMax": 1,
+      "handHzMedian": 0,
+      "handP50Median": 0,
+      "handP95Median": 0,
+      "handP95Max": 0,
+      "clsHzMedian": 3.0054097375185767,
+      "renderP95Max": 1.7000000029802322,
+      "tickP95Max": 2.8000000044703484,
+      "faceInterval": {
+        "p50": 118.89999999850988,
+        "p95": 234.10000000149012,
+        "max": 252,
+        "n": 146
+      },
+      "handInterval": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 0
+      },
+      "clsInterval": {
+        "p50": 349.1000000014901,
+        "p95": 352.20000000298023,
+        "max": 366.69999999552965,
+        "n": 63
+      },
+      "faceAge": {
+        "p50": 135.5,
+        "p95": 155,
+        "max": 165,
+        "n": 147
+      },
+      "clsAge": {
+        "p50": 19.100000001490116,
+        "p95": 36.399999998509884,
+        "max": 41.5,
+        "n": 64
+      },
+      "tipJitterPx": null,
+      "tipFrames": 0,
+      "faceAccepted": 154,
+      "faceStale": 0,
+      "facesSeen": 1,
+      "cls": {
+        "ep": "wasm",
+        "initMs": 1765.3999999985099,
+        "warmupMs": 19.19999999552965,
+        "p50": 1,
+        "p95": 1.6000000014901161,
+        "results": 68,
+        "accepted": 67,
+        "stale": 0
+      }
+    },
+    "clsWasm": {
+      "ep": "wasm",
+      "initMs": 973.1999999955297,
+      "warmupMs": 16.400000005960464,
+      "p50": 0.8999999985098839,
+      "p95": 1.1999999955296516,
+      "hz": 3.5001750087530454
+    },
+    "hands": {
+      "CPU": {
+        "seconds": 20,
+        "samples": 20,
+        "fpsMedian": 60.03602161283351,
+        "fpsMin": 59.78697749200618,
+        "faceHzMedian": 10.506303782245864,
+        "faceP50Median": 27,
+        "faceP95Max": 38.5,
+        "facePendingMax": 1,
+        "handHzMedian": 9.505703422031972,
+        "handP50Median": 95.39999999850988,
+        "handP95Median": 109.89999999850988,
+        "handP95Max": 159.09999999403954,
+        "clsHzMedian": 3.502276479719646,
+        "renderP95Max": 0.5999999940395355,
+        "tickP95Max": 2.3000000044703484,
+        "faceInterval": {
+          "p50": 99.59999999403954,
+          "p95": 102.60000000149012,
+          "max": 117.80000000447035,
+          "n": 209
+        },
+        "handInterval": {
+          "p50": 100.29999999701977,
+          "p95": 131.39999999850988,
+          "max": 152.29999999701977,
+          "n": 189
+        },
+        "clsInterval": {
+          "p50": 283.3999999985099,
+          "p95": 300.3999999985099,
+          "max": 303.20000000298023,
+          "n": 66
+        },
+        "faceAge": {
+          "p50": 50,
+          "p95": 62.899999998509884,
+          "max": 77.09999999403954,
+          "n": 210
+        },
+        "clsAge": {
+          "p50": 20.200000002980232,
+          "p95": 37.400000005960464,
+          "max": 41.5,
+          "n": 67
+        },
+        "tipJitterPx": 0.04459165690394826,
+        "tipFrames": 191,
+        "requested": "CPU",
+        "delegate": "CPU",
+        "initMs": 2501,
+        "warmupMs": 117.70000000298023,
+        "results": 203,
+        "openFraction": 1,
+        "tipJitterCells": 0.0022295828451974133
+      },
+      "GPU": {
+        "seconds": 20,
+        "samples": 20,
+        "fpsMedian": 59.988002399341354,
+        "fpsMin": 58.52048216862822,
+        "faceHzMedian": 3.001951268331125,
+        "faceP50Median": 228.10000000149012,
+        "faceP95Max": 246.80000000447035,
+        "facePendingMax": 1,
+        "handHzMedian": 2.0035061357375405,
+        "handP50Median": 457.8999999985099,
+        "handP95Median": 483.79999999701977,
+        "handP95Max": 492.5,
+        "clsHzMedian": 2.003706857689712,
+        "renderP95Max": 0.5,
+        "tickP95Max": 1.8000000044703484,
+        "faceInterval": {
+          "p50": 249.19999999552965,
+          "p95": 466.20000000298023,
+          "max": 467.8999999985099,
+          "n": 62
+        },
+        "handInterval": {
+          "p50": 467.1000000014901,
+          "p95": 499.6000000014901,
+          "max": 502.8999999985099,
+          "n": 42
+        },
+        "clsInterval": {
+          "p50": 466.30000000447035,
+          "p95": 468.3999999985099,
+          "max": 500.19999999552965,
+          "n": 44
+        },
+        "faceAge": {
+          "p50": 236.89999999850988,
+          "p95": 246.90000000596046,
+          "max": 247,
+          "n": 31
+        },
+        "clsAge": {
+          "p50": 27.100000001490116,
+          "p95": 40.599999994039536,
+          "max": 46.399999998509884,
+          "n": 45
+        },
+        "tipJitterPx": 0.08052252374933497,
+        "tipFrames": 44,
+        "requested": "GPU",
+        "delegate": "GPU",
+        "initMs": 2113.5,
+        "warmupMs": 2480.5,
+        "results": 48,
+        "openFraction": 1,
+        "tipJitterCells": 0.004026126187466749
+      }
+    },
+    "config": {
+      "pointMaxAgeMs": 150,
+      "pointMaxAgeMsCpu": 250,
+      "faceResultMaxAgeMs": 250,
+      "classifierResultMaxAgeMs": 600,
+      "labelMaxAgeMs": 1500,
+      "hysteresisCells": 0.25,
+      "handsDelegate": "auto",
+      "handsDelegateResolved": "CPU",
+      "faceDelegate": "GPU",
+      "faceTargetHz": 12,
+      "classifierTargetHz": 4
+    }
+  },
+  {
+    "startedAt": "2026-09-18T17:54:05.243Z",
+    "seconds": 20,
+    "project": "msedge",
+    "browser": {
+      "name": "chromium",
+      "version": "153.0.4234.46",
+      "channel": "msedge",
+      "headless": true,
+      "playwrightVersion": "1.63.0",
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36 Edg/153.0.8010.12"
+    },
+    "machine": {
+      "os": "Windows_NT 10.0.26200 (x64)",
+      "cpu": "12th Gen Intel(R) Core(TM) i5-12500H",
+      "threads": 16,
+      "memGB": 16,
+      "node": "v24.11.0",
+      "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU"
+    },
+    "env": {
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36 Edg/153.0.8010.12",
+      "browser": {
+        "name": "Edge",
+        "version": "153"
+      },
+      "platform": "Win32",
+      "threads": 16,
+      "deviceMemoryGB": 16,
+      "dpr": 1,
+      "secureContext": true,
+      "crossOriginIsolated": false,
+      "webgl": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Laptop GPU (0x000025A2) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "features": {
+        "rvfc": true,
+        "offscreenCanvas": true,
+        "moduleWorker": true,
+        "imageBitmap": true,
+        "webgpu": true,
+        "wasmSimd": true,
+        "sharedArrayBuffer": false,
+        "fullscreen": true,
+        "directoryPicker": true,
+        "getUserMedia": true
+      }
+    },
+    "adapter": {
+      "vendor": "nvidia",
+      "architecture": "ampere",
+      "description": ""
+    },
+    "faceWorker": {
+      "delegate": "GPU",
+      "initMs": 388.8999999985099,
+      "warmupMs": 2845.7000000029802
+    },
+    "mouse": {
+      "scene": "face.png",
+      "seconds": 20,
+      "samples": 20,
+      "fpsMedian": 143.91365180923614,
+      "fpsMin": 139.846169214177,
+      "faceHzMedian": 11.495401839238609,
+      "faceP50Median": 29.5,
+      "faceP95Max": 42.5,
+      "facePendingMax": 1,
+      "handHzMedian": 0,
+      "handP50Median": 0,
+      "handP95Median": 0,
+      "handP95Max": 0,
+      "clsHzMedian": 3.9872408293490538,
+      "renderP95Max": 0.3999999985098839,
+      "tickP95Max": 0.6999999955296516,
+      "faceInterval": {
+        "p50": 89.89999999850988,
+        "p95": 97.39999999850988,
+        "max": 110.89999999850988,
+        "n": 228
+      },
+      "handInterval": {
+        "p50": 0,
+        "p95": 0,
+        "max": 0,
+        "n": 0
+      },
+      "clsInterval": {
+        "p50": 263.69999999552965,
+        "p95": 271.19999999552965,
+        "max": 278.1000000014901,
+        "n": 76
+      },
+      "faceAge": {
+        "p50": 51.29999999701977,
+        "p95": 66.60000000149012,
+        "max": 77.89999999850988,
+        "n": 229
+      },
+      "clsAge": {
+        "p50": 39.399999998509884,
+        "p95": 55.79999999701977,
+        "max": 65.60000000149012,
+        "n": 77
+      },
+      "tipJitterPx": null,
+      "tipFrames": 0,
+      "faceAccepted": 235,
+      "faceStale": 0,
+      "facesSeen": 1,
+      "cls": {
+        "ep": "webgpu",
+        "initMs": 982.2000000029802,
+        "warmupMs": 153.60000000149012,
+        "p50": 19.5,
+        "p95": 29,
+        "results": 79,
+        "accepted": 78,
+        "stale": 0
+      }
+    },
+    "clsWasm": {
+      "ep": "wasm",
+      "initMs": 645.6999999955297,
+      "warmupMs": 11.300000004470348,
+      "p50": 4.299999997019768,
+      "p95": 6.799999997019768,
+      "hz": 3.996802557965539
+    },
+    "hands": {
+      "CPU": {
+        "seconds": 20,
+        "samples": 20,
+        "fpsMedian": 143.920843535948,
+        "fpsMin": 126.2349066962201,
+        "faceHzMedian": 11.497125718570356,
+        "faceP50Median": 11.899999998509884,
+        "faceP95Max": 55.20000000298023,
+        "facePendingMax": 1,
+        "handHzMedian": 11.486790191297125,
+        "handP50Median": 83.29999999701977,
+        "handP95Median": 88.29999999701977,
+        "handP95Max": 97.29999999701977,
+        "clsHzMedian": 3.9960039960039966,
+        "renderP95Max": 0.3999999985098839,
+        "tickP95Max": 0.8999999985098839,
+        "faceInterval": {
+          "p50": 86.30000000447035,
+          "p95": 97.5,
+          "max": 138.80000000447035,
+          "n": 229
+        },
+        "handInterval": {
+          "p50": 90,
+          "p95": 97.10000000149012,
+          "max": 104.19999999552965,
+          "n": 228
+        },
+        "clsInterval": {
+          "p50": 258.29999999701977,
+          "p95": 271,
+          "max": 278.1000000014901,
+          "n": 73
+        },
+        "faceAge": {
+          "p50": 32.5,
+          "p95": 49.30000000447035,
+          "max": 73.5,
+          "n": 230
+        },
+        "clsAge": {
+          "p50": 35.600000001490116,
+          "p95": 52.5,
+          "max": 56.5,
+          "n": 74
+        },
+        "tipJitterPx": 0.03906627354458513,
+        "tipFrames": 230,
+        "requested": "CPU",
+        "delegate": "CPU",
+        "initMs": 727.3000000044703,
+        "warmupMs": 116.89999999850988,
+        "results": 242,
+        "openFraction": 1,
+        "tipJitterCells": 0.0019533136772292565
+      },
+      "GPU": {
+        "seconds": 20,
+        "samples": 20,
+        "fpsMedian": 143.9496176341498,
+        "fpsMin": 95.0998548476609,
+        "faceHzMedian": 11.497700459916583,
+        "faceP50Median": 14.5,
+        "faceP95Max": 30.100000001490116,
+        "facePendingMax": 1,
+        "handHzMedian": 30.42090564527695,
+        "handP50Median": 23.899999998509884,
+        "handP95Median": 34.400000005960464,
+        "handP95Max": 61.20000000298023,
+        "clsHzMedian": 3.9966028875396358,
+        "renderP95Max": 0.3999999985098839,
+        "tickP95Max": 1,
+        "faceInterval": {
+          "p50": 85.60000000149012,
+          "p95": 97.70000000298023,
+          "max": 104.5,
+          "n": 229
+        },
+        "handInterval": {
+          "p50": 28.5,
+          "p95": 48.900000005960464,
+          "max": 84.70000000298023,
+          "n": 603
+        },
+        "clsInterval": {
+          "p50": 263.70000000298023,
+          "p95": 271.1000000014901,
+          "max": 277.70000000298023,
+          "n": 73
+        },
+        "faceAge": {
+          "p50": 34.899999998509884,
+          "p95": 51.79999999701977,
+          "max": 60,
+          "n": 230
+        },
+        "clsAge": {
+          "p50": 40.100000001490116,
+          "p95": 58.400000005960464,
+          "max": 63.100000001490116,
+          "n": 74
+        },
+        "tipJitterPx": 0.12183868876930401,
+        "tipFrames": 605,
+        "requested": "GPU",
+        "delegate": "GPU",
+        "initMs": 701.2000000029802,
+        "warmupMs": 3572.7000000029802,
+        "results": 631,
+        "openFraction": 1,
+        "tipJitterCells": 0.006091934438465201
+      }
+    },
+    "config": {
+      "pointMaxAgeMs": 150,
+      "pointMaxAgeMsCpu": 250,
+      "faceResultMaxAgeMs": 250,
+      "classifierResultMaxAgeMs": 600,
+      "labelMaxAgeMs": 1500,
+      "hysteresisCells": 0.25,
+      "handsDelegate": "auto",
+      "handsDelegateResolved": "GPU",
+      "faceDelegate": "GPU",
+      "faceTargetHz": 12,
+      "classifierTargetHz": 4
+    }
+  }
+]

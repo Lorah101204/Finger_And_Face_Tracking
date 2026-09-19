@@ -1,0 +1,943 @@
+/*
+ * Biến dùng chung cho màn hình bắt đầu (landing.css, UX-02) và sân khấu (UX-01, UX-03): màu chữ đạt AA trên nền trắng
+ * (ink 16:1, ink-muted 5,9:1, accent 5,4:1 trên trắng và 5,2:1 trên surface), khoảng cách theo bậc 4 px. Chỉ có giao diện
+ * sáng (meta color-scheme). UX-03 (D-049) thêm bộ token điều khiển: cỡ control (--ctl-h), bậc nút (mặc định = phụ,
+ * .primary, .danger, .link), nền nhạt cho trạng thái (-soft) và bo góc nhỏ (--radius-sm); không có font hay ảnh ngoài (I9),
+ * mũi tên select là SVG data URI.
+ */
+:root {
+  --bg: #fff;
+  --surface: #f8f9fa;
+  --surface-2: #f1f3f4;
+  --ink: #202124;
+  --ink-soft: #3c4043;
+  --ink-muted: #5f6368;
+  --line: #dadce0;
+  --line-soft: #eee;
+  --accent: #1967d2;
+  --accent-strong: #1558b0;
+  --accent-soft: #e8f0fe;
+  --accent-line: #c2d7f7;
+  --ok: #188038;
+  --ok-soft: #e6f4ea;
+  --warn: #e37400;
+  --warn-soft: #fff3e0;
+  --error: #b00020;
+  --error-soft: #fde8ec;
+  --error-line: #f0c2ca;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --ctl-h: 32px;
+  --ctl-h-sm: 28px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, Consolas, 'Courier New', monospace;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+}
+
+/* Bậc nút (UX-03): mặc định là nút phụ (viền), .primary cho hành động chính duy nhất của mỗi khối (Bật camera, Bắt đầu,
+ * Bắt đầu thu), .danger cho hành động xóa, .link cho lối thoát nhỏ. Không còn nút đen đặc. */
+button,
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--ctl-h);
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+button:not(:disabled):hover {
+  background: var(--surface);
+}
+
+button[aria-expanded='true'],
+button[aria-pressed='true'] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+button.primary:not(:disabled):hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+}
+
+button.danger {
+  border-color: var(--error-line);
+  color: var(--error);
+}
+
+button.danger:not(:disabled):hover {
+  background: var(--error-soft);
+}
+
+button.sm {
+  height: var(--ctl-h-sm);
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.link {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 400;
+  text-decoration: underline;
+}
+
+button.link:not(:disabled):hover {
+  background: none;
+  color: var(--ink);
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.muted {
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+
+.error {
+  color: var(--error);
+}
+
+/* Control cùng cỡ (UX-03): select, ô số, ô chữ, ô ngày trong sân khấu chung chiều cao, viền, bo góc. */
+.stage select,
+.stage input[type='number'],
+.stage input[type='text'],
+.stage input[type='date'] {
+  box-sizing: border-box;
+  height: var(--ctl-h);
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.stage select {
+  padding-right: 26px;
+  appearance: none;
+  background: var(--bg)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%235f6368' stroke-width='1.6'/%3E%3C/svg%3E")
+    no-repeat right 8px center;
+}
+
+.stage input[type='number'] {
+  width: 76px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage input[type='text'] {
+  width: 100%;
+}
+
+/* Sân khấu: nền trắng tuyệt đối (bất biến I4). Bố cục UX-03 (D-049): .chrome (thanh trên) xếp trên; .body là hàng
+ * gồm .main (cột: .view chứa canvas và lớp hướng dẫn, ngăn kéo debug dưới canvas) và cột cài đặt bên phải 320 px. Panel
+ * nằm trong luồng nên mở hay đóng làm canvas đổi cỡ (epoch++, D-041); ở chế độ lớp phủ (toàn màn hình hoặc trình diễn,
+ * .overlay) mọi panel thành lớp nổi absolute, canvas chiếm trọn .stage và không đổi cỡ. */
+.stage {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  overflow: hidden;
+}
+
+.stage .chrome {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  background: #fff;
+}
+
+.stage .body {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.stage .main {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.stage .view {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.stage .panel[hidden] {
+  display: none;
+}
+
+.stage canvas#stage {
+  display: block;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+  background: #fff;
+  /* ROI-00: kéo chuột trên canvas không cuộn trang, không chọn chữ. */
+  touch-action: none;
+  user-select: none;
+  cursor: crosshair;
+}
+
+/* Thanh trên ba vùng (UX-03): brand và camera | pill trạng thái co giãn | các nút. Một dòng ở 1280 px: pill nhận phần
+ * còn lại và cắt bớt bằng dấu ba chấm (câu đầy đủ ở title và ở lớp hướng dẫn); hẹp hơn nữa mới xuống dòng. */
+.stage .bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--bg);
+}
+
+.stage .bar.top {
+  flex-wrap: nowrap;
+}
+
+.stage .bar.top > * {
+  flex: none;
+}
+
+.stage .bar.top .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.stage .bar.top .brand svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.stage .bar .sep {
+  width: 1px;
+  height: 24px;
+  background: var(--line);
+}
+
+.stage .bar .field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.stage .bar.top select {
+  max-width: 160px;
+}
+
+.stage .bar .right {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 14px;
+}
+
+/* Pill trạng thái camera: chấm màu theo pha (xám chưa bật, hổ phách đang chờ, xanh chạy, đỏ lỗi); role=status giữ nguyên
+ * câu đầy đủ cho e2e và trình đọc màn hình. */
+.stage .bar.top .status {
+  flex: 0 1 auto;
+}
+
+.stage .status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 72px;
+  height: 28px;
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.stage .status .text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.stage .status .dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9aa0a6;
+}
+
+.stage .status.on .dot {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px #d5ecdb;
+}
+
+.stage .status.wait .dot {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px #ffe4c2;
+}
+
+.stage .status.warn {
+  background: var(--warn-soft);
+  color: #8a4b00;
+}
+
+.stage .status.warn .dot {
+  background: var(--warn);
+}
+
+.stage .status.error {
+  background: var(--error-soft);
+  color: var(--error);
+}
+
+.stage .status.error .dot {
+  background: var(--error);
+}
+
+/* Cột cài đặt (UX-03): aside 320 px bên phải chia mục; mỗi mục có tiêu đề chữ hoa nhỏ, control xếp dọc với nhãn trên. */
+.stage aside.settings {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 320px;
+  border-left: 1px solid var(--line-soft);
+  background: var(--bg);
+  overflow: auto;
+}
+
+.stage .panel-title {
+  margin: 0;
+  padding: 12px 16px 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.stage .sec {
+  display: grid;
+  gap: 10px;
+  padding: 10px 16px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.stage .sec h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.stage .sec h3 .hint {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.stage .hint {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.stage .lbl {
+  display: grid;
+  gap: 4px;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.stage .lbl > select,
+.stage .lbl > input {
+  width: 100%;
+}
+
+.stage .cols2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stage .acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+/* Công tắc: vẫn là input[type=checkbox] trong label.check (e2e check/uncheck, toBeChecked giữ nguyên), vẽ bằng CSS. */
+.stage label.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.stage label.check input {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #c4c7cb;
+  appearance: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.stage label.check input::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+
+.stage label.check input:checked {
+  background: var(--accent);
+}
+
+.stage label.check input:checked::before {
+  left: 14px;
+}
+
+.stage label.check input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Chip đầu ngón (ROI-03, UX-03): label.chip chứa checkbox vẽ thành vòng tròn có dấu tích. */
+.stage .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stage label.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--ctl-h-sm);
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.stage label.chip:has(input:checked) {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+
+.stage label.chip input {
+  box-sizing: border-box;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg);
+  appearance: none;
+  cursor: pointer;
+}
+
+.stage label.chip input:checked {
+  border-color: var(--accent);
+  background: var(--accent)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 5.2l2.2 2.2L8 3' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat center;
+}
+
+/* Độ nhạy (ROI-01, UX-03): thanh trượt kèm ô số cùng giá trị; ô số mang aria-label cho e2e và bàn phím, thanh trượt là
+ * tiện ích chuột (aria-hidden, không nhận Tab). */
+.stage .slider {
+  display: grid;
+  gap: 2px;
+}
+
+.stage .slider .lab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.stage .slider .lab input[type='number'] {
+  width: 84px;
+  height: var(--ctl-h-sm);
+  font-size: 13px;
+}
+
+.stage .slider input[type='range'] {
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* Ngăn kéo debug (UX-03, thay thanh một dòng): lưới ba cột dưới canvas, chữ mono 12 px, mọi dòng data-testid giữ nguyên
+ * nội dung; thumbnail buffer vừa gửi (FACE-01 bước 5) 88 px ở cột phải. */
+.stage .panel.debug {
+  flex: none;
+  box-sizing: border-box;
+  max-height: 150px;
+  border-top: 1px solid var(--line-soft);
+  background: #fafbfc;
+  overflow: auto;
+}
+
+.stage .dbg {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 8px 16px;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage .dbg .stats {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 16px;
+  min-width: 0;
+}
+
+.stage .dbg .stat {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.stage .dbg .stat.wide {
+  grid-column: 1 / -1;
+  color: var(--ink);
+}
+
+.stage .dbg canvas.thumb {
+  flex: none;
+  width: 88px;
+  height: 88px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  image-rendering: pixelated;
+  background: #808080;
+}
+
+/* UX-01 (UC-08): lớp hướng dẫn nổi trên canvas; không nhận chuột để kéo cửa sổ vẫn tới canvas. UX-03: ba bước là pill
+ * tiến trình (✓ đã xong, số đang làm), màu theo tone; .hud (chế độ lớp phủ) chữ lớn hơn cho người đứng xa. */
+.guide {
+  --tone: var(--accent);
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+  max-width: min(680px, calc(100% - 32px));
+  padding: 12px 18px 14px;
+  border-radius: 12px;
+  background: rgba(24, 24, 24, 0.86);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+  transform: translateX(-50%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+.guide.tone-wait {
+  --tone: #6b7280;
+}
+
+.guide.tone-ok {
+  --tone: #1e8e3e;
+}
+
+.guide.tone-warn {
+  --tone: #e37400;
+}
+
+.guide.tone-error {
+  --tone: #d93025;
+}
+
+.guide .steps {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  list-style: none;
+}
+
+.guide .steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.guide .steps .n {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.guide .steps .done .n::before {
+  content: '✓';
+}
+
+.guide .steps .current {
+  background: var(--tone);
+  color: #fff;
+  font-weight: 600;
+}
+
+.guide .steps .current .n {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.guide .title {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.guide .detail {
+  color: #e8eaed;
+}
+
+.guide .keys {
+  font-size: 12px;
+  color: #bdc1c6;
+}
+
+.guide.hud {
+  bottom: 28px;
+  max-width: min(760px, calc(100% - 32px));
+  padding: 16px 26px 18px;
+  border-radius: 18px;
+  background: rgba(20, 22, 26, 0.8);
+  backdrop-filter: blur(10px);
+  font-size: 15px;
+}
+
+.guide.hud .title {
+  font-size: 21px;
+}
+
+.guide.hud .steps li {
+  height: 24px;
+  font-size: 12px;
+}
+
+/* Chế độ lớp phủ (D-041, D-049): toàn màn hình (.fullscreen) và trình diễn (.present) dùng chung .overlay: thanh trên
+ * thành pill nổi giữa trên, cột cài đặt thành tấm nổi bên phải, debug thành HUD trên trái (không đè lớp hướng dẫn ở
+ * giữa dưới); canvas chiếm trọn .stage nên
+ * mở hay đóng panel không đổi cỡ canvas (không epoch++). Không tương tác 2,5 s (.idle): mọi lớp nổi ẩn, còn một vạch
+ * gợi ý ở mép trên; lớp hướng dẫn vẫn hiện. */
+.stage.overlay .chrome {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  align-items: center;
+  background: transparent;
+  transition: opacity 0.25s;
+  /* Chỉ pill nhận chuột; phần còn lại của dải trên vẫn tới canvas. */
+  pointer-events: none;
+}
+
+.stage.overlay .bar.top {
+  pointer-events: auto;
+}
+
+.stage.overlay .bar.top {
+  max-width: calc(100% - 24px);
+  margin: 12px auto 0;
+  padding: 6px 10px 6px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.93);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+}
+
+.stage.overlay aside.settings {
+  position: absolute;
+  top: 70px;
+  right: 14px;
+  z-index: 2;
+  max-height: calc(100% - 160px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+  transition: opacity 0.25s;
+}
+
+.stage.overlay .panel.debug {
+  position: absolute;
+  top: 70px;
+  left: 14px;
+  z-index: 2;
+  width: min(460px, calc(100% - 28px));
+  border: 0;
+  border-radius: 12px;
+  background: rgba(24, 26, 30, 0.86);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+  transition: opacity 0.25s;
+}
+
+.stage.overlay .dbg {
+  color: #e8eaed;
+}
+
+.stage.overlay .dbg .stat.wide {
+  color: #fff;
+}
+
+.stage.overlay.idle .chrome,
+.stage.overlay.idle aside.settings,
+.stage.overlay.idle .panel.debug {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.stage .present-hint {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  z-index: 1;
+  width: 44px;
+  height: 4px;
+  margin-left: -22px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+
+.stage.overlay.idle .present-hint {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage.overlay .chrome,
+  .stage.overlay aside.settings,
+  .stage.overlay .panel.debug,
+  .stage .present-hint,
+  .stage label.check input,
+  .stage label.check input::before {
+    transition: none;
+  }
+}
+
+/* CLS-01: chỉ báo đang thu dữ liệu, nổi góc trên phải của canvas (cả khi toàn màn hình), không nhận chuột. */
+.rec-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(217, 48, 37, 0.92);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.rec-badge .rec-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  animation: rec-blink 1s steps(2, start) infinite;
+}
+
+@keyframes rec-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rec-badge .rec-dot {
+    animation: none;
+  }
+}
+
+/* LOG-02: bảng nhật ký trong mục Nhật ký cục bộ. */
+.log-view {
+  display: grid;
+  gap: 8px;
+}
+
+.log-table {
+  display: block;
+  width: 100%;
+  max-height: 14rem;
+  overflow: auto;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.log-table th,
+.log-table td {
+  padding: 0.1rem 0.5rem 0.1rem 0;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.log-table td:last-child {
+  white-space: normal;
+  word-break: break-all;
+}
+
+/* Màn hẹp (dưới 900 px): cột cài đặt thành tấm dưới canvas; thanh trên xuống dòng bình thường. */
+@media (max-width: 899px) {
+  .stage .bar.top {
+    flex-wrap: wrap;
+  }
+
+  .stage .bar .right {
+    flex-wrap: wrap;
+    margin-left: 0;
+  }
+
+  .stage .body {
+    flex-direction: column;
+  }
+
+  .stage aside.settings {
+    width: auto;
+    max-height: 45vh;
+    border-top: 1px solid var(--line-soft);
+    border-left: 0;
+  }
+
+  .stage .dbg .stats {
+    grid-template-columns: 1fr;
+  }
+}

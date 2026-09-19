@@ -1,0 +1,52 @@
+# build
+node_modules/
+dist/
+dist-ssr/
+*.local
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+
+# test
+test-results/
+playwright-report/
+blob-report/
+coverage/
+# QA-01: JSON của vitest và playwright cho tools/test-report.mjs
+reports/
+
+# dữ liệu thu và clip test (CLS-01, TEST-00): không commit
+data/
+*.y4m
+
+# model: tải bằng `npm run models:fetch` theo public/models/models.json
+public/models/*.task
+public/models/wasm/
+public/models/ort/
+*.onnx
+!public/models/*.onnx
+# CLS-02: model stub sinh bởi tools/make-stub-classifier.mjs (models:fetch), model thật là sản phẩm huấn luyện: không commit
+public/models/classifier-stub.onnx
+public/models/classifier.onnx
+
+# editor, OS
+# REL-01: cấu hình phiên Claude Code của máy phát triển (launch.json), không commit
+.claude/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# SPIKE-00: ảnh mẫu, model mẫu và wasm ORT chỉ dùng cho spike, không commit
+public/spike-assets/
+
+# backend đã lưu ở archive/backend/ (D-019): build và DB của nó vẫn không commit
+dist-server/
+.env
+# D-024 (REL-01): archive/backend/ chỉ nằm ở nhánh `archive/backend` (orphan), không có trên main; thư mục trên đĩa bị bỏ qua
+/archive/

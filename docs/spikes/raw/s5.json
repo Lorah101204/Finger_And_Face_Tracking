@@ -1,0 +1,111 @@
+{
+  "spike": "S5",
+  "note": "Trình duyệt tích hợp Chrome 152, GPU NVIDIA RTX 3050 qua ANGLE D3D11, pane ẩn. Nguồn video bị bỏ qua vì host không phát video khi pane ẩn; xem s5-headless.json cho nguồn video (SwiftShader, chỉ để so tương đối).",
+  "iterations": 300,
+  "visibility": "hidden",
+  "video": "bỏ qua: video không phát được (paused=true, visibility=hidden)",
+  "canvas_256": {
+    "drawThenTransfer": {
+      "draw": {
+        "n": 300,
+        "p50": 0,
+        "p95": 0.1,
+        "mean": 0.04,
+        "min": 0,
+        "max": 0.2
+      },
+      "transfer": {
+        "n": 300,
+        "p50": 0,
+        "p95": 0.1,
+        "mean": 0.03,
+        "min": 0,
+        "max": 0.2
+      },
+      "total": {
+        "n": 300,
+        "p50": 0.1,
+        "p95": 0.2,
+        "mean": 0.07,
+        "min": 0,
+        "max": 0.3
+      }
+    },
+    "createImageBitmapCrop": {
+      "n": 300,
+      "p50": 0,
+      "p95": 0.2,
+      "mean": 0.06,
+      "min": 0,
+      "max": 0.6
+    },
+    "cropPlusLetterbox256": {
+      "n": 300,
+      "p50": 0.1,
+      "p95": 0.2,
+      "mean": 0.08,
+      "min": 0,
+      "max": 0.4
+    },
+    "drawPlusGetImageData": {
+      "n": 300,
+      "p50": 8.6,
+      "p95": 14.4,
+      "mean": 9.86,
+      "min": 3.9,
+      "max": 366.9
+    }
+  },
+  "canvas_720": {
+    "drawThenTransfer": {
+      "draw": {
+        "n": 300,
+        "p50": 0,
+        "p95": 0.1,
+        "mean": 0.04,
+        "min": 0,
+        "max": 0.3
+      },
+      "transfer": {
+        "n": 300,
+        "p50": 0,
+        "p95": 0.1,
+        "mean": 0.03,
+        "min": 0,
+        "max": 0.2
+      },
+      "total": {
+        "n": 300,
+        "p50": 0.1,
+        "p95": 0.2,
+        "mean": 0.07,
+        "min": 0,
+        "max": 0.3
+      }
+    },
+    "createImageBitmapCrop": {
+      "n": 300,
+      "p50": 0,
+      "p95": 0.1,
+      "mean": 0.05,
+      "min": 0,
+      "max": 0.3
+    },
+    "cropPlusLetterbox256": {
+      "n": 300,
+      "p50": 0.1,
+      "p95": 0.2,
+      "mean": 0.08,
+      "min": 0,
+      "max": 0.3
+    },
+    "drawPlusGetImageData": {
+      "n": 300,
+      "p50": 13.6,
+      "p95": 29.1,
+      "mean": 16.33,
+      "min": 7,
+      "max": 536.8
+    }
+  }
+}

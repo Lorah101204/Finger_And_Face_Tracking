@@ -1,0 +1,11 @@
+dist
+node_modules
+public/models
+playwright-report
+test-results
+reports
+# SPIKE-00: mã spike giữ nguyên như lúc đo
+tools/spikes
+docs
+data
+archive/

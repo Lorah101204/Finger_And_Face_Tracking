@@ -1,0 +1,123 @@
+{
+  "spike": "S4",
+  "src": "gum",
+  "phase": "fg",
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+  "visibilityAtStart": "visible",
+  "hasRvfc": true,
+  "hasMSTP": true,
+  "source": "getUserMedia 1280x720@20",
+  "conditions": [
+    {
+      "label": "visible",
+      "elapsedS": 4,
+      "rvfc": {
+        "visible": 81,
+        "hidden": 0
+      },
+      "raf": {
+        "visible": 242,
+        "hidden": 0
+      },
+      "rvfcHz": 20,
+      "rafHz": 60.3,
+      "videoTime": 4.28,
+      "paused": false
+    },
+    {
+      "label": "opacity0",
+      "elapsedS": 4.01,
+      "rvfc": {
+        "visible": 82,
+        "hidden": 0
+      },
+      "raf": {
+        "visible": 242,
+        "hidden": 0
+      },
+      "rvfcHz": 20.2,
+      "rafHz": 60.1,
+      "videoTime": 8.63,
+      "paused": false
+    },
+    {
+      "label": "offscreen",
+      "elapsedS": 4,
+      "rvfc": {
+        "visible": 81,
+        "hidden": 0
+      },
+      "raf": {
+        "visible": 242,
+        "hidden": 0
+      },
+      "rvfcHz": 20,
+      "rafHz": 60.3,
+      "videoTime": 12.94,
+      "paused": false
+    },
+    {
+      "label": "size1px",
+      "elapsedS": 4.01,
+      "rvfc": {
+        "visible": 81,
+        "hidden": 0
+      },
+      "raf": {
+        "visible": 242,
+        "hidden": 0
+      },
+      "rvfcHz": 20,
+      "rafHz": 60.1,
+      "videoTime": 17.23,
+      "paused": false
+    },
+    {
+      "label": "visibilityHidden",
+      "elapsedS": 4.01,
+      "rvfc": {
+        "visible": 81,
+        "hidden": 0
+      },
+      "raf": {
+        "visible": 241,
+        "hidden": 0
+      },
+      "rvfcHz": 20,
+      "rafHz": 59.9,
+      "videoTime": 21.54,
+      "paused": false
+    },
+    {
+      "label": "displayNone",
+      "elapsedS": 4,
+      "rvfc": {
+        "visible": 81,
+        "hidden": 0
+      },
+      "raf": {
+        "visible": 241,
+        "hidden": 0
+      },
+      "rvfcHz": 20,
+      "rafHz": 60,
+      "videoTime": 25.88,
+      "paused": false
+    }
+  ],
+  "mstpForeground": {
+    "available": true,
+    "frames": 61,
+    "hz": 20.1,
+    "elapsedS": 3.04,
+    "buckets": {
+      "visible": 61,
+      "hidden": 0
+    }
+  },
+  "runner": {
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+    "visibility": "visible",
+    "webglRenderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+  }
+}

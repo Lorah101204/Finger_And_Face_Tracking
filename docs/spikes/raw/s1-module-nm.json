@@ -1,0 +1,149 @@
+{
+  "spike": "S1",
+  "note": "Chạy lại nhánh module worker với FilesetResolver.forVisionTasks(base, true) và wasm phục vụ từ /node_modules qua pipeline module của Vite (?wasm=nm&only=module).",
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Claude/2.110.0 Chrome/152.0.7977.76 Safari/537.36 MSIX",
+  "webgl": {
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+    "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Laptop GPU (0x000025A2) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "vendor": "Google Inc. (NVIDIA)"
+  },
+  "image": {
+    "w": 958,
+    "h": 1358
+  },
+  "sizes": [
+    64,
+    128,
+    256
+  ],
+  "iterations": 40,
+  "faceCrop": {
+    "found": true,
+    "sx": 295,
+    "sy": 122,
+    "side": 392
+  },
+  "wasmBase": "/node_modules/@mediapipe/tasks-vision/wasm",
+  "workerModuleGPU": {
+    "initMs": 513,
+    "warmMs": 355,
+    "px64": {
+      "detect": {
+        "n": 40,
+        "p50": 14.5,
+        "p95": 22.9,
+        "mean": 16.51,
+        "min": 12.5,
+        "max": 56.8
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 15.2,
+        "p95": 24,
+        "mean": 16.89,
+        "min": 12.7,
+        "max": 57.3
+      },
+      "faces": 1
+    },
+    "px128": {
+      "detect": {
+        "n": 40,
+        "p50": 14.4,
+        "p95": 18.1,
+        "mean": 14.81,
+        "min": 12.6,
+        "max": 19.8
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 14.7,
+        "p95": 18.3,
+        "mean": 15.07,
+        "min": 13,
+        "max": 20.3
+      },
+      "faces": 1
+    },
+    "px256": {
+      "detect": {
+        "n": 40,
+        "p50": 14.6,
+        "p95": 16.1,
+        "mean": 14.51,
+        "min": 12.1,
+        "max": 16.5
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 14.8,
+        "p95": 16.6,
+        "mean": 14.86,
+        "min": 12.4,
+        "max": 17.3
+      },
+      "faces": 1
+    }
+  },
+  "workerModuleCPU": {
+    "initMs": 251,
+    "warmMs": 132,
+    "px64": {
+      "detect": {
+        "n": 40,
+        "p50": 39.3,
+        "p95": 46.1,
+        "mean": 39.87,
+        "min": 32.7,
+        "max": 56
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 39.5,
+        "p95": 46.4,
+        "mean": 40.18,
+        "min": 33,
+        "max": 56.3
+      },
+      "faces": 1
+    },
+    "px128": {
+      "detect": {
+        "n": 40,
+        "p50": 38.6,
+        "p95": 44.3,
+        "mean": 38.92,
+        "min": 33.9,
+        "max": 45.5
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 38.6,
+        "p95": 44.6,
+        "mean": 39.25,
+        "min": 34.1,
+        "max": 45.9
+      },
+      "faces": 1
+    },
+    "px256": {
+      "detect": {
+        "n": 40,
+        "p50": 41.7,
+        "p95": 46.2,
+        "mean": 41.4,
+        "min": 35.5,
+        "max": 46.9
+      },
+      "roundTrip": {
+        "n": 40,
+        "p50": 42.1,
+        "p95": 46.6,
+        "mean": 41.74,
+        "min": 35.8,
+        "max": 47.1
+      },
+      "faces": 1
+    }
+  }
+}
