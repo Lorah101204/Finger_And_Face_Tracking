@@ -152,9 +152,12 @@ test('gate cứng: buffer 256 × 256 không có pixel ngoài cameraRect ở nhi�
   expect((await readLoop(page)).restricted!.builds).toBeGreaterThan(0)
   const counters = await page.evaluate(() => window.__wct!.probes!.counters)
   expect(counters.restrictedFrames).toBeGreaterThan(0)
-  expect(counters.classifierSubmitted).toBe(0)
+  // Worker phân loại khởi tạo lười khi vùng mở lần đầu; cửa sổ ở đây đều ≥ 96 px nên nó có thể đã nhận bitmap (tùy
+  // máy nhanh hay chậm: CI runner có, máy phát triển thường chưa kịp). Số đó chỉ ghi nhận; gate cứng của mọi buffer,
+  // kể cả bản cho classifier, do expectGateClean khẳng định.
   note(
-    `mirror tắt (2, 2) n=8: pixel ngoài ROI ${a.bad}; ${counters.restrictedFrames} buffer qua probe`,
+    `mirror tắt (2, 2) n=8: pixel ngoài ROI ${a.bad}; ${counters.restrictedFrames} buffer qua probe, ` +
+      `${counters.classifierSubmitted} bitmap tới worker phân loại`,
   )
   await expectGateClean(page)
 })

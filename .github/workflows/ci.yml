@@ -30,8 +30,9 @@ jobs:
     timeout-minutes: 45
     env:
       CI: 'true'
-      # REL-01 (D-050): gốc đường dẫn của trang. Chưa có tên miền: /<repo>/; có tên miền: đặt biến repo PAGES_BASE = /.
-      VITE_BASE: ${{ vars.PAGES_BASE || format('/{0}/', github.event.repository.name) }}
+      # REL-01 (D-050): gốc đường dẫn của trang cho build và test:deploy (không đặt cho cả job: dev server của e2e phải
+      # ở '/' như tài liệu). Chưa có tên miền: /<repo>/; có tên miền: đặt biến repo PAGES_BASE = /.
+      PAGES_BASE: ${{ vars.PAGES_BASE || format('/{0}/', github.event.repository.name) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -75,8 +76,12 @@ jobs:
         run: npm run test:e2e
 
       - run: npm run build
+        env:
+          VITE_BASE: ${{ env.PAGES_BASE }}
 
       - name: Kiểm build sạch (REL-01, mục 7.27)
+        env:
+          VITE_BASE: ${{ env.PAGES_BASE }}
         run: |
           test ! -e dist/spike-assets
           test -f dist/sw.js
@@ -85,6 +90,8 @@ jobs:
           echo "VITE_BASE=$VITE_BASE; index.html: $(grep -o 'src="[^"]*"' dist/index.html)"
 
       - name: E2E trên bản build (service worker, gốc đường dẫn, I9; REL-01)
+        env:
+          VITE_BASE: ${{ env.PAGES_BASE }}
         run: npm run test:deploy
 
       - name: Sinh báo cáo mask từ JSON
