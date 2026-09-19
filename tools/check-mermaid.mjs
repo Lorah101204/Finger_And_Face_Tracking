@@ -112,11 +112,7 @@ for (const l of logs) console.log(l)
 console.log(`${file}: ${blocks.length} sơ đồ`)
 console.log(text)
 if (text.includes('ERROR')) {
-  annotate(
-    text
-      .split('\n')
-      .filter((l) => l.startsWith('ERROR'))
-      .join('\n') + (logs.length ? '\n' + logs.join('\n') : ''),
-  )
+  // Toàn bộ kết quả (thông điệp lỗi của Mermaid nhiều dòng: vị trí, đoạn nguồn, token mong đợi) và log của trang.
+  annotate(text + (logs.length ? '\n' + logs.join('\n') : ''))
   process.exit(1)
 }

@@ -583,7 +583,7 @@ stateDiagram-v2
   Open --> Open: cửa sổ dời hoặc đổi n / epoch giữ nguyên, tác vụ đang chạy vẫn validate theo ROI lúc gửi
   Open --> Closed: few-points, stale-point, out-of-board, too-small, ambiguous-hands / xóa mặt và nhãn, accepting = false, rejectAll
   Open --> Closed: tab-hidden, no-camera, user / như trên và epoch++
-  Open --> Closed: config-changed / như trên; epoch đã tăng ở store khi đổi cấu hình (D-027)
+  Open --> Closed: config-changed / như trên, epoch đã tăng ở store khi đổi cấu hình (D-027)
   Closed --> Closed: đổi camera, mirror, grid, resize / epoch++
 ```
 

@@ -121,22 +121,26 @@ test('lần mở 1 vào #/app: worker kích hoạt và điều khiển trang, x�
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, undefined, {
     timeout: 30_000,
   })
-  const loader = ep === 'webgpu' ? 'asyncify' : 'jsep'
   const wantModels = [
     `models/wasm/vision_wasm_module_internal.js`,
     `models/wasm/vision_wasm_module_internal.wasm`,
     `models/hand_landmarker.task`,
     `models/face_landmarker.task`,
     `models/classifier-stub.onnx`,
-    `models/ort/ort-wasm-simd-threaded.${loader}.mjs`,
-    `models/ort/ort-wasm-simd-threaded.${loader}.wasm`,
   ].map((p) => `${ORIGIN}${BASE}${p}`)
   await expect
     .poll(async () => (await dumpCaches(page))[MODELS_CACHE]?.length ?? 0, { timeout: 60_000 })
-    .toBeGreaterThanOrEqual(wantModels.length)
+    .toBeGreaterThanOrEqual(wantModels.length + 2)
   const dump = await dumpCaches(page)
   expect(Object.keys(dump).sort()).toEqual([APP_CACHE, MODELS_CACHE].sort())
   for (const u of wantModels) expect(dump[MODELS_CACHE]).toContain(u)
+  // Loader ORT theo bundle worker đã nạp: asyncify khi có adapter WebGPU (bundle webgpu; EP báo về vẫn có thể là wasm
+  // nếu tạo session webgpu lỗi, ví dụ adapter phần mềm trên runner), jsep khi không có adapter. Một cặp trọn phải có.
+  const loaderOf = (name: string) =>
+    dump[MODELS_CACHE].filter((u) => u.includes(`ort-wasm-simd-threaded.${name}.`)).length
+  const loader = loaderOf('asyncify') === 2 ? 'asyncify' : loaderOf('jsep') === 2 ? 'jsep' : 'thiếu'
+  expect(loader).not.toBe('thiếu')
+  if (ep === 'webgpu') expect(loader).toBe('asyncify')
   expect(dump[APP_CACHE]).toContain(PAGE_KEY)
   expect(dump[APP_CACHE].some((u) => /assets\/index-[\w-]+\.js$/.test(u))).toBe(true)
   expect(dump[APP_CACHE].some((u) => /assets\/face\.worker-[\w-]+\.js$/.test(u))).toBe(true)
