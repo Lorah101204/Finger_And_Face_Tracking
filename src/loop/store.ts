@@ -22,8 +22,7 @@ export type StageSettings = {
   windowSource: WindowSourceKind
   /** HAND-01 (D-010): đảo nhãn trái/phải nếu webcam thật cho nhãn ngược; đổi thì tracker tay reset (id mới). */
   handednessSwap: boolean
-  /** HAND-02 (UC-03): bốn slot đầu ngón; đổi thì epoch++ và cửa sổ đang mở đóng với config-changed. */
-  /** ROI-03 (D-047): đầu ngón dùng cho mọi tay, đã sắp và bỏ trùng, không rỗng. */
+  /** ROI-03 (D-047, thay bốn slot của HAND-02): đầu ngón dùng cho mọi tay, đã sắp và bỏ trùng, không rỗng; đổi thì epoch++ và cửa sổ đang mở đóng với config-changed (UC-03). */
   fingers: FingerTip[]
   /** ROI-01 (UC-09): độ nhạy (One Euro, hysteresis, nMin, tuổi điểm); áp dụng ngay, không đổi epoch. */
   sensitivity: Sensitivity

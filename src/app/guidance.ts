@@ -13,6 +13,7 @@ import type {
   SubjectType,
 } from '../core/types'
 import { subjectText } from '../classify/subjectRule'
+import { isDemoClassifier } from '../core/config'
 import { FINGER_NAMES, fingertipsGuidance } from '../hands/fingertips'
 import type { WindowSourceKind } from '../reveal/windowSource'
 
@@ -310,11 +311,16 @@ function openGuidance(input: GuidanceInput): Guidance {
       )
     case 'face-candidate': {
       const label = input.subject ? subjectText(input.subject) : null
+      // Model phân loại đang là stub theo màu: nói rõ trong hướng dẫn, không chỉ ở hậu tố nhãn.
+      const demo =
+        label && isDemoClassifier()
+          ? ' Nhãn người/hình nộm đến từ model demo theo màu, chưa phải model huấn luyện.'
+          : ''
       return g(
         3,
         'ok',
         label ? `Khuôn mặt trong cửa sổ: ${label}` : 'Khuôn mặt trong cửa sổ',
-        `Nhận diện chỉ chạy trên vùng mở. Dời hoặc thu nhỏ cửa sổ để thấy vùng ngoài đóng lại.${lim}`,
+        `Nhận diện chỉ chạy trên vùng mở. Dời hoặc thu nhỏ cửa sổ để thấy vùng ngoài đóng lại.${demo}${lim}`,
       )
     }
     case 'partial-face':

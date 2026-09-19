@@ -4,10 +4,9 @@
 // accepting theo trạng thái vùng và rejectAll khi đóng hoặc đổi epoch (mục 5.10). FACE-02: kết quả về được validate
 // theo mask hiện tại (bước 7), ValidatedFace[] vẽ ở bước 5 của frame kế, xóa khi đóng hoặc đổi epoch, hết hạn khi
 // worker ngừng trả; FrameOutput (bước 8) phát qua events. HAND-01: bước 2, khi nguồn cửa sổ là tay thì mỗi frame
-// feed HandPipeline (gửi frame gốc cho hand.worker khi rảnh) và vẽ overlay debug tay từ HandFrame mới nhất; chưa có
-// HandWindowSource nên cửa sổ vẫn đóng tới ROI-01. ROI-03: các đầu ngón từ HandFrame mới nhất (hands/fingers.ts), lý do
+// feed HandPipeline (gửi frame gốc cho hand.worker khi rảnh) và vẽ overlay debug tay từ HandFrame mới nhất. ROI-03: các đầu ngón từ HandFrame mới nhất (hands/fingers.ts), lý do
 // đóng theo mục 5.8, chấm đầu ngón trong overlay, FrameOutput.points và hướng dẫn thiếu điểm. ROI-01: nguồn tay là
-// HandWindowSource (sources.hands): mỗi frame trả cửa sổ đã giải (squareSolver) hoặc lý do đóng, kèm các đầu ngón của
+// HandWindowSource (sources.hands): mỗi frame trả vùng đã giải (hullSolver, trước là squareSolver rồi quadSolver) hoặc lý do đóng, kèm các đầu ngón của
 // frame (WindowSample.fingers) nên vòng lặp không tự đánh giá điểm nữa. INT-01: CloseGate (camera dừng, đổi camera,
 // watchdog, tab ẩn) đóng vùng với no-camera hoặc tab-hidden, ngay khi có sự kiện (tab ẩn thì rAF không chạy) và ở
 // mỗi frame; đổi nguồn cửa sổ là đổi cấu hình (store epoch++, đóng config-changed). CLS-02 nối ClassifierClient.

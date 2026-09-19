@@ -1,7 +1,7 @@
 // CLS-02 bước 2: quy tắc unknown, thuần. Không dùng chuyển động (mục 5.11): chỉ xác suất của một ảnh, cỡ ROI và mức
 // nhìn thấy của mặt. unknown khi: chưa có kết quả; max(prob) < unknownThreshold; cạnh ngắn ROI < minRoiPx; mặt partial
 // mà phần landmark còn trong vùng mở dưới partialMinVisible.
-import { DEFAULTS } from '../core/config'
+import { DEFAULTS, isDemoClassifier } from '../core/config'
 import type { SubjectType } from '../core/types'
 
 export type SubjectDecision = {
@@ -49,16 +49,23 @@ export function decideSubject(input: SubjectInput, opts: SubjectRuleOptions = {}
   return { subjectType: label, confidence, reason: null }
 }
 
-/** Chữ hiển thị (UC-07): "Người", "Hình nộm", "Khuôn mặt chưa phân loại" kèm độ tin cậy. */
-export function subjectText(d: { subjectType: SubjectType; confidence?: number }): string {
+/**
+ * Chữ hiển thị (UC-07): "Người", "Hình nộm", "Khuôn mặt chưa phân loại" kèm độ tin cậy. Khi model là stub theo màu
+ * (isDemoClassifier) nhãn có hậu tố " · demo" để người xem trang public không hiểu nhầm là phân loại thật.
+ */
+export function subjectText(
+  d: { subjectType: SubjectType; confidence?: number },
+  demo: boolean = isDemoClassifier(),
+): string {
   const pct =
     d.confidence !== undefined && d.confidence > 0 ? ` ${Math.round(d.confidence * 100)} %` : ''
+  const tag = demo ? ' · demo' : ''
   switch (d.subjectType) {
     case 'person':
-      return `Người${pct}`
+      return `Người${pct}${tag}`
     case 'mannequin':
-      return `Hình nộm${pct}`
+      return `Hình nộm${pct}${tag}`
     default:
-      return 'Khuôn mặt chưa phân loại'
+      return `Khuôn mặt chưa phân loại${tag}`
   }
 }

@@ -135,6 +135,15 @@ export const DEFAULTS = {
 export type Defaults = typeof DEFAULTS
 
 /**
+ * CLS-02 (D-044), rà soát 2026-09-20: model phân loại đang là stub theo màu (tools/make-stub-classifier.mjs) chứ chưa
+ * phải model huấn luyện; nhãn trên trang public phải nói rõ điều đó. Suy từ đường dẫn model để không cần cờ riêng phải
+ * nhớ đổi: trỏ modelPath tới classifier.onnx thật là hết chữ "demo".
+ */
+export function isDemoClassifier(modelPath: string = DEFAULTS.classifier.modelPath): boolean {
+  return /classifier-stub\.onnx$/.test(modelPath)
+}
+
+/**
  * REL-01 (D-050): ghép gốc đường dẫn của trang (Vite `base`, biến build `VITE_BASE`) vào một đường dẫn tuyệt đối từ
  * gốc site. `DEFAULTS` giữ dạng `/models/...` (phụ lục 9.1); chỉ nơi tiêu thụ mới ghép base, nên unit test và dev
  * (base `/`) không đổi. Không nhân đôi dấu gạch: withBase('/models/x', '/repo/') = '/repo/models/x'.

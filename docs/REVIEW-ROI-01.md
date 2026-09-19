@@ -52,12 +52,12 @@ Direction assessment: on track. The build order matches section 2.4 of [WORK-BRE
 
 | ID | Item | Priority | Needed before | Status | Recorded | Updated | Done |
 |---|---|---|---|---|---|---|---|
-| R-01 | First git commit and the `archive/backend` branch | High | Start of INT-01 | Open | 2026-09-18 | 2026-09-18 | |
-| R-02 | Test session with a webcam and real hands | High | Writing more INT-01 code | Open | 2026-09-18 | 2026-09-18 | |
-| R-03 | The 150 ms point age threshold is close to the hand pipeline latency | High | INT-01 acceptance | Open | 2026-09-18 | 2026-09-18 | |
-| R-04 | Start CLS-01 (dataset mode, data capture) in parallel | Medium | QA-01 | Open | 2026-09-18 | 2026-09-18 | |
-| R-05 | One Euro filters in stage px, so it depends on window size and DPR | Low | QA-02 | Open | 2026-09-18 | 2026-09-18 | |
-| R-06 | Chores: `dist/`, README, comments, the rest of INT-01 | Low | REL-01 (item d alone: INT-01) | Open | 2026-09-18 | 2026-09-18 | |
+| R-01 | First git commit and the `archive/backend` branch | High | Start of INT-01 | Done | 2026-09-18 | 2026-09-20 | Done at REL-01 (D-024): `main` and orphan `archive/backend` pushed to GitHub on 2026-09-20 |
+| R-02 | Test session with a webcam and real hands | High | Writing more INT-01 code | Open | 2026-09-18 | 2026-09-20 | Still owed; now planned on the public site (REL-01 step 8, `docs/deploy.md` 5.2) |
+| R-03 | The 150 ms point age threshold is close to the hand pipeline latency | High | INT-01 acceptance | Done | 2026-09-18 | 2026-09-20 | D-045 (QA-02): 150 ms with the GPU delegate, 250 ms with CPU, measured against interval p95 + infer p95 (`docs/benchmark.md` section 6) |
+| R-04 | Start CLS-01 (dataset mode, data capture) in parallel | Medium | QA-01 | Done | 2026-09-18 | 2026-09-20 | CLS-01 done (D-043); real capture with participants and mannequins still pending |
+| R-05 | One Euro filters in stage px, so it depends on window size and DPR | Low | QA-02 | Open | 2026-09-18 | 2026-09-20 | Not addressed in QA-02; the solver reset on layout change limits the effect. Revisit with real-webcam measurements |
+| R-06 | Chores: `dist/`, README, comments, the rest of INT-01 | Low | REL-01 (item d alone: INT-01) | Done | 2026-09-18 | 2026-09-20 | a: REL-01 (D-050); b: README lists `solver`; c: comments and the duplicate line fixed 2026-09-20; d: `CloseGate` wired in INT-01 (D-037), real-hand run stays under R-02 |
 | R-07 | The reveal region is the quadrilateral of four fingertips and the mask is a cell set (locking a square was a mistake) | High | QA-01 | Done | 2026-09-18 | 2026-09-18 | 2026-09-18 |
 
 ## 4. Item details
@@ -70,11 +70,11 @@ Current state: `git log` reports that branch `main` has no commits; every file i
 
 To do:
 
-- [ ] Run the full set of check commands on the development machine and record the results in the log: `lint`, `lint:boundaries`, `check:invariants`, `test:unit`, `test:e2e` (full suite), `build`. Run date: ____
-- [ ] Create the `archive/backend` branch holding `archive/backend/` per D-024, then remove this directory from `main`.
-- [ ] First commit on `main`. Check that `git status` no longer lists `.task` models, wasm, `public/spike-assets/`, `dist/`, `test-results/` (already in `.gitignore`).
-- [ ] Push to a remote or back up somewhere other than drive E:.
-- [ ] From here on, one commit (or one branch) per work package, with the package ID in the commit message.
+- [x] Run the full set of check commands on the development machine and record the results in the log: `lint`, `lint:boundaries`, `check:invariants`, `test:unit`, `test:e2e` (full suite), `build`. Run date: 2026-09-20 (unit 267/267, e2e 65/65, deploy 12/12; see `docs/test-report-mask.md`)
+- [x] Create the `archive/backend` branch holding `archive/backend/` per D-024, then remove this directory from `main`. Done 2026-09-20 (orphan branch; `/archive/` ignored on `main`).
+- [x] First commit on `main`. Check that `git status` no longer lists `.task` models, wasm, `public/spike-assets/`, `dist/`, `test-results/` (already in `.gitignore`). Done 2026-09-20 (268 files, 2.6 MB).
+- [x] Push to a remote or back up somewhere other than drive E:. Done 2026-09-20: https://github.com/Lorah101204/Finger_And_Face_Tracking.
+- [x] From here on, one commit (or one branch) per work package, with the package ID in the commit message. In force since 2026-09-20 (English messages).
 
 Close criteria: `git log` on `main` has a commit containing the full state after ROI-01; the `archive/backend` branch exists; a copy exists off the machine.
 
@@ -148,9 +148,9 @@ Close criteria: the number of cell changes while holding the hands still does no
 Recorded: 2026-09-18. Priority: low.
 
 - [x] a. `dist/` contains `spike-assets/` (person sample images, `mobilenetv2-12.onnx`, WebM) because they live in `public/`. Before REL-01: move the spike assets out of `public/` or exclude them from the build. Done: 2026-09-20 (REL-01, D-050: the `wctBuild` plugin deletes `dist/spike-assets` in `closeBundle`, CI checks `test ! -e dist/spike-assets`)
-- [ ] b. README, Structure section: the e2e list is missing `solver`. Done: ____
-- [ ] c. The header comment of `src/loop/frameLoop.ts` still says "no HandWindowSource yet, so the window stays closed until ROI-01" (outdated after ROI-01). The "How to read" part of WORK-BREAKDOWN repeats the "Section 6" line twice. Done: ____
-- [ ] d. The rest of INT-01: `HandWindowSource` is already wired into the loop and the UI can already switch the window source, both done in ROI-01. Still missing: wire `cameraCloseReason()` into `frameLoop` to close the region with `no-camera` and `tab-hidden` (currently only shown in the debug bar of `StagePage`), and run the section 7 scenarios with real hands (merged with R-02). Done: ____
+- [x] b. README, Structure section: the e2e list is missing `solver`. Done: 2026-09-19 (list updated in ROI-03)
+- [x] c. The header comment of `src/loop/frameLoop.ts` still says "no HandWindowSource yet, so the window stays closed until ROI-01" (outdated after ROI-01). The "How to read" part of WORK-BREAKDOWN repeats the "Section 6" line. Done: 2026-09-20 (both fixed in the audit after REL-01; `store.ts` comment about four slots fixed too)
+- [x] d. The rest of INT-01: `HandWindowSource` is already wired into the loop and the UI can already switch the window source, both done in ROI-01. `cameraCloseReason()` wired into `frameLoop` as `CloseGate` (no-camera, tab-hidden) in INT-01 (D-037). The run of the section 7 scenarios with real hands stays open under R-02. Done: 2026-09-20 (code part)
 
 ### R-07 The reveal region is the quadrilateral of four fingertips and the mask is a cell set
 
@@ -174,6 +174,7 @@ Add new rows at the end; do not edit old rows.
 |---|---|---|---|
 | 2026-09-18 | R-01 to R-06 | Review after ROI-01, created this file | 6 items open; unit, tsc, lint, invariants, build pass; e2e not rerun |
 | 2026-09-18 | R-07 | Switched the reveal region to the four-fingertip quadrilateral and the cell-set mask, updated plan and code, added tests | Done; D-038 |
+| 2026-09-20 | R-01, R-03, R-04, R-06 | Audit after REL-01: first commit and public repo done, point age locked by D-045, CLS-01 done, chores a to d done; R-02 and R-05 stay open | R-01, R-03, R-04, R-06 Done; R-02, R-05 Open |
 
 Row template to copy:
 

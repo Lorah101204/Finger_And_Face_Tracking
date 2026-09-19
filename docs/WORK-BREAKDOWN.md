@@ -1,6 +1,6 @@
 # Detailed work breakdown: Web Camera Tracking
 
-**White pixel screen · square window opened by four fingertips · face tracking only inside the reveal region**
+**White pixel screen · reveal region = convex hull of the fingertips of both hands (mouse: square window for debugging) · face tracking and person/mannequin classification only inside the reveal region**
 
 This document analyses the original plan [Plan-Web-Camera-Tracking.md](./Plan-Web-Camera-Tracking.md) (updated 14/09/2026) and turns it into concrete work packages, starting from an empty repo. There are no time estimates: order and dependencies are the only constraints. The original backlog IDs (CAM-01, GRID-01, …) are kept for cross-reference; newly added packages have their own IDs (SETUP-00, SPIKE-00, ROI-00, TEST-00, INT-01, PERF-01, UX-01, UX-03).
 
@@ -10,7 +10,6 @@ How to read:
 - Section 4: shared architecture (coordinate systems, directories, data types, frame loop, worker protocol, state machine) and the web UI layer: landing page, consent gate (4.7).
 - Section 5: use case diagram, components per thread, processing flows and state machines, mapped directly to the module names in section 4.
 - Section 6: work packages in execution order; each package has steps, done criteria and tests.
-- Section 6: work packages in execution order; each package has steps, done criteria and tests.
 - Section 7: mandatory test suite, mapped from the plan's test table.
 - Sections 8–9: handover and configuration appendix.
 
@@ -19,7 +18,7 @@ How to read:
 The product is a web page that runs entirely in the browser:
 
 - The output always starts as a white board divided into cells; the user chooses the number of columns × rows. The camera is never shown full-frame.
-- The raw camera is read only by the hand tracking branch. Four fingertips (by default thumb + index finger of both hands) control a square window of N × N cells.
+- The raw camera is read only by the hand tracking branch. The selected fingertips of both hands (by default all five per hand, ROI-03, D-047) control the reveal region: the convex hull of the valid fingertips, rasterized to a cell set; the mouse window (debug) is a square of N × N cells. Earlier stages used four slots and a quadrilateral (D-034, D-038); the text below keeps that history where it explains a decision.
 - Inside the window the camera is shown sharp and in the correct position; outside the window is always white; old cells close immediately when the window moves away.
 - Face landmarks and person/mannequin classification run only on a buffer cropped from the window. The constraint sits at the model input data layer, not at the display layer.
 - Two separate outputs: `faceDetected` and `subjectType ∈ {person, mannequin, unknown}`.
@@ -249,7 +248,7 @@ type FrameOutput = {
 
 1. `CameraSource` emits a `FrameStamp` via `requestVideoFrameCallback` (fallback rAF).
 2. If the hand pipeline is idle: send the raw frame to the hand landmarker (allowed under I1). The result returns asynchronously and updates `HandTracker` and the slots.
-3. `WindowSource.current(now)` → `RevealShape | null`. The source is the mouse (debug, square window) or the hands (slots → `quadSolver`: quadrilateral of four fingertips, D-038).
+3. `WindowSource.current(now)` → `RevealShape | null`. The source is the mouse (debug, square window) or the hands (`fingertips.ts` → `hullSolver`: convex hull of the valid fingertips, D-047; before ROI-03 this was slots → `quadSolver`, D-038).
 4. `buildMask(shape, layout, mirror, epoch, { prev, hysteresisCells })` exactly once → `mask` (cell set: the full box for the mouse; the quadrilateral rasterized into cells with hysteresis against the previous frame's mask) or `null`. Update `RevealState`; on closed → open, `epoch++` and reset the filters; on open → closed, clear `ValidatedFace[]`, `FaceClient.rejectAll()`, `ClassifierClient.rejectAll()`.
 5. Compositor: fill white → grid lines (if enabled) → if there is a mask: clip with the union path of the open cells, then `drawImage(video, cameraRect → stageRect)` of the bounding box → overlay: four dots, cell set outline and dashed quadrilateral, validated faces (drawn inside the same clip).
 6. If there is a mask, the face pipeline is idle, the ROI side ≥ threshold and the rate says it is due: `buildRestrictedFrame(video, mask, stamp)` → `FaceClient.submit()`; the classifier receives the same `RestrictedFrame` at a sparser rate.

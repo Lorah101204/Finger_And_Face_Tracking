@@ -112,7 +112,10 @@ export function LandingPage() {
             Hình ảnh camera được xử lý ngay trong trình duyệt. Không có máy chủ nhận dữ liệu; không
             tải lên gì.
           </li>
-          <li>Không lưu video. Chỉ lưu lựa chọn đồng ý này trong trình duyệt của bạn.</li>
+          <li>
+            Không lưu video. Trong trình duyệt của bạn chỉ có lựa chọn đồng ý này, bản cache của
+            model để lần sau mở nhanh, và nhật ký hay dữ liệu thu nếu bạn tự bật trong Cài đặt.
+          </li>
           <li>Camera chỉ bật khi bạn bấm nút ở màn hình kế tiếp.</li>
         </ul>
         {consentCard}

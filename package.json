@@ -2,8 +2,13 @@
   "name": "finger-and-face-tracking",
   "private": true,
   "version": "0.0.0",
+  "description": "Web Camera Tracking: a white pixel grid where the reveal region is the convex hull of your fingertips; face landmarks and person/mannequin classification run only on the revealed crop, entirely in the browser",
+  "homepage": "https://lorah101204.github.io/Finger_And_Face_Tracking/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lorah101204/Finger_And_Face_Tracking.git"
+  },
   "type": "module",
-  "description": "Web Camera Tracking: màn pixel trắng, cửa sổ vuông mở bằng bốn đầu ngón tay, face tracking chỉ trong vùng mở",
   "engines": {
     "node": ">=20"
   },
