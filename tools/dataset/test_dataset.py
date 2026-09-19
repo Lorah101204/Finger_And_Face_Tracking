@@ -172,9 +172,9 @@ class DatasetToolsTest(unittest.TestCase):
         body = stats_tool.render(all_samples(sessions), len(sessions), json.loads((self.root / "splits.json").read_text()))
         self.assertIn("| person | 10 | 1 | 2 |", body)
         self.assertIn("| mannequin | 5 | 1 | 1 |", body)
-        self.assertIn("### Cỡ cửa sổ", body)
-        self.assertIn("| tổng | 5 | 11 | 4 | 20 |", body)  # small, medium, large
-        self.assertIn("### Theo tập", body)
+        self.assertIn("### By window size", body)
+        self.assertIn("| total | 5 | 11 | 4 | 20 |", body)  # small, medium, large
+        self.assertIn("### By split", body)
         doc = self.tmp / "dataset.md"
         doc.write_text("# x\n\n<!-- dataset:begin -->\ncũ\n<!-- dataset:end -->\n\nsau\n", encoding="utf-8")
         self.assertEqual(stats_tool.main([str(self.root), "--doc", str(doc)]), 0)

@@ -1,9 +1,10 @@
-# QA-01 (D-039): CI chạy toàn bộ kiểm tra của README "Kiểm thử và lint" trên Linux với Chromium của Playwright và camera
-# giả. Model (.task) tải theo public/models/models.json và cache theo sha256 trong manifest; wasm copy từ node_modules.
-# Ca e2e cần asset cục bộ (face.png, hands.jpg, không commit) tự bỏ qua. REL-01 (D-048, D-050): job check build với
-# VITE_BASE (biến repo PAGES_BASE, mặc định /<repo>/ cho https://<user>.github.io/<repo>/), kiểm bản build bằng
-# `test:deploy` (service worker, gốc đường dẫn, I9) rồi tải dist/ lên làm artefact Pages; job deploy đưa nó lên GitHub Pages
-# chỉ khi push main (Settings → Pages → Source: GitHub Actions). Rollback: chạy lại (re-run) job deploy của commit cũ.
+# QA-01 (D-039): CI runs every check of the README section "Tests and lint" on Linux with Playwright's Chromium and a
+# fake camera. Models (.task) are downloaded per public/models/models.json and cached by the manifest's sha256; wasm is
+# copied from node_modules. E2E cases that need local assets (face.png, hands.jpg, not committed) skip themselves.
+# REL-01 (D-048, D-050): the check job builds with VITE_BASE (repository variable PAGES_BASE, default /<repo>/ for
+# https://<user>.github.io/<repo>/), verifies the production build with `test:deploy` (service worker, base path, I9) and
+# uploads dist/ as the Pages artifact; the deploy job publishes it to GitHub Pages only on push to main (Settings → Pages →
+# Source: GitHub Actions). Rollback: re-run the deploy job of an older commit.
 name: CI
 
 on:
@@ -13,15 +14,15 @@ on:
   workflow_dispatch:
     inputs:
       soak_minutes:
-        description: 'Soak PERF-01 (phút); job soak chỉ chạy khi kích hoạt thủ công'
+        description: 'PERF-01 soak (minutes); the soak job only runs when triggered manually'
         default: '15'
       bench_seconds:
-        description: 'Benchmark QA-02 (giây mỗi số đo); job bench chỉ chạy khi kích hoạt thủ công'
+        description: 'QA-02 benchmark (seconds per measurement); the bench job only runs when triggered manually'
         default: '20'
 
 concurrency:
   group: ci-${{ github.ref }}
-  # Pull request: push mới hủy lần chạy cũ. main: không hủy để job deploy không bị cắt giữa chừng.
+  # Pull request: a new push cancels the previous run. main: never cancel, so the deploy job is not cut off.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -30,8 +31,8 @@ jobs:
     timeout-minutes: 45
     env:
       CI: 'true'
-      # REL-01 (D-050): gốc đường dẫn của trang cho build và test:deploy (không đặt cho cả job: dev server của e2e phải
-      # ở '/' như tài liệu). Chưa có tên miền: /<repo>/; có tên miền: đặt biến repo PAGES_BASE = /.
+      # REL-01 (D-050): base path of the page for build and test:deploy only (not for the whole job: the e2e dev server
+      # must stay at '/' as documented). Without a custom domain: /<repo>/; with one: set repository variable PAGES_BASE = /.
       PAGES_BASE: ${{ vars.PAGES_BASE || format('/{0}/', github.event.repository.name) }}
     steps:
       - uses: actions/checkout@v4
@@ -43,7 +44,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Cache model MediaPipe
+      - name: Cache MediaPipe models
         uses: actions/cache@v4
         with:
           path: public/models/*.task
@@ -56,10 +57,10 @@ jobs:
       - run: npm run check:invariants
       - run: npx prettier --check .
 
-      - name: Cài Chromium cho Playwright
+      - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
 
-      - name: Kiểm sơ đồ Mermaid
+      - name: Check Mermaid diagrams
         run: |
           node tools/check-mermaid.mjs docs/WORK-BREAKDOWN.md
           node tools/check-mermaid.mjs docs/Plan-Web-Camera-Tracking.md
@@ -67,38 +68,38 @@ jobs:
       - name: Unit (Vitest)
         run: npx vitest run --reporter=default --reporter=json --outputFile=reports/unit.json
 
-      - name: Công cụ dataset và metric phân loại (CLS-01, CLS-02; unittest Python, thư viện chuẩn)
+      - name: Dataset tools and classifier metrics (CLS-01, CLS-02; Python unittest, standard library)
         run: |
           python3 -m unittest discover -s tools/dataset -p "test_*.py"
           python3 -m unittest discover -s tools/train -p "test_*.py"
 
-      - name: E2E (Playwright, camera giả)
+      - name: E2E (Playwright, fake camera)
         run: npm run test:e2e
 
       - run: npm run build
         env:
           VITE_BASE: ${{ env.PAGES_BASE }}
 
-      - name: Kiểm build sạch (REL-01, mục 7.27)
+      - name: Check clean build (REL-01, section 7.27)
         env:
           VITE_BASE: ${{ env.PAGES_BASE }}
         run: |
           test ! -e dist/spike-assets
           test -f dist/sw.js
           ! grep -q __WCT_ dist/sw.js
-          echo "dist/: $(du -sh dist | cut -f1); file lớn nhất: $(find dist -type f -printf '%s %p\n' | sort -n | tail -1)"
+          echo "dist/: $(du -sh dist | cut -f1); largest file: $(find dist -type f -printf '%s %p\n' | sort -n | tail -1)"
           echo "VITE_BASE=$VITE_BASE; index.html: $(grep -o 'src="[^"]*"' dist/index.html)"
 
-      - name: E2E trên bản build (service worker, gốc đường dẫn, I9; REL-01)
+      - name: E2E on the production build (service worker, base path, I9; REL-01)
         env:
           VITE_BASE: ${{ env.PAGES_BASE }}
         run: npm run test:deploy
 
-      - name: Sinh báo cáo mask từ JSON
+      - name: Generate the mask report from JSON
         if: always()
         run: node tools/test-report.mjs
 
-      - name: Lưu kết quả test
+      - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -109,7 +110,7 @@ jobs:
             docs/test-report-mask.md
           if-no-files-found: ignore
 
-      - name: Lưu dist (xem thử ở pull request)
+      - name: Upload dist (preview for pull requests)
         if: github.event_name != 'push'
         uses: actions/upload-artifact@v4
         with:
@@ -117,14 +118,15 @@ jobs:
           path: dist/
           retention-days: 7
 
-      - name: Tải dist lên làm artefact GitHub Pages
+      - name: Upload dist as the GitHub Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist
 
-  # REL-01 (D-048, D-050): đưa artefact Pages của job check lên GitHub Pages. Chỉ push main; PR và workflow_dispatch không
-  # deploy. Địa chỉ in ở summary và ở environment github-pages. Rollback: re-run job này ở lần chạy của commit cũ.
+  # REL-01 (D-048, D-050): publish the Pages artifact of the check job to GitHub Pages. Push to main only; pull requests
+  # and workflow_dispatch do not deploy. The URL is printed in the summary and on the github-pages environment.
+  # Rollback: re-run this job on the run of an older commit.
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: check
@@ -145,10 +147,10 @@ jobs:
       - id: deploy
         uses: actions/deploy-pages@v4
       - run: |
-          echo "Đã deploy: ${{ steps.deploy.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Mở thẳng ứng dụng: ${{ steps.deploy.outputs.page_url }}#/app" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployed: ${{ steps.deploy.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Open the app directly: ${{ steps.deploy.outputs.page_url }}#/app" >> "$GITHUB_STEP_SUMMARY"
 
-  # PERF-01: soak dài chạy riêng khi kích hoạt thủ công (workflow_dispatch), không nằm trong job check.
+  # PERF-01: the long soak runs separately when triggered manually (workflow_dispatch), not inside the check job.
   soak:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -163,19 +165,19 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Cache model MediaPipe
+      - name: Cache MediaPipe models
         uses: actions/cache@v4
         with:
           path: public/models/*.task
           key: models-${{ hashFiles('public/models/models.json') }}
       - run: npm run models:fetch
       - run: npx playwright install --with-deps chromium
-      - name: Soak (Playwright, camera giả)
+      - name: Soak (Playwright, fake camera)
         run: npm run test:soak
-      - name: Sinh benchmark từ mẫu soak
+      - name: Generate the benchmark from soak samples
         if: always()
         run: node tools/benchmark-report.mjs
-      - name: Lưu kết quả soak
+      - name: Upload soak results
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -185,8 +187,9 @@ jobs:
             docs/benchmark.md
           if-no-files-found: ignore
 
-  # QA-02: benchmark ma trận thiết bị trên runner (Chromium headless shell, không GPU: chỉ là cận dưới) khi kích hoạt thủ
-  # công; số đo trên máy mục tiêu có GPU chạy `npm run test:bench` tại chỗ rồi commit docs/benchmark-matrix.json.
+  # QA-02: device-matrix benchmark on the runner (Chromium headless shell, no GPU: a lower bound only) when triggered
+  # manually; measurements on the target machine with a GPU come from `npm run test:bench` locally, then commit
+  # docs/benchmark-matrix.json.
   bench:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -201,19 +204,19 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Cache model MediaPipe
+      - name: Cache MediaPipe models
         uses: actions/cache@v4
         with:
           path: public/models/*.task
           key: models-${{ hashFiles('public/models/models.json') }}
       - run: npm run models:fetch
       - run: npx playwright install --with-deps chromium
-      - name: Benchmark (Playwright, nguồn tổng hợp)
+      - name: Benchmark (Playwright, synthetic source)
         run: npm run test:bench
-      - name: Gộp ma trận thiết bị
+      - name: Merge the device matrix
         if: always()
         run: node tools/benchmark-report.mjs
-      - name: Lưu kết quả bench
+      - name: Upload bench results
         if: always()
         uses: actions/upload-artifact@v4
         with:

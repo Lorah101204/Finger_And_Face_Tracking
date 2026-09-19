@@ -1,5 +1,5 @@
-# REL-01 (D-050): LF trong repo và trong working copy trên mọi hệ (Prettier endOfLine lf, .editorconfig), để
-# `prettier --check .` và diff giống nhau giữa Windows (core.autocrlf) và CI Linux.
+# REL-01 (D-050): LF in the repo and in the working copy on every OS (Prettier endOfLine lf, .editorconfig), so that
+# `prettier --check .` and diffs behave the same on Windows (core.autocrlf) and on the Linux CI runner.
 * text=auto eol=lf
 *.png binary
 *.jpg binary

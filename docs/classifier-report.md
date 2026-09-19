@@ -1,49 +1,49 @@
-# Báo cáo phân loại người và hình nộm (CLS-02)
+# Person and mannequin classification report (CLS-02)
 
-Tài liệu của gói CLS-02 (WORK-BREAKDOWN mục 6, quyết định D-044): đường ống phân loại trong app, model, cách đánh giá theo mục 7.3 và kết quả. Trạng thái: **chưa có model huấn luyện** vì chưa có dataset thật (CLS-01 mục 8); đường ống chạy với model stub và được kiểm thử tự động; script huấn luyện, export, kiểm export và đánh giá đã có nhưng chưa chạy được trên máy phát triển (không có PyTorch).
+Document of work package CLS-02 (WORK-BREAKDOWN section 6, decision D-044): the classification pipeline in the app, the model, the evaluation method per section 7.3 and the results. Status: **no trained model yet** because there is no real dataset (CLS-01 section 8); the pipeline runs with a stub model and is tested automatically; the training, export, export-check and evaluation scripts exist but cannot run on the development machine yet (no PyTorch).
 
-## 1. Đường ống trong app (bước 4, 5, 6)
+## 1. Pipeline in the app (steps 4, 5, 6)
 
-- `src/classify/classifier.worker.ts`: ONNX Runtime Web trong module worker, EP `webgpu` khi `navigator.gpu.requestAdapter()` trả adapter (headless shell có `navigator.gpu` nhưng không có adapter) (bundle `onnxruntime-web/webgpu`), không thì `wasm` (D-013); loader wasm theo môi trường (`/node_modules/onnxruntime-web/dist/` khi dev, `/models/ort/` khi build, copy bởi `npm run models:fetch`). Chỉ nhận `RestrictedFrame` qua `detect` (I1): bitmap letterbox 256 được vẽ về cạnh input 128 trên canvas riêng của worker, chuẩn hóa `(x / 255 − 0,45) / 0,225`, chạy session, softmax → `probs [person, mannequin]`; `input.close()` trong `finally`. Warm-up một tensor 0 sau init.
-- `src/classify/classifierClient.ts`: cùng khung với `FaceClient`; worker khởi tạo lười khi vùng mở lần đầu (vòng lặp gọi `start()`): một tác vụ tại một thời điểm, `rejectAll` khi đóng hay đổi epoch, nhịp `max(1000 / 4, p50 inferMs)` (3 đến 5 Hz), p50/p95, `window.__wct.classifier`.
-- Vòng lặp (`src/loop/frameLoop.ts`): khi classifier rảnh, đến nhịp và cạnh ngắn `cameraRect` ≥ 96 px, builder tạo bitmap thứ hai của **cùng crop** (`copies = 2`, không tạo crop khác); kết quả về qua gate epoch, `taskId` đã loại, tuổi ≤ 600 ms, vùng còn mở; nhãn giữ tối đa 1,5 s và gắn vào từng mặt đã validate bằng quy tắc unknown (`src/classify/subjectRule.ts`); đóng vùng thì xóa nhãn, tác vụ đang chạy bị loại khi về.
-- Quy tắc unknown (bước 2, không dùng chuyển động): chưa có kết quả; `max(prob) < 0,7`; cạnh ngắn ROI < 96 px; mặt `partial` mà phần landmark còn trong vùng mở dưới 60 %. `ValidatedFace.subjectType` và `confidence` nằm trong `FrameOutput.faces`.
-- UI (UC-07): nhãn "Người", "Hình nộm", "Khuôn mặt chưa phân loại" kèm phần trăm vẽ trên bbox mặt (compositor, chỉ `fillRect` và `fillText`, trong clip vùng mở), lớp hướng dẫn (UX-01) nêu nhãn ở bước 3, dòng `classifier-stat` trong panel debug, `stats` (PERF-01) có Hz phân loại.
+- `src/classify/classifier.worker.ts`: ONNX Runtime Web in a module worker, EP `webgpu` when `navigator.gpu.requestAdapter()` returns an adapter (the headless shell has `navigator.gpu` but no adapter) (bundle `onnxruntime-web/webgpu`), otherwise `wasm` (D-013); wasm loader per environment (`/node_modules/onnxruntime-web/dist/` in dev, `/models/ort/` in the build, copied by `npm run models:fetch`). Accepts only a `RestrictedFrame` through `detect` (I1): the 256 letterbox bitmap is drawn down to the 128 input size on the worker's own canvas, normalized `(x / 255 − 0.45) / 0.225`, the session runs, softmax → `probs [person, mannequin]`; `input.close()` in `finally`. Warm-up with one zero tensor after init.
+- `src/classify/classifierClient.ts`: same skeleton as `FaceClient`; the worker initializes lazily when the region opens for the first time (the loop calls `start()`): one task at a time, `rejectAll` on close or epoch change, interval `max(1000 / 4, p50 inferMs)` (3 to 5 Hz), p50/p95, `window.__wct.classifier`.
+- The loop (`src/loop/frameLoop.ts`): when the classifier is idle, the interval has elapsed and the short side of `cameraRect` is ≥ 96 px, the builder creates a second bitmap of the **same crop** (`copies = 2`, no separate crop); results pass through the gates for epoch, rejected `taskId`, age ≤ 600 ms and region still open; the label is kept for at most 1.5 s and attached to each validated face by the unknown rule (`src/classify/subjectRule.ts`); closing the region clears the label, and a running task is dropped when it returns.
+- Unknown rule (step 2, no motion used): no result yet; `max(prob) < 0.7`; ROI short side < 96 px; a `partial` face whose share of landmarks still inside the reveal region is below 60 %. `ValidatedFace.subjectType` and `confidence` live in `FrameOutput.faces`.
+- UI (UC-07): the labels "Người" (Person), "Hình nộm" (Mannequin), "Khuôn mặt chưa phân loại" (Unclassified face) with a percentage are drawn on the face bbox (compositor, only `fillRect` and `fillText`, clipped to the reveal region), the guidance layer (UX-01) names the label in step 3, the `classifier-stat` line in the debug panel, `stats` (PERF-01) includes the classification Hz.
 
 ## 2. Model
 
-| Mục | Hiện tại (stub, D-044) | Kế hoạch (model thật) |
+| Item | Current (stub, D-044) | Planned (real model) |
 |---|---|---|
-| File | `public/models/classifier-stub.onnx` (360 byte, sinh bởi `tools/make-stub-classifier.mjs` trong `models:fetch`) | `public/models/classifier.onnx` (export từ checkpoint, sha256 ghi vào `public/models/models.json`) |
-| Kiến trúc | GlobalAveragePool → Flatten → Gemm(3 → 2): person = G − (R + B) / 2 trên màu trung bình đã chuẩn hóa | MobileNetV3-small (hoặc EfficientNet-B0) của torchvision, đầu ra 2 lớp |
-| Input, output | `input` float32 [1, 3, 128, 128], `logits` [1, 2], opset 17 | như stub (cố định, không dynamic axes) |
-| Ý nghĩa | Kiểm đường ống: cảnh tổng hợp xanh lá → person, magenta → mannequin, xám đệm → 0,5/0,5 (unknown) | Phân loại thật theo dataset CLS-01 |
+| File | `public/models/classifier-stub.onnx` (360 bytes, generated by `tools/make-stub-classifier.mjs` in `models:fetch`) | `public/models/classifier.onnx` (exported from the checkpoint, sha256 recorded in `public/models/models.json`) |
+| Architecture | GlobalAveragePool → Flatten → Gemm(3 → 2): person = G − (R + B) / 2 on the normalized mean color | torchvision MobileNetV3-small (or EfficientNet-B0), 2-class output |
+| Input, output | `input` float32 [1, 3, 128, 128], `logits` [1, 2], opset 17 | same as the stub (fixed, no dynamic axes) |
+| Purpose | Pipeline check: synthetic green scene → person, magenta → mannequin, gray padding → 0.5/0.5 (unknown) | Real classification from the CLS-01 dataset |
 
-Đổi sang model thật: `python tools/train/train.py data/dataset --out data/train/run1`, `python tools/train/export_onnx.py data/train/run1/classifier.pt --out public/models/classifier.onnx`, `python tools/train/check_onnx.py data/train/run1/classifier.pt public/models/classifier.onnx --root data/dataset`, ghi sha256 vào `models.json` (mục `classifier`), đổi `DEFAULTS.classifier.modelPath` sang `/models/classifier.onnx`. Augment trong `tools/train/dataset.py` mô phỏng đường chạy: crop lệch biên, letterbox xám 128, giảm độ phân giải, lật, jitter sáng; chuẩn hóa cùng giá trị với app. Môi trường: `tools/train/requirements.txt`.
+Switching to the real model: `python tools/train/train.py data/dataset --out data/train/run1`, `python tools/train/export_onnx.py data/train/run1/classifier.pt --out public/models/classifier.onnx`, `python tools/train/check_onnx.py data/train/run1/classifier.pt public/models/classifier.onnx --root data/dataset`, record the sha256 in `models.json` (entry `classifier`), change `DEFAULTS.classifier.modelPath` to `/models/classifier.onnx`. The augmentations in `tools/train/dataset.py` mimic the runtime path: off-edge crops, gray letterbox 128, downscaling, flips, brightness jitter; normalization with the same values as the app. Environment: `tools/train/requirements.txt`.
 
-## 3. Cách đánh giá (mục 7.3)
+## 3. Evaluation method (section 7.3)
 
-`python tools/train/eval.py public/models/classifier.onnx data/dataset --split test --doc docs/classifier-report.md` chạy model bằng onnxruntime Python trên tập test (chia theo `subjectId`), áp cùng quy tắc unknown (ngưỡng 0,7, ROI < 96 px), rồi ghi mục 4: precision và recall từng lớp (unknown và miss tính vào thiếu recall của lớp thật; mẫu nền hay chưa rõ được gán nhãn tính vào FP), tỉ lệ hình nộm bị gán người, tỉ lệ unknown, theo cỡ cửa sổ, theo vị trí cắt biên, hình nộm silicone báo riêng. Phần tính metric thuần Python ở `tools/train/metrics.py` có unittest (`python -m unittest discover -s tools/train`). Mục tiêu: precision và recall ≥ 0,90 cả hai lớp.
+`python tools/train/eval.py public/models/classifier.onnx data/dataset --split test --doc docs/classifier-report.md` runs the model with Python onnxruntime on the test split (split by `subjectId`), applies the same unknown rule (threshold 0.7, ROI < 96 px), then writes section 4: per-class precision and recall (unknown and misses count against the recall of the true class; background or unclear samples that receive a label count as FP), the share of mannequins labeled as person, the unknown share, by window size, by edge-crop position, silicone mannequins reported separately. The pure-Python metric code in `tools/train/metrics.py` has unittests (`python -m unittest discover -s tools/train`). Target: precision and recall ≥ 0.90 for both classes.
 
-## 4. Kết quả
+## 4. Results
 
 <!-- classifier:begin -->
-Chưa có model huấn luyện và dataset thật: bảng sinh sau khi chạy `tools/train/eval.py --doc docs/classifier-report.md`. Với model stub, e2e `tests/e2e/classify.spec.ts` ghi số đo đường ống (EP, init, warm-up, inferMs, nhịp) vào `docs/test-report-mask.md`.
+No trained model and no real dataset yet: the table is generated after running `tools/train/eval.py --doc docs/classifier-report.md`. With the stub model, the e2e `tests/e2e/classify.spec.ts` records the pipeline measurements (EP, init, warm-up, inferMs, rate) in `docs/test-report-mask.md`.
 <!-- classifier:end -->
 
-## 5. Đường ống trên máy mục tiêu (QA-02, model stub)
+## 5. Pipeline on the target machine (QA-02, stub model)
 
-Đo bằng `npm run test:bench` (ca 2 và 3 của `tests/bench/bench.spec.ts`, ma trận đầy đủ ở [benchmark.md](benchmark.md) mục 5), cửa sổ chuột 16 ô quanh mặt của `face.png`, 20 s, nhịp 4 Hz:
+Measured with `npm run test:bench` (test cases 2 and 3 of `tests/bench/bench.spec.ts`, full matrix in [benchmark.md](benchmark.md) section 5), a 16-cell mouse window around the face of `face.png`, 20 s, 4 Hz rate:
 
-| Trình duyệt | EP mặc định | init | infer p50 / p95 | Hz | Khoảng cách kết quả p95 | Tuổi lúc gate nhận p95 | wasm (ép `ep=wasm`) |
+| Browser | Default EP | init | infer p50 / p95 | Hz | Result interval p95 | Age at gate receipt p95 | wasm (forced `ep=wasm`) |
 |---|---|---|---|---|---|---|---|
-| Chrome 153, RTX 3050 | webgpu (adapter nvidia) | 982 ms | 19,6 / 30,9 ms | 4,0 | 272 ms | 54 ms | init 658 ms, p50 4,7 ms, 4,0 Hz |
-| Edge 153, RTX 3050 | webgpu | 1105 ms | 17,0 / 28,8 ms | 4,0 | 271 ms | 59 ms | init 680 ms, p50 4,8 ms, 4,0 Hz |
-| Chromium headless shell (SwiftShader) | wasm (không có adapter) | 1554 ms | 1,0 / 1,2 ms | 3,0 | 351 ms | 37 ms | init 935 ms, p50 1,0 ms, 3,5 Hz |
+| Chrome 153, RTX 3050 | webgpu (adapter nvidia) | 982 ms | 19.6 / 30.9 ms | 4.0 | 272 ms | 54 ms | init 658 ms, p50 4.7 ms, 4.0 Hz |
+| Edge 153, RTX 3050 | webgpu | 1105 ms | 17.0 / 28.8 ms | 4.0 | 271 ms | 59 ms | init 680 ms, p50 4.8 ms, 4.0 Hz |
+| Chromium headless shell (SwiftShader) | wasm (no adapter) | 1554 ms | 1.0 / 1.2 ms | 3.0 | 351 ms | 37 ms | init 935 ms, p50 1.0 ms, 3.5 Hz |
 
-Nhận xét: với stub 360 byte, wasm nhanh hơn webgpu vì chi phí điều phối GPU trội (khoảng 15 đến 20 ms mỗi lần chạy); S6 với MobileNetV2 224 px cho webgpu 19 ms so với wasm 59 ms, nên thứ tự EP giữ theo D-013 và đo lại bằng `ep=wasm` khi có model thật (nếu wasm vẫn nhanh hơn với model 128 px thì đổi thứ tự trong `core/config.ts`). Cả hai EP xa dưới nhịp 250 ms nên Hz phân loại do rate control và nhịp buffer mặt quyết định (khoảng cách kết quả là bội của khoảng cách buffer mặt: 3 × 86 ms trên GPU thật, 3 × 117 ms headless). Tuổi kết quả và tuổi nhãn chốt theo số đo này ở benchmark.md mục 6 (D-045); ngưỡng unknown 0,7 chỉ chốt được khi có model thật và tập test.
+Remarks: with the 360-byte stub, wasm is faster than webgpu because GPU dispatch overhead dominates (about 15 to 20 ms per run); S6 with MobileNetV2 at 224 px gives webgpu 19 ms versus wasm 59 ms, so the EP order stays per D-013 and is re-measured with `ep=wasm` once a real model exists (if wasm is still faster with the 128 px model, swap the order in `core/config.ts`). Both EPs are far below the 250 ms interval, so the classification Hz is decided by rate control and the face buffer rate (the result interval is a multiple of the face buffer interval: 3 × 86 ms on a real GPU, 3 × 117 ms headless). The result age and label age are locked from these measurements in benchmark.md section 6 (D-045); the unknown threshold 0.7 can only be locked once a real model and a test split exist.
 
-## 6. Còn lại
+## 6. Remaining work
 
-- Thu dataset (CLS-01 mục 8), huấn luyện, export, kiểm export, ghi sha256, đổi `modelPath`, chạy `eval.py --doc` (metric mục 7.3, gồm theo cỡ cửa sổ, cắt biên, hình nộm silicone).
-- Với model thật: đo lại EP bằng `npm run test:bench` (ca 3) và chốt ngưỡng unknown theo tập test.
+- Capture the dataset (CLS-01 section 8), train, export, check the export, record the sha256, change `modelPath`, run `eval.py --doc` (section 7.3 metrics, including by window size, edge crop, silicone mannequins).
+- With the real model: re-measure the EPs with `npm run test:bench` (test case 3) and lock the unknown threshold from the test split.

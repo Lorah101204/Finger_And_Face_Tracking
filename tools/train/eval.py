@@ -73,8 +73,8 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
     if not records:
-        raise SystemExit(f"tập {args.split} rỗng")
-    body = render_markdown(records, f"Tập {args.split} ({args.onnx.name})")
+        raise SystemExit(f"split {args.split} is empty")
+    body = render_markdown(records, f"Split {args.split} ({args.onnx.name})")
     summary = {"pr": precision_recall(records), **rates(records)}
     print(body)
     print(json.dumps(summary, indent=2, ensure_ascii=False))
@@ -82,9 +82,9 @@ def main(argv: list[str] | None = None) -> int:
         text = args.doc.read_text(encoding="utf-8")
         i, j = text.find(BEGIN), text.find(END)
         if i < 0 or j < 0 or j < i:
-            raise SystemExit(f"{args.doc} thiếu mốc {BEGIN} … {END}")
+            raise SystemExit(f"{args.doc} is missing the markers {BEGIN} … {END}")
         args.doc.write_text(text[:i] + BEGIN + "\n" + body + "\n" + text[j:], encoding="utf-8", newline="\n")
-        print(f"đã ghi {args.doc}")
+        print(f"wrote {args.doc}")
     return 0
 
 

@@ -1,229 +1,229 @@
-**Kế hoạch web Camera Tracking — màn pixel trắng, vùng mở bằng bốn đầu ngón tay và face tracking trong vùng mở**
+**Web Camera Tracking plan: white pixel screen, reveal region from four fingertips, and face tracking inside the reveal region**
 
-Cập nhật 14/09/2026 theo ý tưởng mới của người dùng. Tài liệu này thay thế phương án vận hành ở bản đầu. Đây là kế hoạch thiết kế; chưa có phần mềm được xây hoặc benchmark trong lần cập nhật này.
+Updated 14/09/2026 following the user's new idea. This document replaces the operating approach of the first version. It is a design plan; no software has been built or benchmarked in this update.
 
-Cập nhật 18/09/2026 (D-038): việc chốt vùng mở là **hình vuông** ở bản 14/09 là sai sót. Vùng mở là **tứ giác có bốn đỉnh là bốn đầu ngón tay**; mask là tập các ô lưới nằm trong tứ giác hoặc bị cạnh của tứ giác cắt qua (ô bị cắt cũng mở). Các đoạn dưới đây đã sửa theo; cửa sổ vuông chỉ còn ở chế độ điều khiển bằng chuột để kiểm hình học.
+Updated 18/09/2026 (D-038): locking the reveal region as a **square** in the 14/09 version was a mistake. The reveal region is a **quadrilateral whose four vertices are the four fingertips**; the mask is the set of grid cells that lie inside the quadrilateral or are crossed by one of its edges (crossed cells also open). The sections below have been corrected accordingly; the square window remains only in the mouse-controlled mode for geometry checks.
 
-**Mục tiêu trải nghiệm: dùng bốn đầu ngón tay mở một vùng tứ giác trên màn lưới trắng để nhìn camera; nhận diện mặt/người chỉ hoạt động trên hình ảnh đang được mở.**
+**Experience goal: use four fingertips to open a quadrilateral region on the white grid screen to see the camera; face/person recognition works only on the image that is currently revealed.**
 
-Các yêu cầu đã xác nhận:
+Confirmed requirements:
 
-- Output bắt đầu là màn trắng chia ô; người dùng chọn độ phân giải lưới.
-- Input camera vẫn được dùng cho hand/finger tracking khi output bị che kín.
-- Bốn điểm đầu ngón tay có thể tùy chọn, là bốn đỉnh của vùng mở (tứ giác); ô lưới nằm trong hoặc bị cạnh cắt qua đều mở.
-- Vùng mở hiển thị camera trực tiếp tại đúng vị trí đó. Phần ngoài tiếp tục bị che trắng.
-- Face/human tracking chỉ được chạy trên dữ liệu camera của vùng mở. Vùng bị che không được đưa vào các model mặt/người.
-- Yêu cầu human đã xác nhận trước đây là phân biệt người với hình nộm giống người. Face landmarks và phân loại người/hình nộm là hai đầu ra riêng.
+- The output starts as a white screen divided into cells; the user chooses the grid resolution.
+- The camera input is still used for hand/finger tracking while the output is fully covered.
+- Four selectable fingertip points are the four vertices of the reveal region (a quadrilateral); grid cells inside it or crossed by an edge all open.
+- The reveal region shows the live camera at exactly that position. The rest stays covered in white.
+- Face/human tracking runs only on the camera data of the reveal region. Covered areas must not be fed into the face/person models.
+- The previously confirmed human requirement is to distinguish a person from a human-like mannequin. Face landmarks and person/mannequin classification are two separate outputs.
 
-**Các mặc định dưới đây là đề xuất triển khai, có thể điều chỉnh khi làm PoC.**
+**The defaults below are implementation proposals and may be adjusted during the PoC.**
 
-| Chi tiết | Mặc định đề xuất |
+| Detail | Proposed default |
 |---|---|
-| Camera | Webcam desktop, một nguồn video |
-| Bốn điểm | Ngón cái và ngón trỏ của hai tay; có chọn lại từng điểm |
-| Vùng mở | Tứ giác bốn đầu ngón, rasterize thành tập ô lưới: ô trong tứ giác và ô bị cạnh cắt qua |
-| Hình ảnh được mở | Camera rõ nét; độ phân giải lưới chỉ quyết định kích thước ô che |
-| Sau khi cửa sổ di chuyển | Ô cũ đóng lại ngay; không lưu vệt mở |
-| Mất một điểm bắt buộc | Đóng vùng mở khi xác định điểm không còn hợp lệ; xóa kết quả mặt |
-| Face tracking | Tìm mặt ngay khi có vùng mở hợp lệ, sau đó xử lý lặp lại khi vùng còn mở |
-| Mặt bị cắt bởi biên vùng mở | Mặc định chưa công nhận một mặt đầy đủ; gợi ý mở rộng vùng |
-| Overlay tay | Chỉ bốn chấm điều khiển và viền cửa sổ, không hiển thị camera ngoài vùng mở |
+| Camera | Desktop webcam, one video source |
+| Four points | Thumb and index finger of both hands; each point can be reselected |
+| Reveal region | Quadrilateral of four fingertips, rasterized into a set of grid cells: cells inside the quadrilateral and cells crossed by an edge |
+| Revealed image | Sharp camera image; the grid resolution only determines the size of the covering cells |
+| After the window moves | Old cells close immediately; no reveal trail is kept |
+| A required point is lost | Close the reveal region once the point is determined to be invalid; clear face results |
+| Face tracking | Search for a face as soon as a valid reveal region exists, then process repeatedly while the region stays open |
+| Face cut by the reveal region border | By default not recognized as a full face; suggest enlarging the region |
+| Hand overlay | Only the four control dots and the window outline; no camera shown outside the reveal region |
 
-**Luồng trải nghiệm được sửa thành năm bước.**
+**The experience flow is revised into five steps.**
 
-1. Người dùng chọn camera và độ phân giải lưới; output đã hiển thị trắng trước khi camera bắt đầu phát.
-2. Hand tracker tìm các bàn tay từ camera gốc. UI hướng dẫn đưa hai tay vào khung hình; có thể hiện các chấm đầu ngón tay trên nền trắng.
-3. Khi bốn điểm đã chọn hợp lệ, ứng dụng dựng tứ giác và mở các ô nằm trong hoặc bị cạnh tứ giác cắt qua.
-4. Ảnh camera ở vùng mở được gửi sang nhánh face/human. Có vùng mở là điều kiện khởi chạy; không cần phát hiện mặt ở toàn camera trước để quyết định bật model.
-5. Khi tay thay đổi, vùng mở cập nhật. Khi vùng đóng, face/human dừng nhận tác vụ mới, kết quả hiện tại bị xóa và tác vụ trả về muộn bị loại.
+1. The user chooses the camera and the grid resolution; the output already shows white before the camera starts playing.
+2. The hand tracker finds hands from the raw camera. The UI guides the user to bring both hands into the frame; fingertip dots may be shown on the white background.
+3. When the four selected points are valid, the app builds the quadrilateral and opens the cells inside it or crossed by its edges.
+4. The camera image in the reveal region is sent to the face/human branch. Having a reveal region is the start condition; no full-camera face detection is needed beforehand to decide whether to enable the model.
+5. When the hands change, the reveal region updates. When the region closes, face/human stops receiving new tasks, the current results are cleared and late results are discarded.
 
-Ở đây “enable ontime” được hiểu là bật suy luận khi có vùng mở và tiếp tục cập nhật theo thời gian thực trong lúc mở, không chỉ chạy một lần. Bật model không đồng nghĩa chắc chắn tìm thấy mặt: cửa sổ có thể đang nhìn vào nền hoặc chỉ lộ một phần quá nhỏ của khuôn mặt.
+Here “enable ontime” means turning inference on when a reveal region exists and continuing to update in real time while it is open, not running just once. Enabling the model does not guarantee a face is found: the window may be looking at the background or exposing only a part of the face that is too small.
 
-**Kiến trúc có hai nhánh với quyền đọc dữ liệu khác nhau.**
+**The architecture has two branches with different data read permissions.**
 
 ```mermaid
 flowchart TD
-    A[Camera gốc] --> B[Hand tracking]
-    B --> C[Bốn điểm và tứ giác]
-    C --> D[Mask vùng mở]
-    A --> E[Chỉ sao chép pixel được mở]
+    A[Raw camera] --> B[Hand tracking]
+    B --> C[Four points and quadrilateral]
+    C --> D[Reveal region mask]
+    A --> E[Copy only revealed pixels]
     D --> E
-    E --> F[Output camera và lưới trắng]
-    E --> G[Ảnh đầu vào giới hạn]
-    G --> H[Face và phân loại người]
-    H --> I[Kiểm tra vùng còn mở]
+    E --> F[Camera output and white grid]
+    E --> G[Restricted input image]
+    G --> H[Face and person classification]
+    H --> I[Check region still open]
     I --> F
 ```
 
-| Nhánh | Được đọc camera gốc? | Khi output bị che kín |
+| Branch | May read the raw camera? | When the output is fully covered |
 |---|---|---|
-| Hand/finger tracker | Có, để tìm và điều khiển bốn điểm | Tiếp tục chạy |
-| Bộ tạo vùng mở | Chỉ nhận tọa độ tay và cấu hình | Không tạo vùng nếu điểm không hợp lệ |
-| Bộ dựng output | Có, nhưng chỉ sao chép pixel được mask cho phép | Vẽ trắng, không lóe camera |
-| Face detector/landmarker | Không; chỉ nhận ảnh được cắt từ vùng mở | Không có tác vụ suy luận mới |
-| Phân loại người/hình nộm | Không; chỉ nhận nội dung vùng mở | Không có tác vụ suy luận mới |
-| Overlay mặt và dữ liệu xuất | Chỉ dùng kết quả còn hợp lệ trong vùng hiện tại | Xóa kết quả mặt/người |
+| Hand/finger tracker | Yes, to find and control the four points | Keeps running |
+| Reveal region builder | Receives only hand coordinates and config | Creates no region if points are invalid |
+| Output compositor | Yes, but copies only pixels allowed by the mask | Draws white, no camera flash |
+| Face detector/landmarker | No; receives only the image cropped from the reveal region | No new inference tasks |
+| Person/mannequin classifier | No; receives only the reveal region content | No new inference tasks |
+| Face overlay and exported data | Uses only results still valid in the current region | Clears face/person results |
 
-Không nối video gốc tới face model rồi lọc kết quả theo vị trí. Cũng không chỉ đặt một lớp CSS trắng lên video trong khi face model vẫn đọc video nguyên bản. Quy tắc giới hạn phải có ở dữ liệu đầu vào của model.
+Do not connect the raw video to the face model and then filter results by position. Do not merely place a white CSS layer over the video while the face model still reads the original video. The restriction rule must apply to the model's input data.
 
-**Thiết kế màn pixel: độ phân giải lưới độc lập với độ phân giải camera.**
+**Pixel screen design: the grid resolution is independent of the camera resolution.**
 
-| Tham số | Ví dụ | Ý nghĩa |
+| Parameter | Example | Meaning |
 |---|---|---|
-| Camera input | 1280 × 720 | Độ chi tiết của ảnh nguồn |
-| Grid resolution | 32 × 18, 64 × 36, 128 × 72 | Số cột và hàng của màn che |
-| Pixel/cell size | 20 × 20 ở sân khấu 1280 × 720 với lưới 64 × 36 | Kích thước một ô hiển thị |
-| Reveal size | Tập ô giao với tứ giác; cạnh ngắn hộp bao ≥ nMin ô | Không ép vuông; ô bị cạnh cắt qua cũng mở |
+| Camera input | 1280 × 720 | Detail level of the source image |
+| Grid resolution | 32 × 18, 64 × 36, 128 × 72 | Number of columns and rows of the covering screen |
+| Pixel/cell size | 20 × 20 on a 1280 × 720 stage with a 64 × 36 grid | Size of one displayed cell |
+| Reveal size | Set of cells intersecting the quadrilateral; short side of the bounding box ≥ nMin cells | Not forced square; cells crossed by an edge also open |
 
-Output khởi tạo màu trắng đặc, vạch lưới xám nhạt có thể bật/tắt. Mặc định phần được mở hiển thị camera gốc rõ nét; không pixel hóa hình ảnh mặt theo độ phân giải lưới.
+The output initializes as solid white, with light gray grid lines that can be toggled. By default the revealed part shows the sharp raw camera; the face image is not pixelated to the grid resolution.
 
-Để giữ ô vuông khi người dùng nhập số cột/hàng bất kỳ, tính cạnh ô c = min(stageWidth / columns, stageHeight / rows), căn giữa bảng và để phần đệm màu trắng. Camera giữ tỷ lệ, dùng một phép biến đổi cố định để ánh xạ vào bảng; không kéo giãn người để lấp bảng. Resize, mirror và thay đổi grid phải cập nhật cùng một hệ tọa độ cho tay, mask, camera và mặt.
+To keep cells square when the user enters any number of columns/rows, compute the cell size c = min(stageWidth / columns, stageHeight / rows), center the board and leave the padding white. The camera keeps its aspect ratio and uses one fixed transform to map onto the board; the person is not stretched to fill the board. Resize, mirror and grid changes must update the same coordinate system for hands, mask, camera and face.
 
-Vùng mở luôn là tập ô nguyên trong bảng (điểm ngoài bảng là không hợp lệ nên tứ giác không tràn bảng); chỉ các ô hiện tại thuộc tập được mở. Cửa sổ vuông N × N chỉ còn ở chế độ điều khiển bằng chuột (kiểm hình học), có kẹp mép và trạng thái giới hạn.
+The reveal region is always a set of whole cells inside the board (a point outside the board is invalid, so the quadrilateral never overflows the board); only the cells currently in the set are open. The N × N square window remains only in the mouse-controlled mode (geometry check), with edge clamping and a limit state.
 
-**Bốn điểm là bốn đỉnh của tứ giác vùng mở (D-038).**
+**The four points are the four vertices of the reveal region quadrilateral (D-038).**
 
-Cách tính trong tọa độ sân khấu, sau khi đã đổi từ camera và mirror:
+Computation in stage coordinates, after converting from camera and applying mirror:
 
-- Chọn bốn slot riêng biệt, mỗi slot gồm track bàn tay + tên đầu ngón. Preset dùng left thumb, left index, right thumb, right index.
-- Giữ ID bàn tay theo thời gian; không dùng thứ tự mảng trả về làm ID. Khi hai tay chéo nhau và ghép ID không chắc, đóng vùng thay vì tự chuyển slot.
-- Làm mượt từng điểm ở tọa độ liên tục (One Euro), sắp bốn điểm theo góc quanh tâm thành đa giác đơn (không tự cắt).
-- Rasterize tứ giác thành tập ô: ô nào có phần chung diện tích dương với tứ giác (nằm trong, hoặc bị cạnh cắt qua) thì mở. Hysteresis theo ô: ô đang mở chỉ tắt khi tứ giác rời xa ô hơn 0,25 ô; ô đang tắt chỉ bật khi tứ giác lấn sâu hơn 0,25 ô, để giảm nhấp nháy ở ranh giới.
-- Cạnh ngắn của hộp bao dưới nMin ô, diện tích quá nhỏ (điểm gần trùng hay gần thẳng hàng), thiếu slot, điểm quá cũ hoặc ra khỏi khung thì vùng không hợp lệ.
-- Vẽ riêng bốn điểm, tứ giác (nét đứt) và viền tập ô để người dùng thấy vùng được suy ra từ tay.
+- Select four distinct slots, each consisting of a hand track + a fingertip name. The preset uses left thumb, left index, right thumb, right index.
+- Keep hand IDs over time; do not use the order of the returned array as the ID. When the hands cross and ID matching is uncertain, close the region instead of switching slots automatically.
+- Smooth each point in continuous coordinates (One Euro), sort the four points by angle around the centroid into a simple polygon (no self-intersection).
+- Rasterize the quadrilateral into a cell set: any cell with a positive-area intersection with the quadrilateral (inside, or crossed by an edge) opens. Per-cell hysteresis: an open cell only turns off when the quadrilateral moves more than 0.25 cells away from it; a closed cell only turns on when the quadrilateral encroaches more than 0.25 cells, to reduce flicker at the boundary.
+- The region is invalid if the short side of the bounding box is under nMin cells, the area is too small (points nearly coincident or nearly collinear), a slot is missing, a point is too stale or a point leaves the frame.
+- Draw the four points, the quadrilateral (dashed) and the cell set outline separately so the user sees the region derived from the hands.
 
-Không biến dạng hình ảnh camera theo tứ giác: pixel camera được sao chép đúng vị trí trong từng ô mở; ô trong hộp bao mà không thuộc tập ô là "lỗ", vẫn trắng trên output và được tô đệm xám trong buffer suy luận.
+The camera image is not warped to the quadrilateral: camera pixels are copied at their exact position in each open cell; a cell inside the bounding box that is not in the cell set is a "hole", stays white on the output and is filled with gray padding in the inference buffer.
 
-**Cùng một mask phải quyết định cả hiển thị và dữ liệu nhận diện.**
+**The same mask must decide both the display and the recognition data.**
 
-Gọi I_t là frame camera, M_t là mask nhị phân của vùng mở ở frame t. Output ảnh nền là I_t tại pixel được M_t cho phép và màu trắng tại các pixel còn lại; overlay được vẽ sau bước này.
+Let I_t be the camera frame and M_t the binary mask of the reveal region at frame t. The background output is I_t at pixels allowed by M_t and white at all other pixels; overlays are drawn after this step.
 
-Đầu vào nhận diện được tạo như sau:
+The recognition input is built as follows:
 
-1. Chụp một frame với frameId và timestamp; tính hoặc gắn kết quả tay còn mới với frame đó.
-2. Tạo M_t và cửa sổ theo cấu hình đang có. Chỉ tạo một bản mask chuẩn cho cả hai nhánh output và nhận diện.
-3. Cắt/copy riêng pixel camera trong cửa sổ vào buffer mới, không thêm padding bằng pixel camera ở ngoài cửa sổ. Nếu cần padding cho model, dùng màu đặc.
-4. Sau khi cắt an toàn mới resize/letterbox cho model. Tránh resize toàn camera trước rồi mới crop, vì nội suy ở biên có thể đưa pixel bên ngoài vào đầu vào.
-5. Không đưa đường lưới, chữ, viền hoặc chấm tay vào ảnh suy luận.
-6. Gửi buffer giới hạn này sang face worker; worker mặt không nhận tham chiếu video gốc hoặc frame nguyên bản.
+1. Capture a frame with a frameId and timestamp; compute or attach the fresh hand result to that frame.
+2. Build M_t and the window from the current config. Create only one canonical mask for both the output and recognition branches.
+3. Crop/copy only the camera pixels inside the window into a new buffer, without padding with camera pixels from outside the window. If the model needs padding, use a solid color.
+4. Only after the safe crop, resize/letterbox for the model. Avoid resizing the whole camera first and cropping afterwards, because interpolation at the border can bring outside pixels into the input.
+5. Do not include grid lines, text, outlines or hand dots in the inference image.
+6. Send this restricted buffer to the face worker; the face worker receives no reference to the raw video or the original frame.
 
-Mọi model phụ trợ xác định người/hình nộm cũng theo cùng quy tắc. Không được dùng model người toàn khung ở nền để hỗ trợ việc xác nhận mặt trong cửa sổ.
+Every auxiliary model for person/mannequin determination follows the same rule. A full-frame person model must not run in the background to help confirm a face inside the window.
 
-**Face tracking cần xử lý ranh giới và kết quả trả về muộn.**
+**Face tracking must handle boundaries and late results.**
 
-MediaPipe Face Landmarker có triển khai web, đầu ra landmarks và các tùy chọn biểu cảm/biến đổi. Các lệnh detect/detectForVideo chạy đồng bộ; tài liệu đề xuất Web Worker để tránh chặn UI. [Face Landmarker Web](https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/web_js).
+MediaPipe Face Landmarker has a web implementation, outputs landmarks and offers blendshape/transform options. The detect/detectForVideo calls run synchronously; the documentation suggests a Web Worker to avoid blocking the UI. [Face Landmarker Web](https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/web_js).
 
-Phương án đầu tiên: khởi tạo model trước để giảm thời gian chờ, nhưng chỉ gửi ảnh camera khi vùng mở hợp lệ. Dùng suy luận từng ảnh độc lập làm baseline; ứng dụng ghép các kết quả còn nhìn thấy để tạo tracking. Cách này đơn giản hóa việc cửa sổ crop đổi vị trí/kích thước và việc không giữ track qua vùng che. Cần benchmark trước khi chuyển sang VIDEO và quản lý trạng thái nội bộ phức tạp hơn.
+First approach: initialize the model up front to reduce wait time, but send camera images only when the reveal region is valid. Use independent per-image inference as the baseline; the app links the still-visible results to form tracking. This simplifies crop window position/size changes and not keeping tracks across covered areas. Benchmark before switching to VIDEO mode and its more complex internal state management.
 
-| Tình huống | Suy luận mặt | Trạng thái hiển thị |
+| Situation | Face inference | Display state |
 |---|---|---|
-| Che toàn màn hình | Không cấp tác vụ | Màn trắng/lưới; không có kết quả mặt |
-| Cửa sổ mở nhưng chỉ có nền | Có, trên ảnh vùng mở | Đang tìm khuôn mặt |
-| Cửa sổ quá nhỏ để đọc mặt đáng tin | Có thể tạm giảm/dừng tác vụ theo ngưỡng chất lượng | Gợi ý mở rộng vùng |
-| Mặt đủ rõ và nằm trong vùng mở | Có | Candidate face; gắn nhãn người sau bước phân loại nếu đạt |
-| Mặt bị biên cửa sổ cắt | Chỉ dùng phần thực sự lộ; không mở rộng crop ra ngoài | Mặc định không công nhận mặt đầy đủ; gợi ý mở rộng |
-| Cửa sổ chuyển khỏi mặt | Có thể tiếp tục tìm mặt ở vị trí mới | Bỏ ngay kết quả mặt cũ không còn nằm trong vùng |
-| Mất điểm hoặc người dùng đóng vùng | Dừng cấp tác vụ mới | Xóa mặt/nhãn; bỏ kết quả đang chạy trả về sau |
-| Mở lại sau khi đóng | Suy luận mới | Không khôi phục track mặt cũ từ bộ nhớ |
+| Fully covered screen | No tasks issued | White screen/grid; no face result |
+| Window open but only background | Yes, on the reveal region image | Searching for a face |
+| Window too small to read a face reliably | Tasks may be throttled/paused by a quality threshold | Suggest enlarging the region |
+| Face clear enough and inside the reveal region | Yes | Candidate face; labeled person after the classification step if it passes |
+| Face cut by the window border | Use only the actually exposed part; do not extend the crop outward | By default not recognized as a full face; suggest enlarging |
+| Window moves away from the face | May keep searching for a face at the new position | Immediately drop old face results no longer inside the region |
+| Point lost or user closes the region | Stop issuing new tasks | Clear face/label; discard results of running tasks that return later |
+| Reopen after closing | Fresh inference | Do not restore old face tracks from memory |
 
-Mỗi tác vụ giữ frameId, timestamp, ROI lúc gửi, phép biến đổi crop→camera→output và session/config epoch. Đóng/mở lại, đổi camera, mirror, grid hoặc layout làm vô hiệu các kết quả thuộc epoch trước.
+Each task keeps the frameId, timestamp, ROI at send time, the crop→camera→output transform and the session/config epoch. Closing/reopening, changing camera, mirror, grid or layout invalidates results from the previous epoch.
 
-Khi kết quả trả về, đổi tọa độ theo ROI gốc của tác vụ, không dùng vị trí cửa sổ mới để suy ra tọa độ. Chỉ chấp nhận kết quả đủ mới, cùng epoch và vùng mặt được công nhận nằm trong cả vùng mở lúc chụp lẫn vùng mở hiện tại. Clip tất cả overlay vào mask hiện tại; điểm nằm ngoài bị loại khỏi overlay và dữ liệu xuất. Nếu không đủ điều kiện thì bỏ kết quả, không vẽ dự đoán tiếp dưới lớp trắng.
+When a result returns, convert coordinates using the task's original ROI, not the new window position. Accept only results that are fresh enough, from the same epoch, and whose recognized face area lies inside both the reveal region at capture time and the current reveal region. Clip all overlays to the current mask; points outside are removed from the overlay and the exported data. If the conditions are not met, drop the result; do not keep drawing predictions under the white layer.
 
-Không tăng epoch ở mọi dịch chuyển nhỏ, vì điều đó có thể khiến tác vụ nào cũng bị bỏ khi người dùng di chuyển tay liên tục. Độ mới và vùng hỗ trợ mặt được kiểm tra theo từng tác vụ. Baseline bảo thủ có thể tạm ngừng vẽ mặt lúc cửa sổ thay đổi nhanh; đây là hành vi cần đo trong PoC.
+Do not bump the epoch on every small movement, because that could discard every task while the user moves their hands continuously. Freshness and the face support area are checked per task. A conservative baseline may pause drawing the face while the window changes quickly; this behavior needs to be measured in the PoC.
 
-Tác vụ đồng bộ đã bắt đầu có thể không hủy được giữa chừng; lúc đóng cửa sổ phải ngừng gửi việc mới và bỏ kết quả của tác vụ đó. Ảnh nó từng nhận vẫn chỉ là vùng được mở hợp lệ ở thời điểm gửi.
+A synchronous task that has started may not be cancellable midway; when the window closes, stop sending new work and discard that task's result. The image it received was still only the region validly revealed at send time.
 
-**Phân biệt người với hình nộm vẫn là yêu cầu riêng trong vùng nhìn thấy.**
+**Distinguishing a person from a mannequin remains a separate requirement inside the visible region.**
 
-Face landmarks không chứng minh đó là người thật. Kế hoạch giữ hai đầu ra: faceDetected và subjectType = person / mannequin / unknown. Chỉ công bố nhãn Người khi nhánh phân loại đạt tiêu chí; còn lại hiển thị Khuôn mặt chưa phân loại hoặc Hình nộm. Không suy ra hình nộm chỉ vì đối tượng đứng im.
+Face landmarks do not prove a real person. The plan keeps two outputs: faceDetected and subjectType = person / mannequin / unknown. Publish the label "Người" (Person) only when the classification branch meets its criteria; otherwise show "Khuôn mặt chưa phân loại" (Unclassified face) or "Hình nộm" (Mannequin). Do not infer a mannequin just because the subject stands still.
 
-Vì cửa sổ có thể chỉ lộ đầu hoặc một phần thân, bộ dữ liệu phân loại phải có các crop tương ứng từ người và hình nộm, nhiều kích thước cửa sổ, góc nhìn, ánh sáng và biên che. Model được huấn luyện chỉ trên ảnh toàn thân có thể thiếu tín hiệu ở cửa sổ nhỏ; cần đánh giá lại. Nếu vùng mở không đủ thông tin thì unknown là kết quả hợp lệ. Hình nộm silicone rất giống người là nhóm khó cần báo riêng.
+Because the window may expose only the head or part of the body, the classification dataset must contain matching crops of people and mannequins across many window sizes, viewing angles, lighting conditions and covering borders. A model trained only on full-body images may lack signal in small windows; it needs re-evaluation. If the reveal region lacks enough information, unknown is a valid result. Highly human-like silicone mannequins are a hard group to be reported separately.
 
-Không bổ sung các lớp robot/avatar. Body pose có thể được giữ như module mở rộng của project, nhưng không chạy toàn camera trong chế độ pixel này. Nếu được bật sau này, đầu vào của nó cũng bị giới hạn bởi mask.
+No robot/avatar classes are added. Body pose may be kept as an extension module of the project, but it does not run on the full camera in this pixel mode. If enabled later, its input is also restricted by the mask.
 
-**Stack và các module cần chỉnh so với bản đầu.**
+**Stack and modules to adjust compared with the first version.**
 
-| Module | Công nghệ/phương án | Thay đổi |
+| Module | Technology/approach | Change |
 |---|---|---|
-| Camera source | getUserMedia | Giữ lại, đầu ra video không tự hiển thị lên màn chính |
-| Hand tracker | MediaPipe Hand Landmarker | Chạy từ camera gốc; nhận nhiều tay nhưng gắn bốn slot cụ thể |
-| Point selector | TypeScript | Thêm chọn bốn đầu ngón, khóa ID và chất lượng điểm |
-| Quad solver | TypeScript | Lọc bốn điểm, sắp đỉnh, rasterize tứ giác thành tập ô với hysteresis |
-| Pixel compositor | Canvas 2D; cân nhắc WebGL sau benchmark | Thêm nền trắng, lưới, mask và cửa sổ camera |
-| Restricted frame builder | Canvas/OffscreenCanvas theo tương thích thực tế | Thêm đường dữ liệu chỉ chứa pixel được mở |
-| Face tracker | MediaPipe Face Landmarker trong Worker | Thêm gating, tọa độ crop và chống kết quả cũ |
-| Người/hình nộm | Detector/classifier tùy chỉnh, PyTorch→ONNX Runtime Web là ứng viên | Chuyển dữ liệu huấn luyện và suy luận sang vùng mở |
-| UI | React + TypeScript + Vite | Camera, grid, bốn điểm, độ nhạy và trạng thái vùng mở |
-| Hosting | Static HTTPS | Giữ lại; inference trong browser là mục tiêu |
+| Camera source | getUserMedia | Kept; the video output is not shown on the main screen by itself |
+| Hand tracker | MediaPipe Hand Landmarker | Runs from the raw camera; accepts multiple hands but binds four specific slots |
+| Point selector | TypeScript | Add fingertip selection, ID locking and point quality |
+| Quad solver | TypeScript | Filter the four points, order vertices, rasterize the quadrilateral into a cell set with hysteresis |
+| Pixel compositor | Canvas 2D; consider WebGL after benchmarking | Add white background, grid, mask and camera window |
+| Restricted frame builder | Canvas/OffscreenCanvas depending on actual compatibility | Add a data path containing only revealed pixels |
+| Face tracker | MediaPipe Face Landmarker in a Worker | Add gating, crop coordinates and stale result protection |
+| Person/mannequin | Custom detector/classifier, PyTorch→ONNX Runtime Web is a candidate | Move training data and inference to the reveal region |
+| UI | React + TypeScript + Vite | Camera, grid, four points, sensitivity and reveal region state |
+| Hosting | Static HTTPS | Kept; in-browser inference is the goal |
 
-Hand Landmarker web hỗ trợ nhiều bàn tay và 21 điểm mỗi bàn tay, phù hợp lấy các điểm đầu ngón. [Hand Landmarker Web](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker/web_js).
+Hand Landmarker web supports multiple hands and 21 points per hand, suitable for taking fingertip points. [Hand Landmarker Web](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker/web_js).
 
-Cập nhật kỹ thuật từ bản đầu: tài liệu chính thức ghi MediaPipe Model Maker không còn được duy trì tích cực. Do đó, không chọn nó làm đường huấn luyện chính cho nhánh người/hình nộm. Đường PyTorch→ONNX là đề xuất cần thử export, operator và hiệu năng trên browser trước khi chốt. [Model Maker](https://developers.google.com/edge/mediapipe/solutions/customization/object_detector), [ONNX Runtime Web](https://onnxruntime.ai/docs/tutorials/web/).
+Technical update from the first version: the official documentation states that MediaPipe Model Maker is no longer actively maintained. Therefore it is not chosen as the main training path for the person/mannequin branch. The PyTorch→ONNX path is a proposal that needs export, operator and in-browser performance trials before it is locked. [Model Maker](https://developers.google.com/edge/mediapipe/solutions/customization/object_detector), [ONNX Runtime Web](https://onnxruntime.ai/docs/tutorials/web/).
 
-**Hiệu năng và trạng thái camera.**
+**Performance and camera state.**
 
-- Camera 720p là thiết lập thử. Mục tiêu thử nghiệm: output ≥30 FPS, hand inference ≥20 Hz, face inference trong vùng mở ≥10–15 Hz trên máy desktop được ghi rõ cấu hình; không phải số đã đạt.
-- Phân loại người/hình nộm có thể chạy thưa hơn face landmarks, nhưng không giữ nhãn qua lúc đóng/che mất vùng mặt.
-- Mỗi pipeline có tối đa một tác vụ đang chạy; bỏ frame cũ thay vì tích tụ hàng đợi.
-- Làm mượt bốn điểm trước khi tạo mask và dùng chính tập ô đó cho output/model. Không có một mask “mượt để vẽ” và mask khác để suy luận.
-- Tự điều chỉnh tần suất model theo tải. Độ phân giải grid không tự quyết định kích thước input của face model.
-- Khi mất điểm: đóng ở lần render kế tiếp sau khi trạng thái mất dấu được xác định; không giữ cửa sổ mở bằng điểm dự đoán vô hạn. Đặt giới hạn tuổi điểm, ví dụ 150 ms để bắt đầu thử và điều chỉnh bằng benchmark.
-- Quyền camera bị từ chối, camera dừng, đổi nguồn và tab nền đều trả output về trạng thái đóng. Luôn khởi tạo nền trắng trước video để tránh lóe toàn camera.
+- A 720p camera is the trial setup. Trial targets: output ≥30 FPS, hand inference ≥20 Hz, face inference in the reveal region ≥10–15 Hz on a desktop machine with a documented configuration; these are not achieved numbers.
+- Person/mannequin classification may run less often than face landmarks, but the label is not kept across closing/covering of the face area.
+- Each pipeline has at most one running task; drop old frames instead of building up a queue.
+- Smooth the four points before building the mask and use that same cell set for output/model. There is no separate “smoothed for drawing” mask and another mask for inference.
+- Adapt the model rate to the load. The grid resolution does not by itself determine the face model input size.
+- When a point is lost: close on the next render after the lost state is determined; do not keep the window open with indefinitely predicted points. Set a point age limit, for example 150 ms to start trials, and tune it by benchmark.
+- Camera permission denied, camera stopped, source change and background tab all return the output to the closed state. Always initialize the white background before the video to avoid a full-camera flash.
 
-Camera web yêu cầu quyền truy cập và secure context; triển khai HTTPS, phát triển bằng localhost. [MDN getUserMedia](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia).
+The web camera requires access permission and a secure context; deploy over HTTPS, develop on localhost. [MDN getUserMedia](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia).
 
-**Lộ trình thay đổi tập trung vào mask và cách giới hạn đầu vào trước khi tối ưu nhận diện.**
+**The roadmap changes to focus on the mask and input restriction before optimizing recognition.**
 
-| Giai đoạn | Công việc | Tiêu chí hoàn thành |
+| Phase | Work | Done criteria |
 |---|---|---|
-| 1 — màn che, 2–3 ngày | Camera, lưới trắng, grid tùy chọn; cửa sổ điều khiển bằng chuột để kiểm tra hình học | Toàn màn trắng ban đầu; chỉ các ô mở được hiện; không bóp méo camera |
-| 2 — bốn đầu ngón, 3–5 ngày | Hand tracking, chọn slot, quad solver, smoothing, mất dấu | Vùng tứ giác theo tay ổn định, đóng khi điểm không hợp lệ |
-| 3 — face trong vùng mở, 3–5 ngày | Restricted frame builder, face worker, ánh xạ tọa độ, loại kết quả cũ | Model không nhận phần bị che; mặt biến mất khỏi output khi bị che |
-| 4 — nghiệm thu PoC, 2–3 ngày | Kiểm thử biên, resize/mirror, độ trễ, video lặp lại | Báo cáo test về đúng vùng và benchmark |
-| 5 — người/hình nộm, khoảng 2–4 tuần; dữ liệu bắt đầu sớm | Dữ liệu crop theo cửa sổ, fine-tune, chạy browser, unknown và kiểm thử mẫu mới | Báo metric từng lớp, kích thước cửa sổ và điều kiện che |
-| 6 — pilot, khoảng 1 tuần | Tối ưu, thử các thiết bị mục tiêu, cấu hình và hướng dẫn | Demo dùng được trên cấu hình đã nghiệm thu |
+| 1: covering screen, 2–3 days | Camera, white grid, custom grid; mouse-controlled window for geometry checks | Fully white at start; only open cells are shown; no camera distortion |
+| 2: four fingertips, 3–5 days | Hand tracking, slot selection, quad solver, smoothing, loss of tracking | Stable hand-following quadrilateral region, closes when points are invalid |
+| 3: face inside the reveal region, 3–5 days | Restricted frame builder, face worker, coordinate mapping, stale result rejection | The model never receives covered parts; the face disappears from the output when covered |
+| 4: PoC acceptance, 2–3 days | Boundary tests, resize/mirror, latency, looped video | Test report on region correctness and benchmark |
+| 5: person/mannequin, about 2–4 weeks; data starts early | Window-crop data, fine-tuning, browser run, unknown and tests on new samples | Report metrics per class, window size and covering condition |
+| 6: pilot, about 1 week | Optimization, trials on target devices, configuration and guidance | Usable demo on the accepted configuration |
 
-Ước lượng PoC cơ chế pixel + tay + mặt: khoảng 2–3 tuần cho developer có kinh nghiệm web/computer vision. Bản có phân loại người/hình nộm đã đánh giá: khoảng 5–8 tuần với web và ML làm song song, tùy dữ liệu và model. PoC tìm được khuôn mặt chưa đồng nghĩa đã hoàn thành yêu cầu phân biệt người với hình nộm. Các mốc là dự trù, cập nhật sau giai đoạn 2 và baseline phân loại.
+Estimate for the pixel + hands + face PoC: about 2–3 weeks for a developer experienced in web/computer vision. The version with evaluated person/mannequin classification: about 5–8 weeks with web and ML in parallel, depending on data and model. A PoC that finds a face does not mean the person-vs-mannequin requirement is met. The milestones are provisional and are updated after phase 2 and the classification baseline.
 
-**Các bài kiểm thử quan trọng nhất phải kiểm tra đầu vào thật của model.**
+**The most important tests must check the model's actual input.**
 
-| Trường hợp | Kết quả bắt buộc |
+| Case | Required result |
 |---|---|
-| Khởi động hoặc chưa có bốn điểm | Output trắng; số lần gọi face/human trên camera bằng 0 |
-| Người ở ngoài vùng mở, cửa sổ chỉ nhìn nền | Input face/human không chứa pixel của người; không có kết quả mặt ngoài cửa sổ được công nhận |
-| Chỉ thay nội dung vùng bị che | Giữ cố định mask/điểm tay và nội dung vùng mở: buffer input face/human phải giống hệt; đo ở buffer trước model |
-| Mở đủ mặt | Có thể nhận mặt nếu chất lượng đạt; tọa độ đúng với camera và cửa sổ |
-| Chỉ lộ một phần mặt | Không lấy thêm ảnh ngoài vùng để hoàn thiện mặt; không vẽ landmarks dưới phần trắng |
-| Che lại khi tác vụ mặt đang chạy | Xóa ngay kết quả đang vẽ; kết quả trả về sau không xuất hiện lại |
-| Kéo cửa sổ sang vị trí khác | Không gắn tọa độ theo crop mới cho kết quả crop cũ; mặt cũ không bám sai vị trí |
-| Mất một ngón/tay, tay chéo nhau hoặc điểm trùng | Vùng đóng khi không còn đủ điểm hợp lệ; không nhảy sang tay khác |
-| Đổi grid, mirror, resize, camera | Hủy kết quả cấu hình cũ; mặt/ô mở không lệch nhau |
-| Lưới 64 × 36 trên sân khấu 1280 × 720 | Ô 20 × 20; vùng mở là tập ô giao với tứ giác, ô bị cạnh cắt qua cũng mở |
-| Người đứng im và hình nộm bị di chuyển | Phân loại không dựa vào quy tắc có/không chuyển động |
-| Chạy 15 phút | Không crash, không hàng đợi frame tăng vô hạn, không rò bộ nhớ liên tục |
+| Startup or fewer than four points | White output; the number of face/human calls on the camera is 0 |
+| Person outside the reveal region, window sees only background | Face/human input contains no pixels of the person; no face result outside the window is accepted |
+| Only the covered content changes | Keep the mask/hand points and reveal region content fixed: the face/human input buffer must be identical; measured at the buffer before the model |
+| Full face revealed | The face may be recognized if quality is sufficient; coordinates match the camera and the window |
+| Only part of the face revealed | No extra image outside the region is taken to complete the face; no landmarks drawn under the white part |
+| Covered again while a face task is running | Immediately clear the drawn result; the result returning later does not reappear |
+| Window dragged to another position | Old crop results are not mapped with the new crop coordinates; the old face does not stick to the wrong position |
+| A finger/hand lost, crossed hands or coincident points | The region closes when there are no longer enough valid points; it does not jump to another hand |
+| Change grid, mirror, resize, camera | Results of the old configuration are cancelled; face and open cells stay aligned |
+| 64 × 36 grid on a 1280 × 720 stage | 20 × 20 cells; the reveal region is the set of cells intersecting the quadrilateral, cells crossed by an edge also open |
+| Person standing still and mannequin being moved | Classification does not rely on a motion/no-motion rule |
+| 15-minute run | No crash, no unbounded frame queue growth, no continuous memory leak |
 
-Độ đúng mask là gate cứng: ở vùng đóng không được có pixel camera trong buffer nhận diện. Độ chính xác ML đo riêng, vì model vẫn có thể dự đoán sai ngay cả khi đường dữ liệu được giới hạn đúng.
+Mask correctness is a hard gate: in the closed area there must be no camera pixels in the recognition buffer. ML accuracy is measured separately, because the model can still predict wrongly even when the data path is correctly restricted.
 
-Với phân loại, mục tiêu ban đầu là precision/recall từng lớp ≥90% trong phạm vi đã chọn, unknown/miss tính vào thiếu recall của lớp thật. Báo thêm tỷ lệ hình nộm bị gán người, tỷ lệ unknown và kết quả theo kích thước cửa sổ. Chia train/validation/test theo người, mẫu hình nộm và buổi quay; không chia frame liền nhau sang các tập khác nhau. Chưa có metric nào được đo trong tài liệu này.
+For classification, the initial target is per-class precision/recall ≥90% within the chosen scope, with unknown/miss counted as missing recall of the true class. Also report the rate of mannequins labeled person, the unknown rate and results by window size. Split train/validation/test by person, mannequin sample and recording session; do not split adjacent frames into different sets. No metric has been measured in this document.
 
-**Backlog giao việc cho phương án mới.**
+**Work backlog for the new approach.**
 
-| Mã | Công việc | Phụ thuộc |
+| ID | Work | Depends on |
 |---|---|---|
-| CAM-01 | Camera lifecycle, nền trắng trước video, timestamp | Không |
-| GRID-01 | Grid tùy chọn, cell vuông, viewport và mirror | CAM-01 |
-| HAND-01 | Hand tracker và ID tay ổn định | CAM-01 |
-| HAND-02 | Chọn bốn đầu ngón, freshness và invalid state | HAND-01 |
-| ROI-01 | Tứ giác bốn đầu ngón, smoothing, rasterize thành ô với hysteresis (ROI-02 sửa từ hình vuông) | GRID-01, HAND-02 |
-| MASK-01 | Mask chuẩn và compositor | ROI-01 |
-| MASK-02 | Buffer chỉ chứa vùng mở, crop trước resize | MASK-01 |
-| FACE-01 | Face worker chỉ nhận restricted buffer | MASK-02 |
-| FACE-02 | Gate trạng thái, tọa độ, epoch, freshness, clip kết quả | FACE-01 |
-| CLS-01 | Dữ liệu người/hình nộm theo crop vùng mở | MASK-01 |
-| CLS-02 | Model phân loại, unknown và tích hợp input giới hạn | CLS-01, MASK-02 |
-| QA-01 | Bài kiểm thử mask, tác vụ trễ và thời điểm đóng | FACE-02 |
-| QA-02 | Benchmark, metric phân loại và ma trận thiết bị | QA-01, CLS-02 |
-| REL-01 | Triển khai web công khai (GitHub Pages, tên miền riêng, service worker), source, model/config, hướng dẫn và pilot | QA-02 |
+| CAM-01 | Camera lifecycle, white background before video, timestamp | None |
+| GRID-01 | Custom grid, square cells, viewport and mirror | CAM-01 |
+| HAND-01 | Hand tracker and stable hand IDs | CAM-01 |
+| HAND-02 | Fingertip selection, freshness and invalid state | HAND-01 |
+| ROI-01 | Four-fingertip quadrilateral, smoothing, rasterization into cells with hysteresis (ROI-02 corrects from the square) | GRID-01, HAND-02 |
+| MASK-01 | Canonical mask and compositor | ROI-01 |
+| MASK-02 | Buffer containing only the reveal region, crop before resize | MASK-01 |
+| FACE-01 | Face worker receives only the restricted buffer | MASK-02 |
+| FACE-02 | State gate, coordinates, epoch, freshness, result clipping | FACE-01 |
+| CLS-01 | Person/mannequin data as reveal region crops | MASK-01 |
+| CLS-02 | Classification model, unknown and restricted input integration | CLS-01, MASK-02 |
+| QA-01 | Tests for mask, late tasks and closing time | FACE-02 |
+| QA-02 | Benchmark, classification metrics and device matrix | QA-01, CLS-02 |
+| REL-01 | Public web deployment (GitHub Pages, custom domain, service worker), source, model/config, guidance and pilot | QA-02 |
 
-Bàn giao: source web, sơ đồ đường dữ liệu, cấu hình grid/bốn điểm, model và phiên bản, schema kết quả, bộ clip kiểm thử được phép dùng, báo cáo mask/hiệu năng/phân loại và hướng dẫn chạy. Không lưu hoặc tải lên video mặc định; xuất dữ liệu mặt cũng tuân theo trạng thái vùng mở.
+Handover: web source, data path diagram, grid/four-point configuration, model and version, result schema, the set of test clips permitted for use, mask/performance/classification reports and run instructions. No video is saved or uploaded by default; face data export also follows the reveal region state.

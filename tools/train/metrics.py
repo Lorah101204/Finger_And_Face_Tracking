@@ -79,21 +79,21 @@ def meets_target(pr: dict[str, dict[str, float | int]], target: float = 0.9) -> 
     return all(pr[c]["precision"] >= target and pr[c]["recall"] >= target for c in CLASSES)
 
 
-def render_markdown(records: list[dict], title: str = "Tập test") -> str:
+def render_markdown(records: list[dict], title: str = "Test set") -> str:
     pr = precision_recall(records)
     rt = rates(records)
-    lines = [f"### {title}: {rt['n']} mẫu", "", "| Lớp | Precision | Recall | TP | FP | FN | Support |", "|---|---|---|---|---|---|---|"]
+    lines = [f"### {title}: {rt['n']} samples", "", "| Class | Precision | Recall | TP | FP | FN | Support |", "|---|---|---|---|---|---|---|"]
     for c in CLASSES:
         m = pr[c]
         lines.append(f"| {c} | {m['precision']:.3f} | {m['recall']:.3f} | {m['tp']} | {m['fp']} | {m['fn']} | {m['support']} |")
     lines.append("")
-    lines.append(f"Mục tiêu ≥ 0,90 cả precision và recall hai lớp: {'đạt' if meets_target(pr) else 'không đạt'}. "
-                 f"Hình nộm bị gán người: {rt['mannequinAsPersonRate']:.3f}; tỉ lệ unknown: {rt['unknownRate']:.3f}.")
-    for key, label in (("sizeClass", "Theo cỡ cửa sổ"), ("position", "Theo vị trí (cắt biên)"), ("mannequinType", "Theo loại hình nộm (silicone báo riêng)")):
+    lines.append(f"Target ≥ 0.90 for both precision and recall of both classes: {'pass' if meets_target(pr) else 'fail'}. "
+                 f"Mannequins labelled as person: {rt['mannequinAsPersonRate']:.3f}; unknown rate: {rt['unknownRate']:.3f}.")
+    for key, label in (("sizeClass", "By window size"), ("position", "By position (edge cropping)"), ("mannequinType", "By mannequin type (silicone reported separately)")):
         groups = by_group(records, key)
         if len(groups) <= 1 and "?" in groups:
             continue
-        lines += ["", f"#### {label}", "", "| Nhóm | Mẫu | P person | R person | P mannequin | R mannequin | Nộm→người | Unknown |", "|---|---|---|---|---|---|---|---|"]
+        lines += ["", f"#### {label}", "", "| Group | Samples | P person | R person | P mannequin | R mannequin | Mannequin→person | Unknown |", "|---|---|---|---|---|---|---|---|"]
         for g, m in groups.items():
             p = m["pr"]
             lines.append(

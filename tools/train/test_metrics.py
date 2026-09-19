@@ -56,11 +56,11 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(set(groups), {"small", "large"})
         self.assertEqual(groups["small"]["n"], 10)
         self.assertAlmostEqual(groups["large"]["mannequinAsPersonRate"], 1 / 11)
-        md = render_markdown(records, "Thử")
-        self.assertIn("### Thử: 21 mẫu", md)
+        md = render_markdown(records, "Trial")
+        self.assertIn("### Trial: 21 samples", md)
         self.assertIn("| person | 0.909 | 1.000 | 10 | 1 | 0 | 10 |", md)
-        self.assertIn("đạt", md)
-        self.assertIn("#### Theo loại hình nộm", md)
+        self.assertIn("pass", md)
+        self.assertIn("#### By mannequin type", md)
         self.assertIn("| silicone |", md)
 
 

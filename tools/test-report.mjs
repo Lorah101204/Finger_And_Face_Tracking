@@ -1,9 +1,12 @@
-// QA-01: sinh phần kết quả trong docs/test-report-mask.md từ reports/unit.json (Vitest, reporter json) và
-// reports/e2e.json (Playwright, reporter json, kèm annotations "đo" và "gate cứng" do tests/e2e/helpers.ts ghi),
-// và reports/deploy.json nếu có (REL-01: `npm run test:deploy`, bản build qua vite preview, một mục riêng), cùng môi trường (OS, CPU, Node, Vite, Vitest, Playwright, Chromium theo browsers.json của Playwright), model
-// (public/models/models.json) và asset cục bộ. Chỉ ghi đè phần giữa hai mốc <!-- report:begin --> và
-// <!-- report:end -->; phần còn lại của tài liệu viết tay. Chạy: npm run test:report (chạy test rồi sinh) hoặc
-// npm run test:report:write (chỉ sinh từ JSON đã có). Không gọi mạng, không chạy trình duyệt.
+// QA-01: generates the results section of docs/test-report-mask.md from reports/unit.json (Vitest json reporter) and
+// reports/e2e.json (Playwright json reporter, with the "đo" (measurement) and "gate cứng" (hard gate) annotations written
+// by tests/e2e/helpers.ts), plus reports/deploy.json when present (REL-01: `npm run test:deploy`, production build via
+// vite preview, its own section), together with the environment (OS, CPU, Node, Vite, Vitest, Playwright, Chromium per
+// Playwright's browsers.json), models (public/models/models.json) and local assets. Only the part between
+// <!-- report:begin --> and <!-- report:end --> is overwritten; the rest of the document is hand-written. Run:
+// npm run test:report (run the tests, then generate) or npm run test:report:write (generate from existing JSON only).
+// No network, no browser. The annotation type names and the hard-gate string format are contracts with the test code
+// and stay as the tests write them (Vietnamese).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import { basename, join } from 'node:path'
@@ -16,7 +19,7 @@ const DEPLOY = join(ROOT, 'reports', 'deploy.json')
 const BEGIN = '<!-- report:begin -->'
 const END = '<!-- report:end -->'
 
-/** Mục 7 của WORK-BREAKDOWN mà mỗi file test phủ (7.1 là bảng ánh xạ ca của kế hoạch, 7.2 là gate cứng). */
+/** Section 7 of WORK-BREAKDOWN covered by each test file (7.1 is the plan's case mapping table, 7.2 the hard gate). */
 const E2E_SECTIONS = {
   'landing.spec.ts': '7.4, 7.21',
   'start.spec.ts': '7.21, 7.28',
@@ -90,13 +93,13 @@ const UNIT_SECTIONS = {
 
 function need(p, hint) {
   if (!existsSync(p)) {
-    console.error(`thiếu ${p}: chạy ${hint}`)
+    console.error(`missing ${p}: run ${hint}`)
     process.exit(1)
   }
   return JSON.parse(readFileSync(p, 'utf8'))
 }
-const unit = need(UNIT, 'npm run test:report (Vitest với --reporter=json)')
-const e2e = need(E2E, 'npm run test:report (Playwright với reporter json)')
+const unit = need(UNIT, 'npm run test:report (Vitest with --reporter=json)')
+const e2e = need(E2E, 'npm run test:report (Playwright with the json reporter)')
 const deploy = existsSync(DEPLOY) ? JSON.parse(readFileSync(DEPLOY, 'utf8')) : null
 const pkg = (name) =>
   JSON.parse(readFileSync(join(ROOT, 'node_modules', name, 'package.json'), 'utf8')).version
@@ -107,7 +110,7 @@ const browsers = JSON.parse(
 const chromium =
   browsers.browsers.find((b) => b.name === 'chromium-headless-shell') ?? browsers.browsers[0]
 
-const vi = (n, digits = 1) => n.toFixed(digits).replace('.', ',')
+const vi = (n, digits = 1) => n.toFixed(digits)
 const secs = (ms) => `${vi(ms / 1000)} s`
 const cell = (s) => String(s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ')
 const table = (header, rows) =>
@@ -116,9 +119,9 @@ const table = (header, rows) =>
     `|${header.map(() => '---').join('|')}|`,
     ...rows.map((r) => `| ${r.map(cell).join(' | ')} |`),
   ].join('\n')
-const has = (rel) => (existsSync(join(ROOT, rel)) ? 'có' : 'không')
+const has = (rel) => (existsSync(join(ROOT, rel)) ? 'yes' : 'no')
 
-// Unit: mỗi file một dòng.
+// Unit: one row per file.
 const unitRows = []
 let unitDur = 0
 for (const f of unit.testResults) {
@@ -141,8 +144,8 @@ for (const f of unit.testResults) {
 }
 unitRows.sort((a, b) => String(a[0]).localeCompare(String(b[0])))
 
-// E2E: mỗi ca một dòng, gom theo file; annotations "đo" và "gate cứng" là số đo của ca.
-const STATUS = { expected: 'pass', unexpected: 'FAIL', flaky: 'pass (thử lại)', skipped: 'bỏ qua' }
+// E2E: one row per case, grouped by file; the "đo" and "gate cứng" annotations are the case's measurements.
+const STATUS = { expected: 'pass', unexpected: 'FAIL', flaky: 'pass (retry)', skipped: 'skipped' }
 const files = []
 const e2eTotal = { tests: 0, pass: 0, fail: 0, flaky: 0, skipped: 0, dur: 0 }
 const gate = { tests: 0, frames: 0, clean: 0, dirty: 0, maxDiff: 0 }
@@ -188,7 +191,7 @@ for (const s of e2e.suites ?? []) {
   files.push({ file: basename(s.file ?? s.title), rows })
 }
 files.sort((a, b) => a.file.localeCompare(b.file))
-// REL-01: kết quả trên bản build (tests/deploy, project chromium và chrome nếu có), tổng riêng.
+// REL-01: results on the production build (tests/deploy, projects chromium and chrome when present), separate totals.
 const deployTotal = { tests: 0, pass: 0, fail: 0, flaky: 0, skipped: 0, dur: 0 }
 const deployFiles = []
 for (const s of deploy?.suites ?? []) {
@@ -200,17 +203,17 @@ for (const s of deploy?.suites ?? []) {
 const ran = new Date(e2e.stats?.startTime ?? Date.now())
 const cpu = os.cpus()
 const env = [
-  ['Hệ điều hành', `${os.type()} ${os.release()} (${os.arch()})`],
+  ['Operating system', `${os.type()} ${os.release()} (${os.arch()})`],
   [
     'CPU, RAM',
-    `${cpu[0]?.model.trim() ?? '?'}, ${cpu.length} luồng, ${Math.round(os.totalmem() / 2 ** 30)} GB`,
+    `${cpu[0]?.model.trim() ?? '?'}, ${cpu.length} threads, ${Math.round(os.totalmem() / 2 ** 30)} GB`,
   ],
   ['Node.js', process.version],
   ['Vite / Vitest / Playwright', `${pkg('vite')} / ${pkg('vitest')} / ${pkg('@playwright/test')}`],
   [
-    'Trình duyệt e2e',
-    `${chromium.title} ${chromium.browserVersion} (Playwright build ${chromium.revision}), camera giả của Chromium` +
-      ` (\`--use-fake-device-for-media-stream\`), ${e2e.config?.workers ?? '?'} worker song song`,
+    'E2E browser',
+    `${chromium.title} ${chromium.browserVersion} (Playwright build ${chromium.revision}), Chromium fake camera` +
+      ` (\`--use-fake-device-for-media-stream\`), ${e2e.config?.workers ?? '?'} parallel workers`,
   ],
   [
     'Model',
@@ -219,7 +222,7 @@ const env = [
       .join('; ') + `; ${models.wasm.package} ${models.wasm.version}`,
   ],
   [
-    'Asset cục bộ',
+    'Local assets',
     `face.png: ${has('public/spike-assets/face.png')}; hands.jpg: ${has('public/spike-assets/hands.jpg')};` +
       ` camera.y4m: ${has('tests/e2e/fixtures/camera.y4m')}`,
   ],
@@ -228,37 +231,37 @@ const env = [
 const out = []
 out.push(BEGIN)
 out.push(
-  `Sinh bởi \`npm run test:report\` (\`tools/test-report.mjs\`) từ lần chạy lúc ${ran.toISOString()} trên máy phát triển. Không sửa tay phần này.`,
+  `Generated by \`npm run test:report\` (\`tools/test-report.mjs\`) from the run at ${ran.toISOString()} on the development machine. Do not edit this section by hand.`,
 )
 out.push('')
-out.push('### Môi trường')
+out.push('### Environment')
 out.push('')
-out.push(table(['Mục', 'Giá trị'], env))
+out.push(table(['Item', 'Value'], env))
 out.push('')
 out.push('### Unit (Vitest)')
 out.push('')
 out.push(
   `${unit.testResults.length} file, ${unit.numTotalTests} test: ${unit.numPassedTests} pass, ${unit.numFailedTests} fail,` +
-    ` ${unit.numPendingTests + (unit.numTodoTests ?? 0)} bỏ qua; tổng thời gian test ${secs(unitDur)}.`,
+    ` ${unit.numPendingTests + (unit.numTodoTests ?? 0)} skipped; total test time ${secs(unitDur)}.`,
 )
 out.push('')
-out.push(table(['File', 'Mục 7', 'Test', 'Pass', 'Fail', 'Bỏ qua', 'ms'], unitRows))
+out.push(table(['File', 'Section 7', 'Tests', 'Pass', 'Fail', 'Skipped', 'ms'], unitRows))
 out.push('')
 out.push('### E2E (Playwright)')
 out.push('')
 out.push(
-  `${files.length} spec, ${e2eTotal.tests} ca: ${e2eTotal.pass} pass, ${e2eTotal.flaky} pass sau thử lại, ${e2eTotal.fail} fail,` +
-    ` ${e2eTotal.skipped} bỏ qua (thiếu asset cục bộ); tổng thời gian các ca ${secs(e2eTotal.dur)} (chạy song song).`,
+  `${files.length} spec files, ${e2eTotal.tests} cases: ${e2eTotal.pass} pass, ${e2eTotal.flaky} pass after retry, ${e2eTotal.fail} fail,` +
+    ` ${e2eTotal.skipped} skipped (missing local assets); total case time ${secs(e2eTotal.dur)} (run in parallel).`,
 )
 out.push('')
 out.push(
-  'Gate cứng đo bằng ảnh tham chiếu (`installGateAudit`, cách đo thứ hai của mục 7.2): ' +
-    `${gate.frames} buffer trong ${gate.tests} ca, ${gate.clean} khớp, ${gate.dirty} lệch, sai khác lớn nhất ${gate.maxDiff}/255.`,
+  'Hard gate measured against reference images (`installGateAudit`, the second method of section 7.2): ' +
+    `${gate.frames} buffers in ${gate.tests} cases, ${gate.clean} matching, ${gate.dirty} deviating, largest difference ${gate.maxDiff}/255.`,
 )
 out.push('')
 const specTable = (f) =>
   table(
-    ['Ca', 'Kết quả', 'Thời gian', 'Số đo'],
+    ['Case', 'Result', 'Time', 'Measurements'],
     f.rows.map((r) => [
       r.title,
       r.status + (r.skipNote ? `: ${r.skipNote}` : ''),
@@ -267,22 +270,22 @@ const specTable = (f) =>
     ]),
   )
 for (const f of files) {
-  out.push(`#### ${f.file} (mục ${E2E_SECTIONS[f.file] ?? '?'})`)
+  out.push(`#### ${f.file} (section ${E2E_SECTIONS[f.file] ?? '?'})`)
   out.push('')
   out.push(specTable(f))
   out.push('')
 }
 if (deploy) {
   const projects = (deploy.config?.projects ?? []).map((p) => p.name).join(', ')
-  out.push('### E2E trên bản build (Playwright, `npm run test:deploy`, REL-01)')
+  out.push('### E2E on the production build (Playwright, `npm run test:deploy`, REL-01)')
   out.push('')
   out.push(
-    `\`dist/\` qua \`vite preview\` (playwright.deploy.config.ts), project ${projects || '?'}: ${deployTotal.tests} ca:` +
-      ` ${deployTotal.pass} pass, ${deployTotal.fail} fail, ${deployTotal.skipped} bỏ qua; tổng thời gian ${secs(deployTotal.dur)} (tuần tự).`,
+    `\`dist/\` via \`vite preview\` (playwright.deploy.config.ts), projects ${projects || '?'}: ${deployTotal.tests} cases:` +
+      ` ${deployTotal.pass} pass, ${deployTotal.fail} fail, ${deployTotal.skipped} skipped; total time ${secs(deployTotal.dur)} (sequential).`,
   )
   out.push('')
   for (const f of deployFiles) {
-    out.push(`#### tests/deploy/${f.file} (mục ${E2E_SECTIONS[f.file] ?? '?'})`)
+    out.push(`#### tests/deploy/${f.file} (section ${E2E_SECTIONS[f.file] ?? '?'})`)
     out.push('')
     out.push(specTable(f))
     out.push('')
@@ -294,15 +297,15 @@ const doc = readFileSync(DOC, 'utf8')
 const i = doc.indexOf(BEGIN)
 const j = doc.indexOf(END)
 if (i < 0 || j < 0 || j < i) {
-  console.error(`${DOC} thiếu mốc ${BEGIN} … ${END}`)
+  console.error(`${DOC} is missing the markers ${BEGIN} … ${END}`)
   process.exit(1)
 }
 writeFileSync(DOC, doc.slice(0, i) + out.join('\n') + doc.slice(j + END.length))
 console.log(
-  `đã ghi ${DOC}: unit ${unit.numPassedTests}/${unit.numTotalTests}, e2e ${e2eTotal.pass + e2eTotal.flaky}/${e2eTotal.tests}` +
-    ` (${e2eTotal.skipped} bỏ qua), gate ${gate.clean}/${gate.frames} buffer khớp` +
+  `wrote ${DOC}: unit ${unit.numPassedTests}/${unit.numTotalTests}, e2e ${e2eTotal.pass + e2eTotal.flaky}/${e2eTotal.tests}` +
+    ` (${e2eTotal.skipped} skipped), gate ${gate.clean}/${gate.frames} buffers matching` +
     (deploy
       ? `, deploy ${deployTotal.pass}/${deployTotal.tests}`
-      : ', deploy: không có reports/deploy.json'),
+      : ', deploy: no reports/deploy.json'),
 )
 if (unit.numFailedTests > 0 || e2eTotal.fail > 0 || deployTotal.fail > 0) process.exit(1)

@@ -4,7 +4,7 @@ public/models
 playwright-report
 test-results
 reports
-# SPIKE-00: mã spike giữ nguyên như lúc đo
+# SPIKE-00: spike code is kept exactly as it was when measured
 tools/spikes
 docs
 data
