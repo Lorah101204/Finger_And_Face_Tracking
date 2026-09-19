@@ -1,0 +1,68 @@
+# build
+node_modules/
+dist/
+dist-ssr/
+*.local
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+
+# test
+test-results/
+playwright-report/
+blob-report/
+coverage/
+# QA-01: JSON của vitest và playwright cho tools/test-report.mjs
+reports/
+
+# dữ liệu thu và clip test (CLS-01, TEST-00): không commit
+data/
+*.y4m
+
+# model: tải bằng `npm run models:fetch` theo public/models/models.json
+public/models/*.task
+public/models/wasm/
+public/models/ort/
+*.onnx
+!public/models/*.onnx
+# CLS-02: model stub sinh bởi tools/make-stub-classifier.mjs (models:fetch), model thật là sản phẩm huấn luyện: không commit
+public/models/classifier-stub.onnx
+public/models/classifier.onnx
+
+# editor, OS
+# REL-01: cấu hình phiên Claude Code của máy phát triển (launch.json), không commit
+.claude/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# SPIKE-00: ảnh mẫu, model mẫu và wasm ORT chỉ dùng cho spike, không commit
+public/spike-assets/
+
+# backend đã lưu ở archive/backend/ (D-019): build và DB của nó vẫn không commit
+dist-server/
+.env
+# Nhánh archive/backend: giữ cùng danh sách bỏ qua như main để build, model, asset của main không hiện là thay đổi khi
+# checkout nhánh này (GitHub Desktop từng xóa chúng khi "discard"); các file của main không theo dõi ở đây cũng bị bỏ qua.
+/src/
+/tests/
+/tools/
+/docs/
+/public/
+/.github/
+/.vscode/
+/*.json
+/*.ts
+/*.js
+/*.md
+/*.html
+/.editorconfig
+/.prettierrc
+/.prettierignore
+!/archive/
