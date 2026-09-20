@@ -31,10 +31,18 @@ async function counters(page: Page) {
   return { frames: l.frames, paints: l.paints, builds: l.maskBuilds }
 }
 
-async function delta(page: Page, ms: number) {
+/**
+ * Đếm tới khi vòng lặp chạy thêm ít nhất `minFrames` frame (CI chậm có thể đứng rAF cả giây khi worker khởi tạo), tối
+ * đa 30 s; trả về hiệu của ba bộ đếm trong khoảng đó.
+ */
+async function delta(page: Page, minFrames = 20) {
   const a = await counters(page)
-  await page.waitForTimeout(ms)
-  const b = await counters(page)
+  let b = a
+  const deadline = Date.now() + 30_000
+  while (b.frames - a.frames < minFrames && Date.now() < deadline) {
+    await page.waitForTimeout(200)
+    b = await counters(page)
+  }
   return { frames: b.frames - a.frames, paints: b.paints - a.paints, builds: b.builds - a.builds }
 }
 
@@ -44,35 +52,37 @@ test('frame tĩnh không vẽ lại: vùng đóng thì paints đứng yên trong
   await openSynthetic(page)
   // Chờ vòng lặp ổn định sau khi mount (layout, lần vẽ đầu).
   await page.waitForTimeout(500)
-  const idle = await delta(page, 1000)
-  expect(idle.frames).toBeGreaterThan(10)
+  const idle = await delta(page)
+  expect(idle.frames).toBeGreaterThanOrEqual(20)
   expect(idle.paints).toBe(0)
   await expectCanvasWhite(page)
 
   await page.evaluate(() => window.__scenario!.run('windowAt(20,10,12)'))
   await expect.poll(async () => (await readLoop(page)).reveal.kind).toBe('open')
-  const open = await delta(page, 1000)
-  expect(open.frames).toBeGreaterThan(10)
+  const open = await delta(page)
+  expect(open.frames).toBeGreaterThanOrEqual(20)
   expect(open.paints).toBe(open.frames)
 
   await page.evaluate(() => window.__scenario!.run('coverAll'))
   await expect.poll(async () => (await readLoop(page)).reveal.kind).toBe('closed')
-  await page.waitForTimeout(300)
-  const closed = await delta(page, 1000)
+  // Frame đầu sau khi đóng vẽ một lần để xóa; đợi nó qua rồi mới đếm.
+  await delta(page, 3)
+  const closed = await delta(page)
+  expect(closed.frames).toBeGreaterThanOrEqual(20)
   expect(closed.paints).toBe(0)
   await expectCanvasWhite(page)
 
   // Tắt vạch lưới: một lần vẽ (StagePage vẽ ngay và vòng lặp vẽ lại vì showLines đổi), rồi lại đứng yên.
   const before = await counters(page)
   await page.getByLabel('Vạch lưới').uncheck()
-  await page.waitForTimeout(500)
+  const lines = await delta(page, 10)
   const after = await counters(page)
   expect(after.paints - before.paints).toBeGreaterThanOrEqual(1)
   expect(after.paints - before.paints).toBeLessThanOrEqual(3)
-  expect(after.frames - before.frames).toBeGreaterThan(5)
+  expect(lines.frames).toBeGreaterThanOrEqual(10)
   await expectCanvasWhite(page, true)
   note(
-    `vùng đóng: ${idle.frames} frame / ${idle.paints} lần vẽ trong 1 s; vùng mở: ${open.frames} frame / ${open.paints} lần vẽ;` +
+    `vùng đóng: ${idle.frames} frame / ${idle.paints} lần vẽ; vùng mở: ${open.frames} frame / ${open.paints} lần vẽ;` +
       ` sau khi đóng: ${closed.frames} frame / ${closed.paints} lần vẽ; đổi vạch lưới: ${after.paints - before.paints} lần vẽ`,
   )
   await expectGateClean(page)
@@ -84,13 +94,13 @@ test('dùng lại mask khi hình không đổi: cửa sổ chuột đứng yên 
   await openSynthetic(page)
   await page.evaluate(() => window.__scenario!.run('windowAt(20,10,12)'))
   await expect.poll(async () => (await readLoop(page)).reveal.kind).toBe('open')
-  const still = await delta(page, 1000)
-  expect(still.frames).toBeGreaterThan(10)
+  const still = await delta(page)
+  expect(still.frames).toBeGreaterThanOrEqual(20)
   expect(still.builds).toBe(0)
   const b0 = (await counters(page)).builds
   await page.evaluate(() => window.__scenario!.run('moveWindow(22,10)'))
   await expect.poll(async () => (await counters(page)).builds).toBe(b0 + 1)
-  await page.waitForTimeout(300)
+  await delta(page, 10)
   expect((await counters(page)).builds).toBe(b0 + 1)
   const out = (await readLoop(page)).output
   expect(out.reveal?.cells.length).toBe(144)
@@ -109,7 +119,8 @@ test('dùng lại mask khi hình không đổi: cửa sổ chuột đứng yên 
     orbit: { radius: (3 * L.c) / L.scale, periodMs: 4000 },
   })
   await expect.poll(async () => (await readLoop(page)).reveal.kind).toBe('open')
-  const orbit = await delta(page, 1000)
+  const orbit = await delta(page)
+  expect(orbit.frames).toBeGreaterThanOrEqual(20)
   expect(orbit.builds).toBeGreaterThan(orbit.frames * 0.5)
   expect(orbit.builds).toBeLessThanOrEqual(orbit.frames)
   note(
