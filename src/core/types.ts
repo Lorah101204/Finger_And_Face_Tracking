@@ -23,7 +23,10 @@ export type CellBox = { col: number; row: number; w: number; h: number }
 export type RevealShape =
   { kind: 'window'; window: RevealWindow } | { kind: 'polygon'; polygonStage: Point[] }
 
-/** Mask chuẩn, tạo đúng một lần mỗi frame bởi buildMask (bất biến I2). Vùng mở là tập ô trong hộp bao `box`. */
+/**
+ * Mask chuẩn, chỉ buildMask tạo (bất biến I2), nhiều nhất một lần mỗi frame; hình không đổi thì vòng lặp dùng lại
+ * đối tượng của frame trước (PERF-02). Vùng mở là tập ô trong hộp bao `box`.
+ */
 export type RevealMask = {
   epoch: number
   shape: RevealShape
@@ -186,8 +189,8 @@ export type FrameOutput = {
   reveal: null | {
     shape: RevealShape
     box: CellBox
-    /** danh sách ô mở (col, row) */
-    cells: { col: number; row: number }[]
+    /** danh sách ô mở (col, row); dùng chung qua các frame khi mask không đổi (PERF-02), không sửa tại chỗ */
+    cells: readonly { col: number; row: number }[]
     stageRect: Rect
     cameraRect: Rect
     limited: boolean

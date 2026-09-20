@@ -9,7 +9,8 @@ import {
   type Recorder,
   type DatasetSink,
 } from '../dataset/recorder'
-import { LABEL_TEXT, LIGHTING_TEXT, MANNEQUIN_TEXT, describeRecorder } from './datasetText'
+import { describeRecorder } from './datasetText'
+import { useLang, useStrings } from './useLang'
 
 // CLS-01 bước 2 (UC-13, mục 5.12): mục dataset mode trong cột cài đặt. Công tắc "Thu dữ liệu" mở các trường; chỉ khi
 // tích "người tham gia đã ký đồng ý" mới Bắt đầu thu được; đang thu thì StagePage hiện chỉ báo đỏ trên canvas.
@@ -25,6 +26,8 @@ export type DatasetControlsProps = {
 export function DatasetControls({ recorder, pickDirectory, download }: DatasetControlsProps) {
   const s = useSyncExternalStore(recorder.subscribe, recorder.snapshot)
   const f = s.fields
+  const lang = useLang()
+  const d = useStrings().settings.dataset
 
   async function onPick() {
     if (!pickDirectory) return
@@ -43,7 +46,7 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
   return (
     <section className="sec" data-testid="dataset-bar">
       <h3>
-        Thu dữ liệu <span className="hint">CLS-01</span>
+        {d.title} <span className="hint">CLS-01</span>
       </h3>
       <div className="acts">
         <label className="check">
@@ -52,65 +55,65 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
             checked={s.enabled}
             onChange={(e) => recorder.setEnabled(e.target.checked)}
           />
-          Thu dữ liệu
+          {d.toggle}
         </label>
-        {!s.enabled && <span className="hint">chỉ crop vùng mở, lưu tại máy</span>}
+        {!s.enabled && <span className="hint">{d.offHint}</span>}
       </div>
       {s.enabled && (
         <>
-          <label className="check" title="Bước 1 của CLS-01: không có văn bản đồng ý thì không thu">
+          <label className="check" title={d.consentTitle}>
             <input
               type="checkbox"
-              aria-label="Người tham gia đã ký đồng ý"
+              aria-label={d.consentAria}
               checked={f.participantConsent}
               disabled={s.recording}
               onChange={(e) => recorder.setFields({ participantConsent: e.target.checked })}
             />
-            Người tham gia đã ký đồng ý bằng văn bản
+            {d.consent}
           </label>
           <div className="cols2">
             <div className="lbl">
-              <span>Mã người tham gia</span>
+              <span>{d.subjectId}</span>
               <input
                 type="text"
-                aria-label="Mã người tham gia"
+                aria-label={d.subjectId}
                 value={f.subjectId}
                 disabled={s.recording}
                 onChange={(e) => recorder.setFields({ subjectId: e.target.value })}
               />
             </div>
             <div className="lbl">
-              <span>Nhãn tạm</span>
+              <span>{d.label}</span>
               <select
-                aria-label="Nhãn tạm"
+                aria-label={d.label}
                 value={f.label}
                 onChange={(e) => recorder.setFields({ label: e.target.value as DatasetLabel })}
               >
                 {DATASET_LABELS.map((l) => (
                   <option key={l} value={l}>
-                    {LABEL_TEXT[l]}
+                    {d.labels[l]}
                   </option>
                 ))}
               </select>
             </div>
             <div className="lbl">
-              <span>Ánh sáng</span>
+              <span>{d.lighting}</span>
               <select
-                aria-label="Ánh sáng"
+                aria-label={d.lighting}
                 value={f.lighting}
                 onChange={(e) => recorder.setFields({ lighting: e.target.value as Lighting })}
               >
                 {LIGHTINGS.map((l) => (
                   <option key={l} value={l}>
-                    {LIGHTING_TEXT[l]}
+                    {d.lightings[l]}
                   </option>
                 ))}
               </select>
             </div>
             <div className="lbl">
-              <span>Hình nộm</span>
+              <span>{d.mannequin}</span>
               <select
-                aria-label="Loại hình nộm"
+                aria-label={d.mannequinAria}
                 value={f.mannequinType}
                 onChange={(e) =>
                   recorder.setFields({ mannequinType: e.target.value as MannequinType })
@@ -118,27 +121,27 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
               >
                 {MANNEQUIN_TYPES.map((m) => (
                   <option key={m} value={m}>
-                    {MANNEQUIN_TEXT[m]}
+                    {d.mannequins[m]}
                   </option>
                 ))}
               </select>
             </div>
           </div>
           <div className="lbl">
-            <span>Ghi chú</span>
+            <span>{d.note}</span>
             <input
               type="text"
-              aria-label="Ghi chú"
+              aria-label={d.note}
               value={f.note}
               onChange={(e) => recorder.setFields({ note: e.target.value })}
             />
           </div>
           <div className="acts">
             <div className="lbl">
-              <span>Nhịp (Hz)</span>
+              <span>{d.rate}</span>
               <input
                 type="number"
-                aria-label="Nhịp thu"
+                aria-label={d.rateAria}
                 min={0.2}
                 max={30}
                 step={0.5}
@@ -148,7 +151,7 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
             </div>
             {s.recording ? (
               <button type="button" onClick={() => recorder.stop()}>
-                Dừng thu
+                {d.stop}
               </button>
             ) : (
               <button
@@ -157,29 +160,29 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
                 disabled={!f.participantConsent}
                 onClick={() => recorder.start()}
               >
-                Bắt đầu thu
+                {d.start}
               </button>
             )}
           </div>
           <div className="acts">
             {pickDirectory && (
               <button type="button" className="sm" onClick={() => void onPick()}>
-                {s.sink ? `Thư mục: ${s.sink}` : 'Chọn thư mục…'}
+                {s.sink ? d.folder(s.sink) : d.pickFolder}
               </button>
             )}
             {s.inMemory > 0 && (
               <button type="button" className="sm" onClick={() => void onDownload()}>
-                Tải zip ({s.inMemory} mẫu)
+                {d.downloadZip(s.inMemory)}
               </button>
             )}
             {s.inMemory > 0 && !s.recording && (
               <button type="button" className="sm danger" onClick={() => recorder.clear()}>
-                Xóa mẫu trong bộ nhớ
+                {d.clear}
               </button>
             )}
           </div>
           <span className="hint" data-testid="dataset-stat">
-            {describeRecorder(s)}
+            {describeRecorder(s, lang)}
           </span>
         </>
       )}

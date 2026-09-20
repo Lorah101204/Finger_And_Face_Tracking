@@ -1,18 +1,19 @@
 import { useSyncExternalStore } from 'react'
 import type { StageStore } from '../loop/store'
 import { SENSITIVITY_LIMITS, defaultSensitivity, type Sensitivity } from '../reveal/sensitivity'
+import { useStrings } from './useLang'
 
 // ROI-01 bước 4 (UC-09): độ nhạy của cửa sổ theo tay: One Euro (minCutoff, beta), hysteresis, nMin, tuổi điểm.
 // Mọi thay đổi đi qua store.setSettings({ sensitivity }): kẹp trong giới hạn, áp dụng ở frame kế, không đổi epoch.
 // Chỉ hiện khi nguồn cửa sổ là tay (StagePage). Giá trị trống hay không phải số thì bỏ qua (giữ giá trị cũ).
 // UX-03 (D-049): mỗi tham số là thanh trượt kèm ô số cùng giá trị; ô số mang aria-label (e2e fill, bàn phím), thanh
 // trượt là tiện ích chuột (aria-hidden, không nhận Tab) vì cùng nhãn sẽ làm getByLabel trùng hai phần tử.
-const FIELDS: { key: keyof Sensitivity; label: string; aria: string }[] = [
-  { key: 'minCutoff', label: 'Lọc (Hz)', aria: 'Lọc minCutoff' },
-  { key: 'beta', label: 'Beta', aria: 'Lọc beta' },
-  { key: 'hysteresisCells', label: 'Hysteresis (ô)', aria: 'Hysteresis' },
-  { key: 'nMin', label: 'N min (ô)', aria: 'N min' },
-  { key: 'pointMaxAgeMs', label: 'Tuổi điểm (ms)', aria: 'Tuổi điểm' },
+const FIELDS: readonly (keyof Sensitivity)[] = [
+  'minCutoff',
+  'beta',
+  'hysteresisCells',
+  'nMin',
+  'pointMaxAgeMs',
 ]
 
 export function SensitivityControls({
@@ -25,6 +26,7 @@ export function SensitivityControls({
 }) {
   const { settings } = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const s = settings.sensitivity
+  const txt = useStrings().settings.sensitivity
 
   function update(key: keyof Sensitivity, value: number): void {
     if (!Number.isFinite(value)) return
@@ -34,16 +36,17 @@ export function SensitivityControls({
   return (
     <section className="sec" data-testid="sensitivity-bar">
       <h3>
-        Độ nhạy
+        {txt.title}
         <button
           type="button"
           className="link"
           onClick={() => store.setSettings({ sensitivity: defaultSensitivity(handDelegate) })}
         >
-          Đặt lại độ nhạy
+          {txt.reset}
         </button>
       </h3>
-      {FIELDS.map(({ key, label, aria }) => {
+      {FIELDS.map((key) => {
+        const { label, aria } = txt.fields[key]
         const lim = SENSITIVITY_LIMITS[key]
         return (
           <div className="slider" key={key}>

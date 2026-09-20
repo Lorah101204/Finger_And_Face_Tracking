@@ -196,6 +196,9 @@ export type SubjectSnap = {
 export type LoopSnap = {
   running: boolean
   frames: number
+  /** PERF-02: số frame có vẽ và số lần buildMask. */
+  paints: number
+  maskBuilds: number
   reveal: { kind: 'closed'; reason: string } | { kind: 'open'; mask: MaskSnap }
   mask: MaskSnap | null
   epoch: number

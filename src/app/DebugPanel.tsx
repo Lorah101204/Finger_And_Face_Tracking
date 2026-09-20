@@ -20,6 +20,7 @@ import {
 import type { StageStore } from '../loop/store'
 import { subscribeTick } from './tick'
 import { describeHandWindow, type HandWindowSource } from '../reveal/handWindowSource'
+import { useStrings } from './useLang'
 
 // UX-01: panel debug tách khỏi panel cài đặt (nút "Debug" trên thanh trên; mở sẵn khi ?debug=1). Giữ nguyên các dòng
 // data-testid mà e2e đọc: stage-status (statusMessage của FACE-02), camera-stat (CAM-01), stats-stat (PERF-01),
@@ -58,6 +59,7 @@ export function DebugPanel({
   const thumbRef = useRef<HTMLCanvasElement>(null)
   // QA-02: môi trường không đổi trong đời trang, đọc một lần (tạo context WebGL để lấy renderer).
   const [envText] = useState(() => describeEnv(readEnv()))
+  const d = useStrings().debug
   const snap = useSyncExternalStore(camera.subscribe, camera.getSnapshot)
   const stage = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const frameId = useSyncExternalStore(subscribeTick, () => camera.lastStamp?.frameId ?? -1)
@@ -78,7 +80,7 @@ export function DebugPanel({
   )
   const statsText = useSyncExternalStore(stats.subscribe, () => describeStats(stats.snapshot()))
   const classifierText = useSyncExternalStore(subscribeTick, () =>
-    classifier ? describeClassifier(classifier.snapshot()) : 'phân loại: không có',
+    classifier ? describeClassifier(classifier.snapshot()) : d.noClassifier,
   )
   const solverText = useSyncExternalStore(subscribeTick, () =>
     describeHandWindow(
@@ -107,7 +109,7 @@ export function DebugPanel({
     <section
       id={id}
       className="panel debug"
-      aria-label="Debug"
+      aria-label={d.label}
       hidden={!open}
       data-testid="debug-panel"
     >
@@ -117,13 +119,14 @@ export function DebugPanel({
             {statusText}
           </span>
           <span className="stat" data-testid="camera-stat">
-            epoch {stage.epoch} · frame {frameId} · đóng: {cameraCloseReason(snap) ?? 'không'}
+            {d.epoch} {stage.epoch} · {d.frame} {frameId} · {d.close}:{' '}
+            {cameraCloseReason(snap) ?? d.none}
           </span>
           <span className="stat" data-testid="stats-stat">
             {statsText}
           </span>
           <span className="stat" data-testid="reveal-stat">
-            vùng: {revealText}
+            {d.region}: {revealText}
           </span>
           <span className="stat" data-testid="restricted-stat">
             {restrictedText}
@@ -147,8 +150,9 @@ export function DebugPanel({
             {envText}
           </span>
           <span className="stat" data-testid="layout-stat">
-            c {L.c} · bảng {L.board.w}×{L.board.h} tại ({L.board.x}, {L.board.y}) · stage{' '}
-            {L.stage.w}×{L.stage.h} · camera {L.cam.w}×{L.cam.h} · scale {L.scale.toFixed(3)}
+            c {L.c} · {d.board} {L.board.w}×{L.board.h} {d.at} ({L.board.x}, {L.board.y}) ·{' '}
+            {d.stage} {L.stage.w}×{L.stage.h} · {d.camera} {L.cam.w}×{L.cam.h} · {d.scale}{' '}
+            {L.scale.toFixed(3)}
           </span>
         </div>
         {probes.enabled && (
@@ -158,7 +162,7 @@ export function DebugPanel({
             width={256}
             height={256}
             data-testid="restricted-thumb"
-            aria-label="Buffer vừa gửi cho worker mặt"
+            aria-label={d.thumb}
           />
         )}
       </div>

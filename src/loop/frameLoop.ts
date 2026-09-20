@@ -11,10 +11,16 @@
 // watchdog, tab ẩn) đóng vùng với no-camera hoặc tab-hidden, ngay khi có sự kiện (tab ẩn thì rAF không chạy) và ở
 // mỗi frame; đổi nguồn cửa sổ là đổi cấu hình (store epoch++, đóng config-changed). CLS-02 nối ClassifierClient.
 // Chạy bằng requestAnimationFrame; camera cấp FrameStamp riêng qua FrameSource.lastStamp.
+// PERF-02: (a) hình của frame này bằng hình frame trước (shapeEquals) với cùng layout, mirror, hysteresis, limited thì
+// dùng lại RevealMask cũ, không rasterize; (b) danh sách ô của FrameOutput lấy từ cache theo đối tượng mask; (c) không
+// có gì động trên màn (vùng đóng, không overlay tay, không đầu ngón) và layout, vạch lưới không đổi thì bỏ qua render
+// của frame đó (canvas giữ nguyên nền trắng đã vẽ); `paints` đếm số frame có vẽ để đo.
 import { DEFAULTS } from '../core/config'
 import type { EpochCounter } from '../core/epoch'
 import { createLatencyWindow, type LatencyStats } from '../core/latency'
 import { closedState, stepReveal } from '../core/revealState'
+import { shapeEquals } from '../core/revealShape'
+import type { Lang } from '../core/i18n'
 import type {
   ClassifyResult,
   CloseReason,
@@ -24,6 +30,7 @@ import type {
   Rect,
   RestrictedFrame,
   RevealMask,
+  RevealShape,
   RevealState,
   FingerStatus,
   ValidatedFace,
@@ -33,7 +40,8 @@ import type { Probes } from '../debug/probes'
 import type { FaceClient, PendingTask } from '../face/faceClient'
 import { validateFace, type RejectReason } from '../face/faceValidate'
 import type { HandPipeline } from '../hands/handPipeline'
-import { listCells } from '../core/cells'
+import { cachedCells } from '../core/cells'
+import type { Layout } from '../core/coords'
 import { fingertipsGuidance, toPoints } from '../hands/fingertips'
 import type { ClassifierClient, ClassifyTask } from '../classify/classifierClient'
 import { decideSubject } from '../classify/subjectRule'
@@ -79,6 +87,9 @@ export type ClassifyGateStats = {
 export type LoopSnapshot = {
   running: boolean
   frames: number
+  /** PERF-02: số frame có gọi render (frame tĩnh không vẽ lại) và số lần buildMask (hình không đổi thì không dựng lại). */
+  paints: number
+  maskBuilds: number
   reveal: RevealState
   mask: RevealMask | null
   epoch: number
@@ -138,6 +149,8 @@ export type FrameLoopDeps = {
   hands?: HandPipeline
   /** INT-01: lý do đóng theo camera và tab (no-camera, tab-hidden); đóng ngay khi gate báo, không chờ frame kế. */
   gate?: CloseGate
+  /** I18N-01: ngôn ngữ của nhãn vẽ lên canvas (đọc mỗi lần vẽ); mặc định tiếng Việt. */
+  lang?: () => Lang
 }
 
 export const EMPTY_OUTPUT: FrameOutput = {
@@ -151,7 +164,8 @@ export const EMPTY_OUTPUT: FrameOutput = {
 }
 
 export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
-  const { store, epoch, sources, frame, probes, restricted, face, hands, gate, classifier } = deps
+  const { store, epoch, sources, frame, probes, restricted, face, hands, gate, classifier, lang } =
+    deps
   const consume = restricted?.consume ?? ((f: RestrictedFrame) => f.input.close())
   const buildIntervalMs = 1000 / (restricted?.targetHz ?? DEFAULTS.face.targetHz)
   // FACE-02: mặt giữ tới kết quả kế; hết hạn nếu worker ngừng trả (4 lần tuổi tối đa) để overlay không đứng hình.
@@ -161,6 +175,20 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
   let ctx: CanvasRenderingContext2D | null = null
   let raf = 0
   let frames = 0
+  let paints = 0
+  let maskBuilds = 0
+  // PERF-02 (a): khóa của mask đang mở để nhận ra hình không đổi; null khi vùng đóng.
+  let maskKey: {
+    shape: RevealShape
+    limited: boolean
+    layout: Layout
+    mirror: boolean
+    hysteresis: number
+  } | null = null
+  // PERF-02 (c): lần vẽ gần nhất có nội dung động không, và với layout, vạch lưới nào.
+  let paintedDynamic = false
+  let paintLayout: Layout | null = null
+  let paintLines: boolean | null = null
   let lastTs = 0
   let reveal: RevealState = closedState('user')
   let lastLayout = store.getSnapshot().layout
@@ -229,7 +257,7 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
         ? {
             shape: mask.shape,
             box: mask.box,
-            cells: listCells(mask),
+            cells: cachedCells(mask),
             stageRect: mask.stageRect,
             cameraRect: mask.cameraRect,
             limited: mask.limited,
@@ -248,8 +276,13 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     close(reason)
     syncFaceGate()
     fingers = []
+    maskKey = null
     const { layout, settings } = store.getSnapshot()
     if (ctx) {
+      paints++
+      paintedDynamic = false
+      paintLayout = layout
+      paintLines = settings.showLines
       render(ctx, layout, {
         showLines: settings.showLines,
         mirror: settings.mirror,
@@ -385,26 +418,45 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
         : noWindow('user')
     fingers = sample.fingers ?? []
     if (sample.shape && layout.c > 0) {
-      // Bước 4: buildMask một lần; đa giác rasterize với hysteresis ô so với mask của frame trước cùng phiên mở
-      // (ROI-02); tập ô rỗng (đa giác quá mảnh) thì đóng too-small.
+      // Bước 4: buildMask nhiều nhất một lần; đa giác rasterize với hysteresis ô so với mask của frame trước cùng
+      // phiên mở (ROI-02); tập ô rỗng (đa giác quá mảnh) thì đóng too-small. PERF-02 (a): hình và điều kiện dựng
+      // không đổi so với mask đang mở thì giữ nguyên đối tượng mask (không rasterize, không cấp phát).
       const shape = sample.shape
-      const prevMask = reveal.kind === 'open' ? reveal.mask : null
-      reveal = stepReveal(
-        reveal,
-        {
-          kind: 'open',
-          build: (ep) =>
-            buildMask(shape, layout, settings.mirror, ep, {
-              limited: sample.limited,
-              prev: prevMask,
-              hysteresisCells: settings.sensitivity.hysteresisCells,
-            }),
-        },
-        epoch,
-      ).state
-      if (reveal.kind === 'open' && reveal.mask.cellCount === 0) close('too-small')
+      const hysteresis = settings.sensitivity.hysteresisCells
+      const same =
+        reveal.kind === 'open' &&
+        maskKey !== null &&
+        maskKey.layout === layout &&
+        maskKey.mirror === settings.mirror &&
+        maskKey.hysteresis === hysteresis &&
+        maskKey.limited === sample.limited &&
+        shapeEquals(maskKey.shape, shape)
+      if (!same) {
+        const prevMask = reveal.kind === 'open' ? reveal.mask : null
+        reveal = stepReveal(
+          reveal,
+          {
+            kind: 'open',
+            build: (ep) => {
+              maskBuilds++
+              return buildMask(shape, layout, settings.mirror, ep, {
+                limited: sample.limited,
+                prev: prevMask,
+                hysteresisCells: hysteresis,
+              })
+            },
+          },
+          epoch,
+        ).state
+        if (reveal.kind === 'open' && reveal.mask.cellCount === 0) close('too-small')
+        maskKey =
+          reveal.kind === 'open'
+            ? { shape, limited: sample.limited, layout, mirror: settings.mirror, hysteresis }
+            : null
+      }
     } else {
       close(sample.shape ? 'config-changed' : sample.reason)
+      maskKey = null
     }
 
     syncFaceGate()
@@ -416,18 +468,34 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     const mask = reveal.kind === 'open' ? reveal.mask : null
 
     if (ctx) {
-      const r0 = performance.now()
-      render(ctx, layout, {
-        showLines: settings.showLines,
-        mirror: settings.mirror,
-        drawable: frame.drawable,
-        mask,
-        faces,
-        hands: handsActive && hands ? hands.latest : null,
-        now,
-        fingers,
-      })
-      renderWin.push(performance.now() - r0)
+      // PERF-02 (c): vẽ khi có nội dung động (vùng mở, overlay tay, đầu ngón), khi frame trước có nội dung động (để
+      // xóa), hoặc khi layout hay vạch lưới đổi; frame tĩnh giữ nguyên canvas (nền trắng và lưới đã vẽ).
+      const handOverlay = handsActive && hands && hands.latest && hands.latest.hands.length > 0
+      const dynamic = mask !== null || handOverlay === true || fingers.length > 0
+      if (
+        dynamic ||
+        paintedDynamic ||
+        paintLayout !== layout ||
+        paintLines !== settings.showLines
+      ) {
+        const r0 = performance.now()
+        render(ctx, layout, {
+          showLines: settings.showLines,
+          mirror: settings.mirror,
+          drawable: frame.drawable,
+          mask,
+          faces,
+          hands: handsActive && hands ? hands.latest : null,
+          now,
+          fingers,
+          lang: lang?.(),
+        })
+        renderWin.push(performance.now() - r0)
+        paints++
+        paintedDynamic = dynamic
+        paintLayout = layout
+        paintLines = settings.showLines
+      }
       probes?.emitOutputFrame(ctx, { epoch: epoch.current, frameId: frames, ts: now })
     }
 
@@ -500,11 +568,15 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
       if (reveal.kind === 'open') close('user')
       canvas = null
       ctx = null
+      maskKey = null
+      paintLayout = null
     },
     snapshot() {
       return {
         running: raf !== 0,
         frames,
+        paints,
+        maskBuilds,
         reveal,
         mask: reveal.kind === 'open' ? reveal.mask : null,
         epoch: epoch.current,

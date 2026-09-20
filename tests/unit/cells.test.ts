@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   boxCells,
+  cachedCells,
+  cachedOutlineEdges,
   cellAt,
   cellOutlineEdges,
   cellRangeOfStageRect,
@@ -195,5 +197,29 @@ describe('tra cứu theo ô', () => {
     )
     expect(lShape.cellCount).toBe(3)
     expect(cellOutlineEdges(lShape, G)).toHaveLength(8)
+  })
+})
+
+// PERF-02 (mục 7.29): danh sách ô và cạnh biên cache theo đối tượng CellSet.
+describe('cache theo đối tượng', () => {
+  it('cachedCells trả cùng mảng cho cùng đối tượng, đúng nội dung listCells, mảng khác cho đối tượng khác', () => {
+    const a = boxCells({ col: 1, row: 2, w: 2, h: 2 })
+    const first = cachedCells(a)
+    expect(first).toEqual(listCells(a))
+    expect(cachedCells(a)).toBe(first)
+    const b = boxCells({ col: 1, row: 2, w: 2, h: 2 })
+    expect(cachedCells(b)).toEqual(first)
+    expect(cachedCells(b)).not.toBe(first)
+  })
+
+  it('cachedOutlineEdges giữ theo grid: cùng grid trả cùng mảng, grid khác tính lại bằng cellOutlineEdges', () => {
+    const a = boxCells({ col: 0, row: 0, w: 2, h: 1 })
+    const e1 = cachedOutlineEdges(a, G)
+    expect(e1).toEqual(cellOutlineEdges(a, G))
+    expect(cachedOutlineEdges(a, G)).toBe(e1)
+    const G2 = { ...G, c: 10, board: { x: 5, y: 5, w: 100, h: 100 } }
+    const e2 = cachedOutlineEdges(a, G2)
+    expect(e2).not.toBe(e1)
+    expect(e2).toEqual(cellOutlineEdges(a, G2))
   })
 })

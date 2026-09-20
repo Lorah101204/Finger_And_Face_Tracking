@@ -5,6 +5,7 @@
 // loại khỏi bao lồi; vùng đóng khi không còn đủ minPoints điểm hợp lệ của đủ minHands tay (mục 5.8). Thuần, unit test
 // trong Node; HandWindowSource và vòng lặp dùng chung.
 import { DEFAULTS } from '../core/config'
+import { DEFAULT_LANG, t, type Lang } from '../core/i18n'
 import { cameraToStage, pointInBoard, type Layout } from '../core/coords'
 import type {
   CloseReason,
@@ -30,15 +31,18 @@ export type HullRequirement = {
   minHands?: number
 }
 
-export const FINGER_NAMES: Record<FingerTip, string> = {
-  4: 'cái',
-  8: 'trỏ',
-  12: 'giữa',
-  16: 'áp út',
-  20: 'út',
-}
+/** Tên ngón và tay tiếng Việt (dòng debug, test cũ); giao diện dùng fingerName/handName theo ngôn ngữ (I18N-01). */
+export const FINGER_NAMES: Record<FingerTip, string> = t('vi').fingers.names
 export const TIP_CHOICES: readonly FingerTip[] = [4, 8, 12, 16, 20]
-export const HAND_NAMES: Record<Handedness, string> = { left: 'Trái', right: 'Phải' }
+export const HAND_NAMES: Record<Handedness, string> = t('vi').fingers.hands
+
+export function fingerName(tip: FingerTip, lang: Lang = DEFAULT_LANG): string {
+  return t(lang).fingers.names[tip]
+}
+
+export function handName(hand: Handedness, lang: Lang = DEFAULT_LANG): string {
+  return t(lang).fingers.hands[hand]
+}
 
 /** Nhãn ngắn "Trái-cái", "Phải-trỏ" cho thanh debug và thông điệp. */
 export function fingerLabel(hand: Handedness, tip: FingerTip): string {
@@ -140,31 +144,30 @@ export function toPoints(statuses: readonly FingerStatus[]): FrameOutput['points
 export function fingertipsGuidance(
   statuses: readonly FingerStatus[],
   req: HullRequirement = {},
+  lang: Lang = DEFAULT_LANG,
 ): string | null {
   const reason = fingertipsCloseReason(statuses, req)
   if (reason === null) return null
+  const f = t(lang).fingers
   const minPoints = req.minPoints ?? DEFAULTS.reveal.minPoints
   const minHands = req.minHands ?? DEFAULTS.hands.minHands
-  if (statuses.length === 0) {
-    return `Đưa ${minHands >= 2 ? 'hai bàn tay' : 'bàn tay'} vào khung hình: cửa sổ mở theo các đầu ngón (cần ít nhất ${minPoints} đầu ngón).`
-  }
+  if (statuses.length === 0) return f.none(minPoints, minHands >= 2)
   const valid = validPoints(statuses)
   const seen = new Set(statuses.map((s) => s.hand))
   const parts: string[] = []
-  if (reason === 'ambiguous-hands') parts.push('hai tay chéo nhau, chưa phân biệt được')
+  if (reason === 'ambiguous-hands') parts.push(f.ambiguous)
   if (minHands >= 2) {
-    for (const h of ['left', 'right'] as const)
-      if (!seen.has(h)) parts.push(`chưa thấy tay ${HAND_NAMES[h].toLowerCase()}`)
+    for (const h of ['left', 'right'] as const) if (!seen.has(h)) parts.push(f.missingHand(h))
   }
   const count = (r: FingerReason) => statuses.filter((s) => s.reason === r).length
   const out = count('out-of-board')
-  if (out) parts.push(`${out} đầu ngón ngoài bảng`)
+  if (out) parts.push(f.outOfBoard(out))
   const stale = count('stale-point')
-  if (stale) parts.push(`${stale} đầu ngón cũ`)
+  if (stale) parts.push(f.stale(stale))
   const low = count('low-score')
-  if (low) parts.push(`${low} đầu ngón chưa rõ tay`)
-  if (parts.length === 0) parts.push('giơ thêm ngón')
-  return `Đang thấy ${valid.length} đầu ngón hợp lệ, cần ít nhất ${minPoints} của ${minHands} tay: ${parts.join('; ')}.`
+  if (low) parts.push(f.lowScore(low))
+  if (parts.length === 0) parts.push(f.more)
+  return f.summary(valid.length, minPoints, minHands, parts.join('; '))
 }
 
 /** Dòng cho thanh debug: "trái 5/5 ok · phải 3/5 (2 stale-point)". */

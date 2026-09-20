@@ -2,6 +2,7 @@
 // FrameOutput.status, từng CloseReason và từng pha camera, sắp theo ba bước (camera → cửa sổ → khuôn mặt). Thuần,
 // không đụng DOM: unit test trong Node liệt kê đủ mọi lý do. Dòng debug `statusMessage` (loop/frameLoop.ts) vẫn là
 // mô tả kỹ thuật ngắn; ở đây là tiêu đề ngắn cộng một câu nói người dùng phải làm gì tiếp.
+// I18N-01: mọi câu lấy từ từ điển `t(lang)`; `buildGuidance(input, lang)` mặc định tiếng Việt.
 import type { CameraSnapshot } from '../camera/cameraState'
 import { DEFAULTS } from '../core/config'
 import type {
@@ -14,7 +15,8 @@ import type {
 } from '../core/types'
 import { subjectText } from '../classify/subjectRule'
 import { isDemoClassifier } from '../core/config'
-import { FINGER_NAMES, fingertipsGuidance } from '../hands/fingertips'
+import { DEFAULT_LANG, t, type Lang, type Strings } from '../core/i18n'
+import { fingertipsGuidance } from '../hands/fingertips'
 import type { WindowSourceKind } from '../reveal/windowSource'
 
 /** Pha camera nhìn từ người dùng (gộp từ CameraSnapshot và lý do đóng của vòng lặp). */
@@ -64,129 +66,77 @@ export type Guidance = {
   reason: CloseReason | null
 }
 
-export const GUIDE_STEPS: readonly { step: GuidanceStep; label: string }[] = [
-  { step: 1, label: 'Camera' },
-  { step: 2, label: 'Cửa sổ' },
-  { step: 3, label: 'Khuôn mặt' },
-]
+export const GUIDE_STEP_IDS: readonly GuidanceStep[] = [1, 2, 3]
+
+/** Ba bước với nhãn theo ngôn ngữ (Guide, trang chào). */
+export function guideSteps(lang: Lang = DEFAULT_LANG): { step: GuidanceStep; label: string }[] {
+  const s = t(lang)
+  return GUIDE_STEP_IDS.map((step) => ({ step, label: s.guide.steps[step] }))
+}
 
 /** Gợi ý phím cho nguồn chuột (hiện dưới thông điệp). */
-export const MOUSE_KEYS =
-  'Bấm hoặc kéo trên bảng để mở · lăn chuột đổi cỡ · Esc đóng · Space mở lại'
-
-const LIMITED = ' Cửa sổ chạm mép bảng.'
+export function mouseKeys(lang: Lang = DEFAULT_LANG): string {
+  return t(lang).guide.mouseKeys
+}
 
 function g(
   step: GuidanceStep,
   tone: GuidanceTone,
-  title: string,
-  detail: string,
+  msg: { title: string; detail?: unknown },
   reason: CloseReason | null = null,
+  detail?: string,
 ): Guidance {
-  return { step, tone, title, detail, reason }
+  const d = detail ?? (typeof msg.detail === 'string' ? msg.detail : '')
+  return { step, tone, title: msg.title, detail: d, reason }
 }
 
-const TAB_HIDDEN = g(
-  1,
-  'warn',
-  'Tab đang ẩn',
-  'Cửa sổ đã đóng và màn về trắng. Quay lại tab này để mở lại.',
-  'tab-hidden',
-)
-
-export function buildGuidance(input: GuidanceInput): Guidance {
-  const camera = cameraGuidance(input)
+export function buildGuidance(input: GuidanceInput, lang: Lang = DEFAULT_LANG): Guidance {
+  const s = t(lang)
+  const camera = cameraGuidance(input, s)
   if (camera) return camera
   const { reveal } = input
   if (reveal.kind === 'closed') {
-    if (reveal.reason === 'tab-hidden') return TAB_HIDDEN
-    if (reveal.reason === 'no-camera')
-      return g(
-        1,
-        'wait',
-        'Đang chờ frame đầu từ camera…',
-        'Cửa sổ chỉ mở khi camera đã cấp hình.',
-        'no-camera',
-      )
+    if (reveal.reason === 'tab-hidden') return g(1, 'warn', s.guide.tabHidden, 'tab-hidden')
+    if (reveal.reason === 'no-camera') return g(1, 'wait', s.guide.noCameraWait, 'no-camera')
     return input.source === 'hands'
-      ? handsClosed(input, reveal.reason)
-      : mouseClosed(input, reveal.reason)
+      ? handsClosed(input, reveal.reason, s, lang)
+      : mouseClosed(reveal.reason, s)
   }
-  return openGuidance(input)
+  return openGuidance(input, s, lang)
 }
 
-function cameraGuidance(input: GuidanceInput): Guidance | null {
+function cameraGuidance(input: GuidanceInput, s: Strings): Guidance | null {
   const text = input.cameraText ?? ''
   switch (input.camera) {
     case 'off':
-      return g(
-        1,
-        'info',
-        'Bật camera để bắt đầu',
-        'Chọn camera rồi bấm Bật camera. Màn vẫn trắng cho tới khi bạn mở cửa sổ.',
-      )
+      return g(1, 'info', s.guide.camOff)
     case 'requesting':
-      return g(
-        1,
-        'wait',
-        'Đang xin quyền camera…',
-        'Cho phép camera trong hộp thoại của trình duyệt.',
-      )
+      return g(1, 'wait', s.guide.camRequesting)
     case 'switching':
-      return g(
-        1,
-        'wait',
-        'Đang đổi camera…',
-        'Cửa sổ đã đóng; mở lại sau khi camera mới chạy.',
-        'no-camera',
-      )
+      return g(1, 'wait', s.guide.camSwitching, 'no-camera')
     case 'hidden':
-      return TAB_HIDDEN
+      return g(1, 'warn', s.guide.tabHidden, 'tab-hidden')
     case 'stalled':
-      return g(
-        1,
-        'warn',
-        'Camera không cấp hình',
-        'Cửa sổ đã đóng. Kiểm tra camera có bị ứng dụng khác dùng; đổi camera nếu cần.',
-        'no-camera',
-      )
+      return g(1, 'warn', s.guide.camStalled, 'no-camera')
     case 'ended':
-      return g(1, 'error', 'Camera đã dừng', text || 'Bấm Bật camera để chạy lại.', 'no-camera')
+      return g(1, 'error', s.guide.camEnded, 'no-camera', text || s.guide.camEnded.detail)
     case 'error':
-      return g(
-        1,
-        'error',
-        'Không bật được camera',
-        text || 'Kiểm tra quyền camera rồi bấm lại.',
-        'no-camera',
-      )
+      return g(1, 'error', s.guide.camError, 'no-camera', text || s.guide.camError.detail)
     case 'active':
     case 'synthetic':
       return null
   }
 }
 
-function fingerNames(input: GuidanceInput): string {
-  return (input.fingerConfig ?? DEFAULTS.hands.fingers).map((t) => FINGER_NAMES[t]).join(', ')
+function fingerNames(input: GuidanceInput, s: Strings): string {
+  return (input.fingerConfig ?? DEFAULTS.hands.fingers)
+    .map((tip) => s.fingers.names[tip])
+    .join(', ')
 }
 
-function handsClosed(input: GuidanceInput, reason: CloseReason): Guidance {
-  if (input.hands === 'loading')
-    return g(
-      2,
-      'wait',
-      'Đang nạp bộ nhận diện tay…',
-      'Chỉ mất vài giây lần đầu. Chuẩn bị hai bàn tay trước camera.',
-      reason,
-    )
-  if (input.hands === 'error')
-    return g(
-      2,
-      'error',
-      'Bộ nhận diện tay không chạy được',
-      'Tải lại trang; nếu vẫn lỗi, chọn nguồn cửa sổ Chuột trong Cài đặt.',
-      reason,
-    )
+function handsClosed(input: GuidanceInput, reason: CloseReason, s: Strings, lang: Lang): Guidance {
+  if (input.hands === 'loading') return g(2, 'wait', s.guide.handsLoading, reason)
+  if (input.hands === 'error') return g(2, 'error', s.guide.handsError, reason)
   switch (reason) {
     case 'few-points':
     case 'user':
@@ -196,57 +146,37 @@ function handsClosed(input: GuidanceInput, reason: CloseReason): Guidance {
         return g(
           2,
           'info',
-          'Đưa hai bàn tay vào trước camera',
-          `Giơ hai tay cách nhau một khoảng, lòng bàn tay hướng về camera. Cửa sổ là vùng bao các đầu ngón (${fingerNames(input)}); cần ít nhất ${DEFAULTS.reveal.minPoints} đầu ngón của ${DEFAULTS.hands.minHands} tay.`,
+          s.guide.handsNone,
           reason,
+          s.guide.handsNone.detail(
+            fingerNames(input, s),
+            DEFAULTS.reveal.minPoints,
+            DEFAULTS.hands.minHands,
+          ),
         )
-      const guide = fingertipsGuidance(input.fingers)
-      return g(
-        2,
-        'info',
-        'Còn thiếu đầu ngón',
-        guide ?? 'Giơ thêm đầu ngón hoặc đưa tay còn lại vào khung hình để mở cửa sổ.',
-        reason,
-      )
+      const guide = fingertipsGuidance(input.fingers, {}, lang)
+      return g(2, 'info', s.guide.handsMissing, reason, guide ?? s.guide.handsMissing.detail)
     }
     case 'stale-point':
-      return g(
-        2,
-        'warn',
-        'Mất dấu đầu ngón',
-        'Giữ các đầu ngón trong khung hình và di chuyển chậm hơn; điểm cũ bị bỏ khỏi vùng, thiếu điểm thì cửa sổ đóng.',
-        reason,
-      )
+      return g(2, 'warn', s.guide.stalePoint, reason)
     case 'out-of-board':
-      return g(2, 'warn', 'Đầu ngón ra ngoài bảng', 'Đưa các đầu ngón vào trong vùng lưới.', reason)
+      return g(2, 'warn', s.guide.outOfBoard, reason)
     case 'too-small':
       return g(
         2,
         'warn',
-        'Các đầu ngón quá gần nhau',
-        `Xòe ngón hoặc tách hai tay xa nhau hơn để cửa sổ đủ cỡ (tối thiểu ${DEFAULTS.reveal.nMin} ô mỗi cạnh).`,
+        s.guide.tooSmallHands,
         reason,
+        s.guide.tooSmallHands.detail(DEFAULTS.reveal.nMin),
       )
     case 'ambiguous-hands':
-      return g(
-        2,
-        'warn',
-        'Hai tay chéo nhau',
-        'Đặt tay trái bên trái, tay phải bên phải và không để hai tay chồng lên nhau.',
-        reason,
-      )
+      return g(2, 'warn', s.guide.ambiguous, reason)
     case 'config-changed':
-      return g(
-        2,
-        'info',
-        'Cài đặt vừa đổi, cửa sổ đã đóng',
-        'Đưa các đầu ngón vào lại để mở cửa sổ mới.',
-        reason,
-      )
+      return g(2, 'info', s.guide.configChangedHands, reason)
   }
 }
 
-function mouseClosed(_input: GuidanceInput, reason: CloseReason): Guidance {
+function mouseClosed(reason: CloseReason, s: Strings): Guidance {
   switch (reason) {
     case 'user':
     case 'few-points':
@@ -255,85 +185,53 @@ function mouseClosed(_input: GuidanceInput, reason: CloseReason): Guidance {
     case 'ambiguous-hands':
     case 'no-camera':
     case 'tab-hidden':
-      return g(
-        2,
-        'info',
-        'Mở cửa sổ bằng chuột',
-        'Bấm hoặc kéo trên bảng để mở một cửa sổ vuông. Chọn nguồn cửa sổ Tay trong Cài đặt để mở theo các đầu ngón.',
-        reason,
-      )
+      return g(2, 'info', s.guide.mouseOpen, reason)
     case 'too-small':
-      return g(2, 'warn', 'Cửa sổ quá nhỏ', 'Lăn chuột để phóng to cửa sổ.', reason)
+      return g(2, 'warn', s.guide.mouseTooSmall, reason)
     case 'config-changed':
-      return g(
-        2,
-        'info',
-        'Cài đặt vừa đổi, cửa sổ đã đóng',
-        'Bấm trên bảng hoặc nhấn Space để mở lại.',
-        reason,
-      )
+      return g(2, 'info', s.guide.configChangedMouse, reason)
   }
 }
 
-function openGuidance(input: GuidanceInput): Guidance {
+function openGuidance(input: GuidanceInput, s: Strings, lang: Lang): Guidance {
   const hands = input.source === 'hands'
-  const lim = input.limited ? LIMITED : ''
+  const lim = input.limited ? s.guide.limited : ''
   if (input.face === 'loading')
-    return g(
-      3,
-      'wait',
-      'Đang nạp bộ nhận diện mặt…',
-      `Cửa sổ đã mở; khuôn mặt sẽ được tìm ngay khi nạp xong.${lim}`,
-    )
-  if (input.face === 'error')
-    return g(
-      3,
-      'error',
-      'Bộ nhận diện mặt không chạy được',
-      'Cửa sổ vẫn mở nhưng không tìm được khuôn mặt. Tải lại trang.',
-    )
+    return g(3, 'wait', s.guide.faceLoading, null, s.guide.faceLoading.detail + lim)
+  if (input.face === 'error') return g(3, 'error', s.guide.faceError)
   switch (input.status) {
     case 'searching':
-      return g(
-        3,
-        'wait',
-        'Đang tìm khuôn mặt trong cửa sổ',
-        `Đưa khuôn mặt vào vùng đang mở. Chỉ phần này của camera được xử lý.${lim}`,
-      )
+      return g(3, 'wait', s.guide.searching, null, s.guide.searching.detail + lim)
     case 'too-small':
       return g(
         3,
         'warn',
-        'Cửa sổ quá nhỏ cho khuôn mặt',
-        (hands
-          ? 'Xòe ngón hoặc tách hai tay xa hơn để cửa sổ rộng hơn.'
-          : 'Lăn chuột để phóng to cửa sổ.') + lim,
+        s.guide.tooSmallFace,
+        null,
+        (hands ? s.guide.tooSmallFace.hands : s.guide.tooSmallFace.mouse) + lim,
       )
     case 'face-candidate': {
-      const label = input.subject ? subjectText(input.subject) : null
+      const label = input.subject ? subjectText(input.subject, isDemoClassifier(), lang) : null
       // Model phân loại đang là stub theo màu: nói rõ trong hướng dẫn, không chỉ ở hậu tố nhãn.
-      const demo =
-        label && isDemoClassifier()
-          ? ' Nhãn người/hình nộm đến từ model demo theo màu, chưa phải model huấn luyện.'
-          : ''
-      return g(
-        3,
-        'ok',
-        label ? `Khuôn mặt trong cửa sổ: ${label}` : 'Khuôn mặt trong cửa sổ',
-        `Nhận diện chỉ chạy trên vùng mở. Dời hoặc thu nhỏ cửa sổ để thấy vùng ngoài đóng lại.${demo}${lim}`,
-      )
+      const demo = label && isDemoClassifier() ? s.guide.faceCandidate.demo : ''
+      return {
+        step: 3,
+        tone: 'ok',
+        title: label ? s.guide.faceCandidate.titleWith(label) : s.guide.faceCandidate.title,
+        detail: `${s.guide.faceCandidate.detail}${demo}${lim}`,
+        reason: null,
+      }
     }
     case 'partial-face':
       return g(
         3,
         'warn',
-        'Khuôn mặt bị cắt',
-        (hands
-          ? 'Mở rộng hoặc dời cửa sổ để khuôn mặt nằm trọn trong vùng mở.'
-          : 'Kéo cửa sổ hoặc lăn chuột để phóng to.') + lim,
+        s.guide.partialFace,
+        null,
+        (hands ? s.guide.partialFace.hands : s.guide.partialFace.mouse) + lim,
       )
     case 'covered':
-      return g(2, 'wait', 'Đang mở cửa sổ…', `Vùng mở sẽ hiện ở frame kế.${lim}`)
+      return g(2, 'wait', s.guide.covered, null, s.guide.covered.detail + lim)
   }
 }
 

@@ -7,12 +7,13 @@
 // nét đứt mảnh.
 // HAND-01 bước 5: overlay debug tay (bbox, năm đầu ngón, tâm lòng bàn tay, nhãn id và trái/phải) vẽ trên nền trắng
 // bằng fillRect, strokeRect, fillText: không có pixel camera, nên được vẽ cả ngoài stageRect và khi không có mask.
-import { cellOutlineEdges, isFullBox, listCells } from '../core/cells'
+import { cachedCells, cachedOutlineEdges, isFullBox } from '../core/cells'
 import { cameraToStage, rectCameraToStage, type Layout } from '../core/coords'
 import { DEFAULTS } from '../core/config'
 import { FINGER_TIPS } from '../core/handLandmarks'
 import type { FingerStatus, HandFrame, Handedness, RevealMask, ValidatedFace } from '../core/types'
 import { subjectText } from '../classify/subjectRule'
+import { DEFAULT_LANG, t, type Lang } from '../core/i18n'
 
 /** Xám nhạt của vạch lưới. e2e coi màu này và trắng là "chưa có pixel camera" (mục 7.6). */
 export const GRID_LINE_COLOR = '#e6e6e6'
@@ -88,6 +89,8 @@ export type RenderOptions = {
   now?: number
   /** ROI-03: đầu ngón đã chọn của mọi tay; chấm màu theo tay, mờ khi không hợp lệ. */
   fingers?: readonly FingerStatus[]
+  /** I18N-01: ngôn ngữ của nhãn vẽ lên canvas (nhãn phân loại, nhãn tay); mặc định tiếng Việt. */
+  lang?: Lang
 }
 
 /**
@@ -101,7 +104,7 @@ export function render(ctx: Ctx2D, layout: Layout, opts: RenderOptions): void {
   const { mask, drawable } = opts
   if (mask && mask.cellCount > 0) drawWindow(ctx, layout, mask, drawable, opts)
   if (opts.hands && opts.hands.hands.length > 0)
-    drawHands(ctx, layout, opts.mirror, opts.hands, opts.now ?? opts.hands.ts)
+    drawHands(ctx, layout, opts.mirror, opts.hands, opts.now ?? opts.hands.ts, opts.lang)
   if (opts.fingers && opts.fingers.length > 0) drawFingertips(ctx, opts.fingers)
 }
 
@@ -129,7 +132,7 @@ function cellPath(ctx: Ctx2D, layout: Layout, mask: RevealMask): void {
     return
   }
   const { board, c } = layout
-  for (const { col, row } of listCells(mask)) ctx.rect(board.x + col * c, board.y + row * c, c, c)
+  for (const { col, row } of cachedCells(mask)) ctx.rect(board.x + col * c, board.y + row * c, c, c)
 }
 
 function drawWindow(
@@ -155,7 +158,7 @@ function drawWindow(
     }
     ctx.restore()
   }
-  if (opts.faces && opts.faces.length > 0) drawFaces(ctx, layout, mask, opts.faces)
+  if (opts.faces && opts.faces.length > 0) drawFaces(ctx, layout, mask, opts.faces, opts.lang)
   drawWindowOutline(ctx, layout, mask)
 }
 
@@ -169,6 +172,7 @@ export function drawFaces(
   layout: Layout,
   mask: RevealMask,
   faces: readonly ValidatedFace[],
+  lang: Lang = DEFAULT_LANG,
 ): void {
   const s = mask.stageRect
   if (s.w <= 0 || s.h <= 0) return
@@ -187,7 +191,7 @@ export function drawFaces(
     for (const p of f.landmarksStage) ctx.fillRect(Math.round(p.x) - 1, Math.round(p.y) - 1, 2, 2)
     // CLS-02 bước 6 (UC-07): nhãn "Người", "Hình nộm" hay "Khuôn mặt chưa phân loại" kèm độ tin cậy, chữ trên nền
     // đặc trong bbox (fillRect + fillText, không có pixel camera), cùng clip nên không ra ngoài vùng mở.
-    const text = subjectText(f)
+    const text = subjectText(f, undefined, lang)
     ctx.font = 'bold 12px system-ui, sans-serif'
     const tw = ctx.measureText(text).width
     const tx = Math.round(b.x) + 3
@@ -213,7 +217,9 @@ export function drawHands(
   mirror: boolean,
   frame: HandFrame,
   now: number,
+  lang: Lang = DEFAULT_LANG,
 ): void {
+  const hn = t(lang).fingers.hands
   if (layout.c === 0 || layout.scale === 0) return
   const stale = now - frame.ts > DEFAULTS.freshness.pointMaxAgeMs
   ctx.save()
@@ -236,7 +242,7 @@ export function drawHands(
     }
     const pc = cameraToStage(h.palmCenterCam, layout, mirror)
     ctx.strokeRect(Math.round(pc.x) - 3 + 0.5, Math.round(pc.y) - 3 + 0.5, 6, 6)
-    const label = `${h.handedness === 'left' ? 'Trái' : 'Phải'} #${h.id}${frame.uncertain ? ' ?' : ''}`
+    const label = `${hn[h.handedness]} #${h.id}${frame.uncertain ? ' ?' : ''}`
     const tx = Math.round(b.x)
     const ty = Math.round(b.y) - 4
     ctx.lineWidth = 3
@@ -264,7 +270,7 @@ export function drawWindowOutline(ctx: Ctx2D, layout: Layout, mask: RevealMask):
     ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2)
   } else {
     ctx.beginPath()
-    for (const e of cellOutlineEdges(mask, layout)) {
+    for (const e of cachedOutlineEdges(mask, layout)) {
       // Lùi 1 px vào trong ô (nét 2 px phủ đúng 2 px trong ô như strokeRect với hộp đầy).
       switch (e.side) {
         case 'left':

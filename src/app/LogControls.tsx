@@ -1,12 +1,12 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
-  LOG_EVENT_TEXT,
   LOG_EVENT_TYPES,
   localDay,
   type LocalLog,
   type LogEvent,
   type LogEventType,
 } from '../log/localLog'
+import { useStrings } from './useLang'
 
 // LOG-02 (D-022, D-046): mục nhật ký cục bộ trong cột cài đặt: công tắc (mặc định tắt, lưu localStorage), số bản
 // ghi, bảng xem tại chỗ (lọc theo loại và ngày, mới nhất trước, tối đa 200 dòng), Xuất CSV (Blob + <a download>
@@ -32,6 +32,7 @@ export function LogControls({ log, download }: LogControlsProps) {
   const [type, setType] = useState<LogEventType | 'all'>('all')
   const [day, setDay] = useState('')
   const [rows, setRows] = useState<LogEvent[]>([])
+  const l = useStrings().settings.log
 
   // Bảng chỉ đọc kho khi đang mở; đọc lại khi bộ lọc hay số bản ghi đổi (kết quả về bất đồng bộ).
   useEffect(() => {
@@ -53,20 +54,21 @@ export function LogControls({ log, download }: LogControlsProps) {
   return (
     <section className="sec" data-testid="log-bar">
       <h3>
-        Nhật ký cục bộ
+        {l.title}
         <span className="hint" data-testid="log-count">
-          {snap.count} bản ghi{snap.pending ? ` (đang ghi ${snap.pending})` : ''}
+          {l.count(snap.count)}
+          {snap.pending ? l.pending(snap.pending) : ''}
         </span>
       </h3>
       <div className="acts">
         <label className="check">
           <input
             type="checkbox"
-            aria-label="Ghi nhật ký cục bộ"
+            aria-label={l.toggle}
             checked={snap.enabled}
             onChange={(e) => log.setEnabled(e.target.checked)}
           />
-          Ghi nhật ký cục bộ
+          {l.toggle}
         </label>
       </div>
       <div className="acts">
@@ -77,7 +79,7 @@ export function LogControls({ log, download }: LogControlsProps) {
           aria-controls="log-view"
           onClick={() => setOpen((o) => !o)}
         >
-          {open ? 'Ẩn nhật ký' : 'Xem nhật ký'}
+          {open ? l.hide : l.show}
         </button>
         <button
           type="button"
@@ -85,7 +87,7 @@ export function LogControls({ log, download }: LogControlsProps) {
           disabled={snap.count === 0}
           onClick={() => void exportCsv()}
         >
-          Xuất CSV
+          {l.exportCsv}
         </button>
         <button
           type="button"
@@ -93,37 +95,37 @@ export function LogControls({ log, download }: LogControlsProps) {
           disabled={snap.count === 0}
           onClick={() => void log.clear()}
         >
-          Xóa nhật ký
+          {l.clear}
         </button>
       </div>
       {snap.error && (
         <span className="error" role="alert">
-          nhật ký lỗi: {snap.error}
+          {l.error(snap.error)}
         </span>
       )}
       {open && (
         <div className="log-view" id="log-view" data-testid="log-view">
           <div className="cols2">
             <div className="lbl">
-              <span>Loại</span>
+              <span>{l.typeFilter}</span>
               <select
-                aria-label="Lọc loại"
+                aria-label={l.typeFilterAria}
                 value={type}
                 onChange={(e) => setType(e.target.value as LogEventType | 'all')}
               >
-                <option value="all">tất cả</option>
+                <option value="all">{l.all}</option>
                 {LOG_EVENT_TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {LOG_EVENT_TEXT[t]} ({t})
+                    {l.events[t]} ({t})
                   </option>
                 ))}
               </select>
             </div>
             <div className="lbl">
-              <span>Ngày</span>
+              <span>{l.dayFilter}</span>
               <input
                 type="date"
-                aria-label="Lọc ngày"
+                aria-label={l.dayFilterAria}
                 value={day}
                 onChange={(e) => setDay(e.target.value)}
               />
@@ -132,16 +134,16 @@ export function LogControls({ log, download }: LogControlsProps) {
           <table className="log-table" data-testid="log-table">
             <thead>
               <tr>
-                <th>Thời điểm</th>
-                <th>Loại</th>
-                <th>Chi tiết</th>
+                <th>{l.colTime}</th>
+                <th>{l.colType}</th>
+                <th>{l.colDetail}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((e) => (
                 <tr key={e.id ?? e.ts} data-type={e.type}>
                   <td>{timeText(e.ts)}</td>
-                  <td>{LOG_EVENT_TEXT[e.type]}</td>
+                  <td>{l.events[e.type]}</td>
                   <td>
                     <code>{JSON.stringify(e.payload)}</code>
                   </td>
@@ -150,7 +152,7 @@ export function LogControls({ log, download }: LogControlsProps) {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={3} className="muted">
-                    không có bản ghi
+                    {l.empty}
                   </td>
                 </tr>
               )}

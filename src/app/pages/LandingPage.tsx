@@ -2,9 +2,11 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { DEFAULTS } from '../../core/config'
 import { BrandMark } from '../BrandMark'
-import { GUIDE_STEPS } from '../guidance'
+import { GUIDE_STEP_IDS } from '../guidance'
 import { LandingPreview } from '../LandingPreview'
+import { LanguageSwitch } from '../LanguageSwitch'
 import { CONSENT_VERSION, consentScopeNote, giveConsent, useConsent } from '../session'
+import { useLang, useStrings } from '../useLang'
 import '../landing.css'
 
 // WEB-00: trang chào và nút đồng ý. Không gọi getUserMedia ở đây (bất biến I10); không gửi gì ra ngoài trình duyệt
@@ -14,13 +16,17 @@ import '../landing.css'
 // UX-03 (D-049): dòng eyebrow, ba bước thành stepper, hộp đồng ý đổi viền khi đã tích, minh họa động bằng canvas
 // (LandingPreview, không camera, không ảnh); `?mode=present` là màn hình bắt đầu kiosk: lưới phủ cả màn với cửa sổ mẫu
 // trôi, thẻ đồng ý nổi giữa, nút lớn, rồi vào `#/app?mode=present` (chế độ trình diễn của sân khấu).
+// I18N-01: mọi chữ theo useStrings(); nút chuyển ngôn ngữ (LanguageSwitch) ở góc trên phải của trang và trên thẻ kiosk,
+// đặt cuối DOM (vị trí bằng CSS) để thứ tự Tab vẫn là hộp đồng ý → Bắt đầu (mục 7.21).
 export function LandingPage() {
   const navigate = useNavigate()
   const consented = useConsent()
   const [searchParams] = useSearchParams()
   const present = searchParams.get('mode') === 'present'
   const [agreed, setAgreed] = useState(false)
-  const scopeNote = consentScopeNote(DEFAULTS.consent.scope)
+  const lang = useLang()
+  const s = useStrings()
+  const scopeNote = consentScopeNote(DEFAULTS.consent.scope, lang)
   const appPath = present ? '/app?mode=present' : '/app'
 
   function onSubmit(e: FormEvent) {
@@ -34,7 +40,7 @@ export function LandingPage() {
     <form onSubmit={onSubmit} className={`consent-card${agreed ? ' agreed' : ''}`}>
       <label className="consent">
         <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-        <span>Tôi đã đọc và đồng ý (văn bản đồng ý phiên bản {CONSENT_VERSION}).</span>
+        <span>{s.landing.consent(CONSENT_VERSION)}</span>
       </label>
       {scopeNote && (
         <p className="muted small" data-testid="consent-scope">
@@ -43,24 +49,24 @@ export function LandingPage() {
       )}
       <div className="actions">
         <button type="submit" className="primary" disabled={!agreed}>
-          Bắt đầu
+          {s.landing.start}
         </button>
         {consented && (
           <span className="muted">
-            Bạn đã đồng ý trước đó. <Link to={appPath}>Vào thẳng màn hình</Link>.
+            {s.landing.consentedBefore} <Link to={appPath}>{s.landing.goStraight}</Link>.
           </span>
         )}
       </div>
     </form>
   )
   const steps = (
-    <ol className="steps" aria-label="Ba bước">
-      {GUIDE_STEPS.map((s) => (
-        <li key={s.step}>
+    <ol className="steps" aria-label={s.landing.stepsLabel}>
+      {GUIDE_STEP_IDS.map((step) => (
+        <li key={step}>
           <span className="num" aria-hidden="true">
-            {s.step}
+            {step}
           </span>
-          {STEP_TEXT[s.step]}
+          {s.landing.steps[step]}
         </li>
       ))}
     </ol>
@@ -73,23 +79,21 @@ export function LandingPage() {
         <div className="kiosk-card">
           <p className="eyebrow">
             <BrandMark size={16} />
-            Chạy hoàn toàn trong trình duyệt · không tải lên
+            {s.landing.eyebrow}
           </p>
-          <h1>Web Camera Tracking</h1>
-          <p className="lead">
-            Giơ hai tay trước camera để mở một cửa sổ trên màn trắng; khuôn mặt chỉ được nhận diện
-            trong cửa sổ đó.
-          </p>
-          <ul className="pledges compact" aria-label="Cam kết riêng tư">
-            <li>Xử lý trong trình duyệt</li>
-            <li>Không tải lên, không lưu video</li>
-            <li>Camera chỉ bật khi bạn bấm</li>
+          <h1>{s.landing.title}</h1>
+          <p className="lead">{s.landing.leadKiosk}</p>
+          <ul className="pledges compact" aria-label={s.landing.pledgesLabel}>
+            {s.landing.pledgesCompact.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
           </ul>
           {consentCard}
           {steps}
+          <LanguageSwitch className="corner" />
         </div>
         <span className="kiosk-corner" aria-hidden="true">
-          Ngoài cửa sổ luôn trắng
+          {s.landing.kioskCorner}
         </span>
       </main>
     )
@@ -100,41 +104,23 @@ export function LandingPage() {
       <div className="landing-copy">
         <p className="eyebrow">
           <span className="dot" aria-hidden="true" />
-          Chạy hoàn toàn trong trình duyệt · không tải lên
+          {s.landing.eyebrow}
         </p>
-        <h1>Web Camera Tracking</h1>
-        <p className="lead">
-          Màn hình trắng chia ô. Các đầu ngón tay của bạn mở một cửa sổ nhìn vào camera; nhận diện
-          khuôn mặt chỉ chạy trên phần đang mở, phần còn lại luôn trắng.
-        </p>
-        <ul className="pledges" aria-label="Cam kết riêng tư">
-          <li>
-            Hình ảnh camera được xử lý ngay trong trình duyệt. Không có máy chủ nhận dữ liệu; không
-            tải lên gì.
-          </li>
-          <li>
-            Không lưu video. Trong trình duyệt của bạn chỉ có lựa chọn đồng ý này, bản cache của
-            model để lần sau mở nhanh, và nhật ký hay dữ liệu thu nếu bạn tự bật trong Cài đặt.
-          </li>
-          <li>Camera chỉ bật khi bạn bấm nút ở màn hình kế tiếp.</li>
+        <h1>{s.landing.title}</h1>
+        <p className="lead">{s.landing.lead}</p>
+        <ul className="pledges" aria-label={s.landing.pledgesLabel}>
+          {s.landing.pledges.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
         </ul>
         {consentCard}
         {steps}
       </div>
       <figure className="landing-art">
-        <LandingPreview />
-        <figcaption>
-          Các đầu ngón tay đóng khung cửa sổ (bao lồi). Chỉ các ô trong cửa sổ hiện camera và được
-          nhận diện; minh họa động, không dùng camera.
-        </figcaption>
+        <LandingPreview lang={lang} />
+        <figcaption>{s.landing.figcaption}</figcaption>
       </figure>
+      <LanguageSwitch className="corner" />
     </main>
   )
-}
-
-/** Câu ngắn cho từng bước của lớp hướng dẫn (UX-01) trên màn hình bắt đầu. */
-const STEP_TEXT: Record<number, string> = {
-  1: 'Bật camera',
-  2: 'Giơ hai tay để mở cửa sổ',
-  3: 'Khuôn mặt trong cửa sổ',
 }

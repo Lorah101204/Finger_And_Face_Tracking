@@ -4,6 +4,7 @@ import { CameraSource } from '../../camera/cameraSource'
 import { type CameraErrorKind, type CameraSnapshot } from '../../camera/cameraState'
 import { SyntheticCameraSource } from '../../camera/syntheticCameraSource'
 import { DEFAULTS, modelWarmList } from '../../core/config'
+import { langStore, t, type Lang, type Strings } from '../../core/i18n'
 import type { FrameOutput } from '../../core/types'
 import { createEpochCounter } from '../../core/epoch'
 import { ClassifierClient } from '../../classify/classifierClient'
@@ -55,7 +56,7 @@ import { Guide } from '../Guide'
 import {
   buildGuidance,
   cameraPhase,
-  MOUSE_KEYS,
+  mouseKeys,
   type CameraPhase,
   type WorkerPhase,
 } from '../guidance'
@@ -66,6 +67,7 @@ import { useFullscreen } from '../useFullscreen'
 import { useIdle } from '../useIdle'
 import { useStageCanvas } from '../useStageCanvas'
 import { useUiState } from '../useUiState'
+import { useLang, useStrings } from '../useLang'
 
 /**
  * Sân khấu: canvas output trắng với vạch lưới (bất biến I4); thanh trên với camera (CAM-01), panel cài đặt (lưới
@@ -94,6 +96,8 @@ import { useUiState } from '../useUiState'
  * LOG-02 (D-022, D-046): nhật ký vận hành cục bộ (`log/localLog.ts`, IndexedDB `wct-log`): chỉ sự kiện metadata do trang
  * này xây từ snapshot chữ và số (consent, camera bật/dừng/lỗi, vùng mở/đóng kèm lý do, đổi cấu hình), công tắc mặc định
  * tắt; thanh LogControls trong panel cài đặt, trạng thái ở thanh trên; window.__wct.log.
+ * I18N-01: mọi chữ qua useStrings(); hướng dẫn dựng theo ngôn ngữ đang chọn; nhãn trên canvas theo langStore.
+ * UX-04: lớp hướng dẫn gọn (tự thu còn một dòng), chế độ theo `ui.guide` trong mục Giao diện của cột cài đặt.
  */
 export function StagePage() {
   const navigate = useNavigate()
@@ -175,6 +179,7 @@ export function StagePage() {
       hands,
       classifier,
       gate: synthetic ? visibilityGate() : cameraGate(camera),
+      lang: () => langStore.get(),
     })
     // PERF-01: sampler 4 Hz đọc bộ đếm của vòng lặp, FaceClient và hand pipeline; panel debug và window.__wct.stats.
     const stats = createStats({
@@ -255,10 +260,13 @@ export function StagePage() {
   const snap = useSyncExternalStore(camera.subscribe, camera.getSnapshot)
   const stage = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const [selected, setSelected] = useState('')
+  const lang = useLang()
+  const s = useStrings()
   const [ui, setUi] = useUiState({
     settingsOpen: !presentParam,
     debugOpen: debug,
     present: presentParam,
+    guide: 'auto',
   })
   const fs = useFullscreen(rootRef)
   // Chế độ lớp phủ: toàn màn hình hoặc trình diễn; không tương tác thì ẩn lớp nổi (canvas không đổi cỡ, D-041).
@@ -448,22 +456,21 @@ export function StagePage() {
   const selectValue = selected || currentId || ''
   const switching = active && selectValue !== currentId
   const msg = synthetic
-    ? {
-        text: `Nguồn tổng hợp (debug) ${synthetic.width}×${synthetic.height}: không dùng camera thật.`,
-        error: false,
-      }
-    : cameraMessage(snap)
+    ? { text: s.bar.synthetic(synthetic.width, synthetic.height), error: false }
+    : cameraMessage(snap, s)
 
-  // UX-01: hướng dẫn đọc ở nhịp 250 ms và ngay khi camera hay cài đặt đổi; chuỗi JSON để so sánh theo giá trị.
+  // UX-01: hướng dẫn đọc ở nhịp 250 ms và ngay khi camera, cài đặt hay ngôn ngữ đổi; chuỗi JSON để so sánh theo giá trị.
   const subscribeGuide = useCallback(
     (cb: () => void) => {
       const offTick = subscribeTick(cb)
       const offCam = camera.subscribe(cb)
       const offStore = store.subscribe(cb)
+      const offLang = langStore.subscribe(cb)
       return () => {
         offTick()
         offCam()
         offStore()
+        offLang()
       }
     },
     [camera, store],
@@ -475,23 +482,30 @@ export function StagePage() {
     const f = face.snapshot()
     const cam = camera.getSnapshot()
     const phase: CameraPhase = synthetic ? 'synthetic' : cameraPhase(cam, camHist.wasActive)
+    const lg: Lang = langStore.get()
     return JSON.stringify(
-      buildGuidance({
-        camera: phase,
-        cameraText: synthetic ? undefined : cameraMessage(cam).text,
-        source: s.windowSource,
-        hands: s.windowSource !== 'hands' ? 'off' : h.fake ? 'ready' : workerPhase(h.client),
-        handsSeen: h.latest?.hands.length ?? 0,
-        face: workerPhase(f),
-        reveal: l.reveal,
-        status: l.output.status,
-        limited: l.output.reveal?.limited ?? false,
-        fingers: l.fingers,
-        fingerConfig: s.fingers,
-        subject: l.output.faces[0]
-          ? { subjectType: l.output.faces[0].subjectType, confidence: l.output.faces[0].confidence }
-          : null,
-      }),
+      buildGuidance(
+        {
+          camera: phase,
+          cameraText: synthetic ? undefined : cameraMessage(cam, lg).text,
+          source: s.windowSource,
+          hands: s.windowSource !== 'hands' ? 'off' : h.fake ? 'ready' : workerPhase(h.client),
+          handsSeen: h.latest?.hands.length ?? 0,
+          face: workerPhase(f),
+          reveal: l.reveal,
+          status: l.output.status,
+          limited: l.output.reveal?.limited ?? false,
+          fingers: l.fingers,
+          fingerConfig: s.fingers,
+          subject: l.output.faces[0]
+            ? {
+                subjectType: l.output.faces[0].subjectType,
+                confidence: l.output.faces[0].confidence,
+              }
+            : null,
+        },
+        lg,
+      ),
     )
   })
   const guidance = JSON.parse(guideJson) as ReturnType<typeof buildGuidance>
@@ -499,7 +513,7 @@ export function StagePage() {
   const rec = useSyncExternalStore(recorder.subscribe, recorder.snapshot)
   // LOG-02: trạng thái nhật ký ở thanh trên.
   const logSnap = useSyncExternalStore(localLog.subscribe, localLog.snapshot)
-  const keys = stage.settings.windowSource === 'mouse' ? MOUSE_KEYS : null
+  const keys = stage.settings.windowSource === 'mouse' ? mouseKeys(lang) : null
 
   function onStart() {
     // Chỉ từ handler bấm nút: CameraSource.start() gọi gate (assertCameraAllowed) rồi mới getUserMedia.
@@ -530,20 +544,20 @@ export function StagePage() {
     <div className={rootClass} ref={rootRef}>
       <div className="chrome">
         <header className="bar top">
-          <Link to="/" className="brand" title="Về trang chào">
+          <Link to="/" className="brand" title={s.bar.brandTitle}>
             <BrandMark />
-            Web Camera Tracking
+            {s.meta.title}
           </Link>
           <span className="sep" aria-hidden="true" />
           <span className="field">
-            Camera
+            {s.bar.camera}
             <select
-              aria-label="Chọn camera"
+              aria-label={s.bar.selectCamera}
               value={selectValue}
               onChange={(e) => setSelected(e.target.value)}
               disabled={requesting}
             >
-              <option value="">Mặc định</option>
+              <option value="">{s.bar.defaultCamera}</option>
               {snap.devices.map((d) => (
                 <option key={d.deviceId} value={d.deviceId}>
                   {d.label}
@@ -553,7 +567,7 @@ export function StagePage() {
           </span>
           {active && !switching ? (
             <button type="button" onClick={onStop}>
-              Dừng camera
+              {s.bar.stop}
             </button>
           ) : (
             <button
@@ -562,7 +576,7 @@ export function StagePage() {
               onClick={onStart}
               disabled={!consented || requesting || synthetic !== null}
             >
-              {switching ? 'Đổi camera' : 'Bật camera'}
+              {switching ? s.bar.switch : s.bar.start}
             </button>
           )}
           <span className={`status ${tone}`} role="status" aria-live="polite" title={msg.text}>
@@ -574,9 +588,9 @@ export function StagePage() {
               className="hint"
               data-testid="log-stat"
               style={{ whiteSpace: 'nowrap' }}
-              title="Nhật ký cục bộ (LOG-02): chỉ sự kiện metadata trong trình duyệt này; tắt thì không hiện để thanh không xuống dòng"
+              title={s.bar.logTitle}
             >
-              nhật ký bật · {logSnap.count}
+              {s.bar.logOn(logSnap.count)}
             </span>
           )}
           <span className="right">
@@ -586,7 +600,7 @@ export function StagePage() {
               aria-controls="settings-panel"
               onClick={() => setUi({ settingsOpen: !ui.settingsOpen })}
             >
-              Cài đặt
+              {s.bar.settings}
             </button>
             <button
               type="button"
@@ -594,23 +608,23 @@ export function StagePage() {
               aria-controls="debug-panel"
               onClick={() => setUi({ debugOpen: !ui.debugOpen })}
             >
-              Debug
+              {s.bar.debug}
             </button>
             <button
               type="button"
               aria-pressed={ui.present}
-              title="Mọi điều khiển thành lớp nổi tự ẩn; canvas chiếm cả màn"
+              title={s.bar.presentTitle}
               onClick={() => setUi({ present: !ui.present })}
             >
-              Trình diễn
+              {s.bar.present}
             </button>
             {fs.supported && (
-              <button type="button" title="Phím F" onClick={fs.toggle}>
-                {fs.active ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+              <button type="button" title={s.bar.fullscreenTitle} onClick={fs.toggle}>
+                {fs.active ? s.bar.exitFullscreen : s.bar.fullscreen}
               </button>
             )}
             <button type="button" className="link" onClick={onRevoke}>
-              Thu hồi đồng ý
+              {s.bar.revoke}
             </button>
           </span>
         </header>
@@ -618,8 +632,8 @@ export function StagePage() {
       <div className="body">
         <div className="main">
           <div className="view">
-            <canvas id="stage" ref={canvasRef} aria-label="Màn pixel trắng" />
-            <Guide guidance={guidance} keys={keys} hud={overlay} />
+            <canvas id="stage" ref={canvasRef} aria-label={s.bar.canvasLabel} />
+            <Guide guidance={guidance} keys={keys} hud={overlay} mode={ui.guide} lang={lang} />
             {rec.recording && (
               <div
                 className="rec-badge"
@@ -628,7 +642,7 @@ export function StagePage() {
                 aria-live="polite"
               >
                 <span className="rec-dot" aria-hidden="true" />
-                Đang thu dữ liệu · {rec.count} mẫu
+                {s.bar.recording(rec.count)}
               </div>
             )}
           </div>
@@ -651,6 +665,8 @@ export function StagePage() {
           handDelegate={handDelegate}
           open={ui.settingsOpen}
           id="settings-panel"
+          ui={ui}
+          setUi={setUi}
           recorder={recorder}
           dataset={{
             pickDirectory: directorySinkSupported() ? pickDirectorySink : null,
@@ -684,50 +700,46 @@ function workerPhase(w: { ready: boolean; failed: boolean }): WorkerPhase {
   return 'loading'
 }
 
-function cameraMessage(s: CameraSnapshot): { text: string; error: boolean } {
+/** I18N-01: câu trạng thái camera theo từ điển (`Strings` hoặc mã ngôn ngữ). */
+function cameraMessage(s: CameraSnapshot, dict: Strings | Lang): { text: string; error: boolean } {
+  const c = (typeof dict === 'string' ? t(dict) : dict).camera
   const st = s.state
   switch (st.status) {
     case 'idle':
-      return { text: 'Camera chưa bật.', error: false }
+      return { text: c.idle, error: false }
     case 'requesting':
-      return { text: 'Đang xin quyền camera…', error: false }
+      return { text: c.requesting, error: false }
     case 'active': {
-      if (s.hidden)
-        return { text: 'Tab đang ẩn: vùng mở sẽ đóng cho tới khi quay lại.', error: false }
-      if (s.stalled)
-        return {
-          text: `Camera không cấp frame (quá ${DEFAULTS.camera.noFrameWatchdogMs} ms không có frame mới).`,
-          error: true,
-        }
-      const fps = st.frameRate ? ` @ ${Math.round(st.frameRate)} fps` : ''
-      return { text: `Camera đang chạy ${st.width}×${st.height}${fps}.`, error: false }
+      if (s.hidden) return { text: c.hidden, error: false }
+      if (s.stalled) return { text: c.stalled(DEFAULTS.camera.noFrameWatchdogMs), error: true }
+      return {
+        text: c.running(st.width, st.height, st.frameRate ? Math.round(st.frameRate) : null),
+        error: false,
+      }
     }
     case 'ended':
       return {
-        text:
-          st.reason === 'device-removed'
-            ? 'Camera đã bị rút. Bấm Bật camera để chạy lại.'
-            : 'Camera đã dừng (track kết thúc). Bấm Bật camera để chạy lại.',
+        text: st.reason === 'device-removed' ? c.endedRemoved : c.endedTrack,
         error: true,
       }
     case 'error':
-      return { text: errorText(st.kind, st.message), error: true }
+      return { text: errorText(st.kind, st.message, c), error: true }
   }
 }
 
-function errorText(kind: CameraErrorKind, message: string): string {
+function errorText(kind: CameraErrorKind, message: string, c: Strings['camera']): string {
   switch (kind) {
     case 'not-allowed':
-      return 'Bạn đã từ chối quyền camera. Cho phép camera trong trình duyệt rồi bấm lại.'
+      return c.notAllowed
     case 'not-found':
-      return 'Không tìm thấy camera nào.'
+      return c.notFound
     case 'overconstrained':
-      return 'Camera không đáp ứng cấu hình yêu cầu. Chọn camera khác.'
+      return c.overconstrained
     case 'not-readable':
-      return 'Không đọc được camera (đang bị ứng dụng khác dùng?).'
+      return c.notReadable
     case 'gate':
-      return `Không bật được camera: ${message}`
+      return c.gate(message)
     default:
-      return `Lỗi camera: ${message}`
+      return c.other(message)
   }
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { subjectText } from '../classify/subjectRule'
+import { DEFAULT_LANG, type Lang } from '../core/i18n'
 import { cellOutlineEdges, listCells, type CellGrid } from '../core/cells'
 import {
   FACE_FULL_COLOR,
@@ -21,6 +22,7 @@ export function LandingPreview({
   rows = variant === 'hands' ? 18 : 36,
   anchorX = 0.5,
   className,
+  lang = DEFAULT_LANG,
 }: {
   variant?: SceneVariant
   cols?: number
@@ -28,6 +30,8 @@ export function LandingPreview({
   /** Vị trí khuôn mặt theo tỉ lệ chiều rộng bảng (kiosk đặt lệch phải để thẻ đồng ý không che). */
   anchorX?: number
   className?: string
+  /** I18N-01: ngôn ngữ của nhãn phân loại trong minh họa. */
+  lang?: Lang
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
 
@@ -57,7 +61,7 @@ export function LandingPreview({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       const grid = sceneGrid(W, H, cols, rows)
       const t = reduced ? 1.2 : (now - t0) / 1000
-      drawFrame(ctx, W, H, grid, sceneFrame(t, grid, variant, anchorX))
+      drawFrame(ctx, W, H, grid, sceneFrame(t, grid, variant, anchorX), lang)
     }
     const loop = (now: number) => {
       // Khoảng 30 khung/giây là đủ cho chuyển động chậm; tiết kiệm CPU cho trang chào.
@@ -75,7 +79,7 @@ export function LandingPreview({
       cancelAnimationFrame(raf)
       ro.disconnect()
     }
-  }, [variant, cols, rows, anchorX])
+  }, [variant, cols, rows, anchorX, lang])
 
   return (
     <canvas
@@ -94,6 +98,7 @@ function drawFrame(
   H: number,
   grid: CellGrid,
   frame: SceneFrame,
+  lang: Lang,
 ): void {
   const { board, c, cols, rows } = grid
   ctx.fillStyle = '#fff'
@@ -138,7 +143,7 @@ function drawFrame(
       ctx.stroke()
       ctx.setLineDash([])
     }
-    if (frame.faceStatus !== 'none') drawFaceBox(ctx, grid, frame, cells)
+    if (frame.faceStatus !== 'none') drawFaceBox(ctx, grid, frame, cells, lang)
   }
 
   // Chấm đầu ngón màu theo tay (ROI-03), viền trắng để nổi trên vạch lưới.
@@ -204,6 +209,7 @@ function drawFaceBox(
   grid: CellGrid,
   frame: SceneFrame,
   cells: { col: number; row: number }[],
+  lang: Lang,
 ): void {
   const { board, c } = grid
   const f = frame.face
@@ -224,7 +230,7 @@ function drawFaceBox(
     ellipse(ctx, f.cx + Math.cos(ang) * f.rx * 0.85, f.cy + Math.sin(ang) * f.ry * 0.85, 2, 2)
   }
   if (full) {
-    const label = subjectText({ subjectType: 'person', confidence: 0.93 })
+    const label = subjectText({ subjectType: 'person', confidence: 0.93 }, undefined, lang)
     ctx.font = 'bold 12px system-ui, sans-serif'
     const tw = ctx.measureText(label).width + 12
     ctx.fillRect(f.rect.x, f.rect.y - 18, tw, 18)

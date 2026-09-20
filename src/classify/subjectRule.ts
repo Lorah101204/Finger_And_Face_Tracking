@@ -2,6 +2,7 @@
 // nhìn thấy của mặt. unknown khi: chưa có kết quả; max(prob) < unknownThreshold; cạnh ngắn ROI < minRoiPx; mặt partial
 // mà phần landmark còn trong vùng mở dưới partialMinVisible.
 import { DEFAULTS, isDemoClassifier } from '../core/config'
+import { DEFAULT_LANG, t, type Lang } from '../core/i18n'
 import type { SubjectType } from '../core/types'
 
 export type SubjectDecision = {
@@ -51,21 +52,24 @@ export function decideSubject(input: SubjectInput, opts: SubjectRuleOptions = {}
 
 /**
  * Chữ hiển thị (UC-07): "Người", "Hình nộm", "Khuôn mặt chưa phân loại" kèm độ tin cậy. Khi model là stub theo màu
- * (isDemoClassifier) nhãn có hậu tố " · demo" để người xem trang public không hiểu nhầm là phân loại thật.
+ * (isDemoClassifier) nhãn có hậu tố " · demo" để người xem trang public không hiểu nhầm là phân loại thật. I18N-01: chữ
+ * theo `lang` (mặc định tiếng Việt; compositor truyền ngôn ngữ đang chọn).
  */
 export function subjectText(
   d: { subjectType: SubjectType; confidence?: number },
   demo: boolean = isDemoClassifier(),
+  lang: Lang = DEFAULT_LANG,
 ): string {
+  const s = t(lang).subject
   const pct =
     d.confidence !== undefined && d.confidence > 0 ? ` ${Math.round(d.confidence * 100)} %` : ''
-  const tag = demo ? ' · demo' : ''
+  const tag = demo ? s.demo : ''
   switch (d.subjectType) {
     case 'person':
-      return `Người${pct}${tag}`
+      return `${s.person}${pct}${tag}`
     case 'mannequin':
-      return `Hình nộm${pct}${tag}`
+      return `${s.mannequin}${pct}${tag}`
     default:
-      return `Khuôn mặt chưa phân loại${tag}`
+      return `${s.unknown}${tag}`
   }
 }

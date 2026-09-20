@@ -624,25 +624,29 @@ a {
 }
 
 /* UX-01 (UC-08): lớp hướng dẫn nổi trên canvas; không nhận chuột để kéo cửa sổ vẫn tới canvas. UX-03: ba bước là pill
- * tiến trình (✓ đã xong, số đang làm), màu theo tone; .hud (chế độ lớp phủ) chữ lớn hơn cho người đứng xa. */
+ * tiến trình (✓ đã xong, số đang làm), màu theo tone; .hud (chế độ lớp phủ) chữ lớn hơn cho người đứng xa.
+ * UX-04 (D-053): thẻ gọn: rộng tối đa 480 px, đệm 8/14 px, chữ 13 px, bước là chấm số 18 px chỉ ghi nhãn ở bước hiện
+ * tại; .collapsed (sau 6 s không đổi thông điệp) là một dòng: chấm bước và tiêu đề, câu chi tiết và gợi ý phím
+ * display: none (vẫn trong DOM). Đo ở 1280 × 720: thẻ đầy đủ ≈ 480 × 74 px thay vì 520 × 112 px; thu gọn ≈ 300 × 36 px. */
 .guide {
   --tone: var(--accent);
   position: absolute;
-  bottom: 20px;
+  bottom: 14px;
   left: 50%;
   z-index: 1;
   display: grid;
-  gap: 6px;
-  max-width: min(680px, calc(100% - 32px));
-  padding: 12px 18px 14px;
-  border-radius: 12px;
-  background: rgba(24, 24, 24, 0.86);
+  gap: 4px;
+  box-sizing: border-box;
+  max-width: min(480px, calc(100% - 32px));
+  padding: 8px 14px 9px;
+  border-radius: 10px;
+  background: rgba(24, 24, 24, 0.84);
   color: #fff;
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.35;
   text-align: center;
   transform: translateX(-50%);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
   pointer-events: none;
 }
 
@@ -665,10 +669,10 @@ a {
 .guide .steps {
   display: flex;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding: 0;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.02em;
   list-style: none;
 }
@@ -676,9 +680,9 @@ a {
 .guide .steps li {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 22px;
-  padding: 0 10px;
+  gap: 5px;
+  height: 18px;
+  padding: 0 3px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.72);
@@ -687,12 +691,17 @@ a {
 .guide .steps .n {
   display: inline-grid;
   place-items: center;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.25);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
+}
+
+/* Chỉ bước hiện tại ghi nhãn; bước khác là chấm số (nhãn ở title). */
+.guide .steps li:not(.current) .label {
+  display: none;
 }
 
 .guide .steps .done .n::before {
@@ -700,6 +709,7 @@ a {
 }
 
 .guide .steps .current {
+  padding: 0 8px 0 3px;
   background: var(--tone);
   color: #fff;
   font-weight: 600;
@@ -709,37 +719,90 @@ a {
   background: rgba(255, 255, 255, 0.3);
 }
 
+.guide .body {
+  display: grid;
+  gap: 2px;
+}
+
 .guide .title {
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .guide .detail {
   color: #e8eaed;
+  font-size: 12.5px;
 }
 
 .guide .keys {
-  font-size: 12px;
+  font-size: 11px;
   color: #bdc1c6;
 }
 
+.guide.collapsed {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 8px;
+}
+
+.guide.collapsed .detail,
+.guide.collapsed .keys {
+  display: none;
+}
+
 .guide.hud {
-  bottom: 28px;
-  max-width: min(760px, calc(100% - 32px));
-  padding: 16px 26px 18px;
-  border-radius: 18px;
+  bottom: 22px;
+  gap: 5px;
+  max-width: min(600px, calc(100% - 32px));
+  padding: 11px 20px 12px;
+  border-radius: 14px;
   background: rgba(20, 22, 26, 0.8);
   backdrop-filter: blur(10px);
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .guide.hud .title {
-  font-size: 21px;
+  font-size: 18px;
+}
+
+.guide.hud .detail {
+  font-size: 14px;
 }
 
 .guide.hud .steps li {
-  height: 24px;
-  font-size: 12px;
+  height: 20px;
+  font-size: 11px;
+}
+
+.guide.hud.collapsed {
+  padding: 8px 16px 8px 10px;
+}
+
+/* I18N-01: nút chuyển ngôn ngữ dạng phân đoạn; ở trang chào nằm góc trên phải (.corner). */
+.lang-switch {
+  display: inline-flex;
+  gap: 0;
+}
+
+.lang-switch button {
+  border-radius: 0;
+}
+
+.lang-switch button:first-child {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.lang-switch button:last-child {
+  margin-left: -1px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.lang-switch.corner {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
 }
 
 /* Chế độ lớp phủ (D-041, D-049): toàn màn hình (.fullscreen) và trình diễn (.present) dùng chung .overlay: thanh trên

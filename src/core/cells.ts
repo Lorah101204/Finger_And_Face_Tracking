@@ -142,6 +142,32 @@ export function isFullBox(set: CellSet): boolean {
   return set.cellCount === set.box.w * set.box.h && set.cellCount > 0
 }
 
+/**
+ * PERF-02: danh sách ô và cạnh biên tính một lần cho mỗi đối tượng CellSet (WeakMap theo đối tượng, tự giải phóng khi
+ * mask bị bỏ). Mask được vòng lặp dùng lại qua nhiều frame khi hình không đổi, nên compositor (clip, viền), FrameOutput
+ * và landing không rasterize lại danh sách mỗi frame. Kết quả dùng chung: không được sửa tại chỗ.
+ */
+const CELLS_CACHE = new WeakMap<CellSet, { col: number; row: number }[]>()
+const EDGES_CACHE = new WeakMap<CellSet, { grid: CellGrid; edges: CellEdge[] }>()
+
+export function cachedCells(set: CellSet): readonly { col: number; row: number }[] {
+  let out = CELLS_CACHE.get(set)
+  if (!out) {
+    out = listCells(set)
+    CELLS_CACHE.set(set, out)
+  }
+  return out
+}
+
+/** Cạnh biên theo grid; grid khác (layout đổi) thì tính lại. */
+export function cachedOutlineEdges(set: CellSet, grid: CellGrid): readonly CellEdge[] {
+  const hit = EDGES_CACHE.get(set)
+  if (hit && hit.grid === grid) return hit.edges
+  const edges = cellOutlineEdges(set, grid)
+  EDGES_CACHE.set(set, { grid, edges })
+  return edges
+}
+
 export function listCells(set: CellSet): { col: number; row: number }[] {
   const out: { col: number; row: number }[] = []
   const { box, cells } = set

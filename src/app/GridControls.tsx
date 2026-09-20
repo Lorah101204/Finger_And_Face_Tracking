@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { GRID_LIMITS, GRID_PRESETS, gridLabel, presetIndex } from '../core/grid'
 import type { StageStore } from '../loop/store'
 import type { WindowSourceKind } from '../reveal/windowSource'
+import { useStrings } from './useLang'
 
 // GRID-01 bước 4: preset lưới, custom cột × hàng có giới hạn, bật/tắt vạch lưới, bật/tắt mirror.
 // Mọi thay đổi đi qua store: cols, rows, mirror làm epoch++ (cửa sổ đang mở sẽ đóng với config-changed).
@@ -12,20 +13,21 @@ export function GridControls({ store }: { store: StageStore }) {
   const { settings, layout } = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const preset = presetIndex(settings)
   const hands = settings.windowSource === 'hands'
+  const s = useStrings()
+  const g = s.settings.grid
+  const w = s.settings.window
 
   return (
     <>
       <section className="sec" data-testid="grid-section">
         <h3>
-          Lưới
-          <span className="hint">
-            {settings.cols} × {settings.rows} · ô {layout.c} px
-          </span>
+          {g.title}
+          <span className="hint">{g.hint(settings.cols, settings.rows, layout.c)}</span>
         </h3>
         <div className="lbl">
-          <span>Preset</span>
+          <span>{g.preset}</span>
           <select
-            aria-label="Lưới"
+            aria-label={g.presetAria}
             value={preset < 0 ? 'custom' : String(preset)}
             onChange={(e) => {
               const p = GRID_PRESETS[Number(e.target.value)]
@@ -37,15 +39,15 @@ export function GridControls({ store }: { store: StageStore }) {
                 {gridLabel(p)}
               </option>
             ))}
-            <option value="custom">Tùy chỉnh</option>
+            <option value="custom">{g.custom}</option>
           </select>
         </div>
         <div className="cols2">
           <div className="lbl">
-            <span>Cột</span>
+            <span>{g.cols}</span>
             <input
               type="number"
-              aria-label="Số cột"
+              aria-label={g.colsAria}
               min={GRID_LIMITS.minCols}
               max={GRID_LIMITS.maxCols}
               value={settings.cols}
@@ -53,10 +55,10 @@ export function GridControls({ store }: { store: StageStore }) {
             />
           </div>
           <div className="lbl">
-            <span>Hàng</span>
+            <span>{g.rows}</span>
             <input
               type="number"
-              aria-label="Số hàng"
+              aria-label={g.rowsAria}
               min={GRID_LIMITS.minRows}
               max={GRID_LIMITS.maxRows}
               value={settings.rows}
@@ -71,7 +73,7 @@ export function GridControls({ store }: { store: StageStore }) {
               checked={settings.showLines}
               onChange={(e) => store.setSettings({ showLines: e.target.checked })}
             />
-            Vạch lưới
+            {g.lines}
           </label>
           <label className="check">
             <input
@@ -79,41 +81,37 @@ export function GridControls({ store }: { store: StageStore }) {
               checked={settings.mirror}
               onChange={(e) => store.setSettings({ mirror: e.target.checked })}
             />
-            Mirror
+            {g.mirror}
           </label>
         </div>
       </section>
       <section className="sec" data-testid="window-section">
-        <h3>Cửa sổ</h3>
+        <h3>{w.title}</h3>
         <div className="lbl">
-          <span>Nguồn</span>
+          <span>{w.source}</span>
           <select
-            aria-label="Nguồn cửa sổ"
+            aria-label={w.sourceAria}
             value={settings.windowSource}
             onChange={(e) =>
               store.setSettings({ windowSource: e.target.value as WindowSourceKind })
             }
           >
-            <option value="mouse">Chuột</option>
-            <option value="hands">Tay</option>
+            <option value="mouse">{w.mouse}</option>
+            <option value="hands">{w.hands}</option>
           </select>
         </div>
-        <span className="hint">
-          {hands
-            ? 'Cửa sổ là vùng bao các đầu ngón của hai tay; đổi nguồn thì cửa sổ đang mở đóng lại.'
-            : 'Bấm hoặc kéo trên bảng để mở; lăn chuột đổi cỡ; Esc đóng; Space mở lại.'}
-        </span>
+        <span className="hint">{hands ? w.hintHands : w.hintMouse}</span>
         {hands && (
           <div className="acts">
-            <label className="check" title="D-010: bật nếu webcam thật gán nhãn tay ngược">
+            <label className="check" title={w.swapTitle}>
               <input
                 type="checkbox"
                 checked={settings.handednessSwap}
                 onChange={(e) => store.setSettings({ handednessSwap: e.target.checked })}
               />
-              Đảo trái/phải
+              {w.swap}
             </label>
-            <span className="hint">khi webcam gán nhãn tay ngược</span>
+            <span className="hint">{w.swapHint}</span>
           </div>
         )}
       </section>

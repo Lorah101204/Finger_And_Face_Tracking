@@ -29,7 +29,7 @@ Invariants set by the plan. Every work package must preserve them; section 7 has
 | # | Invariant | Consequence in code |
 |---|---|---|
 | I1 | The face/person model never receives the raw frame or a video reference | The face/classifier worker has a single API that accepts `RestrictedFrame`; importing the camera module is forbidden by lint |
-| I2 | A single mask for both display and inference | `buildMask()` runs exactly once per frame; the compositor and the restricted frame builder receive the same object |
+| I2 | A single mask for both display and inference | `buildMask()` is the only function that creates a mask and runs at most once per frame (PERF-02 reuses the previous frame's object when the shape and layout are unchanged); the compositor and the restricted frame builder receive the same object |
 | I3 | Crop first, resize after | Copy the camera region 1:1 (integer rect) into a separate canvas, then letterbox for the model |
 | I4 | White before video | The output canvas is filled white as soon as it mounts; the video element is hidden and not in the display tree |
 | I5 | Inference results carry the epoch, frameId and ROI at submit time; checked on return | Never use the current window to convert the coordinates of an old task |
@@ -249,7 +249,7 @@ type FrameOutput = {
 1. `CameraSource` emits a `FrameStamp` via `requestVideoFrameCallback` (fallback rAF).
 2. If the hand pipeline is idle: send the raw frame to the hand landmarker (allowed under I1). The result returns asynchronously and updates `HandTracker` and the slots.
 3. `WindowSource.current(now)` → `RevealShape | null`. The source is the mouse (debug, square window) or the hands (`fingertips.ts` → `hullSolver`: convex hull of the valid fingertips, D-047; before ROI-03 this was slots → `quadSolver`, D-038).
-4. `buildMask(shape, layout, mirror, epoch, { prev, hysteresisCells })` exactly once → `mask` (cell set: the full box for the mouse; the quadrilateral rasterized into cells with hysteresis against the previous frame's mask) or `null`. Update `RevealState`; on closed → open, `epoch++` and reset the filters; on open → closed, clear `ValidatedFace[]`, `FaceClient.rejectAll()`, `ClassifierClient.rejectAll()`.
+4. `buildMask(shape, layout, mirror, epoch, { prev, hysteresisCells })` at most once (skipped when the shape, layout, mirror, hysteresis and `limited` equal the open mask's, PERF-02) → `mask` (cell set: the full box for the mouse; the quadrilateral rasterized into cells with hysteresis against the previous frame's mask) or `null`. Update `RevealState`; on closed → open, `epoch++` and reset the filters; on open → closed, clear `ValidatedFace[]`, `FaceClient.rejectAll()`, `ClassifierClient.rejectAll()`.
 5. Compositor: fill white → grid lines (if enabled) → if there is a mask: clip with the union path of the open cells, then `drawImage(video, cameraRect → stageRect)` of the bounding box → overlay: four dots, cell set outline and dashed quadrilateral, validated faces (drawn inside the same clip).
 6. If there is a mask, the face pipeline is idle, the ROI side ≥ threshold and the rate says it is due: `buildRestrictedFrame(video, mask, stamp)` → `FaceClient.submit()`; the classifier receives the same `RestrictedFrame` at a sparser rate.
 7. Result returns (asynchronously): `validateFace(result, task, currentMask, epoch, now)` → `ValidatedFace[]` used in step 5 of the next frame.
@@ -263,7 +263,7 @@ flowchart LR
   SL --> SQ["hullSolver<br/>filter by point key, convex hull, too-small"]
   MS["MouseWindowSource<br/>(debug)"] --> WIN
   SQ --> WIN["RevealShape or null"]
-  WIN --> MK["buildMask<br/>rasterize into cells, once per frame"]
+  WIN --> MK["buildMask<br/>rasterize into cells, at most once per frame"]
   CAM -->|raw frame| CP["compositor<br/>white + grid + drawImage(cameraRect)"]
   MK --> CP
   CAM -->|raw frame| RF["restrictedFrame<br/>crop 1:1 then letterbox"]
@@ -796,7 +796,7 @@ sequenceDiagram
 
 Execution order for one person:
 
-`SETUP-00 → SPIKE-00 → WEB-00 → CAM-01 → GRID-01 → ROI-00 → MASK-01 → TEST-00 → MASK-02 → FACE-01 → FACE-02 → HAND-01 → HAND-02 → ROI-01 → INT-01 → ROI-02 → QA-01 → PERF-01 → UX-01 → UX-02 → CLS-01 → CLS-02 → QA-02 → LOG-02 (optional) → ROI-03 → UX-03 → REL-01`
+`SETUP-00 → SPIKE-00 → WEB-00 → CAM-01 → GRID-01 → ROI-00 → MASK-01 → TEST-00 → MASK-02 → FACE-01 → FACE-02 → HAND-01 → HAND-02 → ROI-01 → INT-01 → ROI-02 → QA-01 → PERF-01 → UX-01 → UX-02 → CLS-01 → CLS-02 → QA-02 → LOG-02 (optional) → ROI-03 → UX-03 → REL-01 → PERF-02 → UX-04 → I18N-01`
 
 API-00, LOG-01, ADM-01, SEC-01, DEP-01 are dropped per D-019 (code in `archive/backend/`); static deployment to GitHub Pages with a custom domain is part of REL-01 (D-024, D-048). UX-02 (landing screen, D-023) depends only on WEB-00, so it can be pulled forward to any point after CAM-01; LOG-02 (local log, D-022) is optional and not a precondition of REL-01.
 
@@ -1277,6 +1277,55 @@ Done criteria: green CI on `main` including `test:deploy` and the `deploy` job; 
 
 Implementation note (D-050, 2026-09-20): step 1 done on 2026-09-20 (repo, two branches, push; the first CI run was red at Mermaid because diagram 5.7 had a `;` in a transition description that the local check missed by reading only the last two lines, fixed; the untracked assets on the development machine were deleted during branch operations in GitHub Desktop, recreated with `npm ci`, `models:fetch` and the new `spikes:fetch` script with pinned sha256 of the MediaPipe sample images); steps 2, 3, 4, 5, 6 and the documentation part of 9 are done and checked locally; steps 1, 7, 8, 10 await the operator's GitHub account and domain. `test:deploy` measurements (table 7.27): with `VITE_BASE=/` and `/repo/`, on Chromium headless shell (EP wasm → jsep loader) and Chrome 153 with GPU (EP webgpu → asyncify loader): the first load downloads 12 `models/` + `assets/` responses of about 40 MB, the model cache has 7 files and the app cache 7 files on that same load; the second load serves 12/12 responses from the service worker and the worker goes to the network only once (the page, network-first); the third load offline still has the face and classifier workers ready and the region opens; 64 requests across three loads, 27 to `models/`, 0 cross-origin. Bug found while writing the test case: the first version of the service worker did not use `ignoreVary`, so the offline load could not get the assets (vite preview returns `Vary: Origin`), fixed and documented in the code.
 
+### Phase 7: refinement after the first deployment
+
+#### PERF-02 Loop and render economy
+
+Depends on: REL-01 (measured on the deployed build). Motivation: a kiosk spends most of its time with the region closed (camera on, nobody in front of it) or with the camera off; the loop still repainted the full canvas (white fill plus about 100 grid-line `fillRect`) at the display rate, rebuilt the `RevealMask` every frame even when the shape had not moved (mouse window; hand frames arrive at about 30 Hz while the loop runs at 60 fps or more) and allocated a fresh cell list, `FrameOutput` and outline edges per frame.
+
+Steps:
+
+1. `core/revealShape.ts`: `shapeEquals(a, b)` compares the controlling shape by value (window: col, row, n; polygon: every vertex in order).
+2. `loop/frameLoop.ts`: keep a key of the open mask (shape, `limited`, layout object, mirror, hysteresis); when the sample of this frame matches, keep the same `RevealMask` object and skip `stepReveal`/`buildMask`. Rasterizing the same polygon with the previous mask as `prev` is a fixed point of the hysteresis rule (open cells still touch the enlarged cell, closed cells still fail the on-threshold), so the result is identical by construction. `maskBuilds` counts the builds.
+3. `core/cells.ts`: `cachedCells(set)` and `cachedOutlineEdges(set, grid)` memoize per `CellSet` object in `WeakMap`s; the compositor clip path, the outline and `FrameOutput.reveal.cells` use them (`cells` is now `readonly` and shared across frames).
+4. `loop/frameLoop.ts`: skip `render()` when nothing dynamic is on screen (no mask, no hand overlay with hands, no fingertips), the previous paint had nothing dynamic either, and layout and grid-line setting are unchanged; `closeNow` and the first frame after a change still paint; `paints` counts painted frames; `probes.emitOutputFrame` keeps running every frame.
+5. Measurement script `tools/measure-loop.mjs` (Chrome headless, CDP `Performance.getMetrics`): main-thread share and loop counters in five states; e2e `perf.spec.ts` (section 7.29) checks the counters.
+
+Done criteria: with the region closed the loop paints zero frames per second while `frames` keeps increasing; a still mouse window builds no mask; every pixel test (7.6, 7.8, 7.10) and the soak still pass; the debug and probe paths are unchanged.
+
+Implementation note (D-052, 2026-09-20): measured on the development machine with the synthetic source at 1280 × 720 in Chrome 153 headless (rAF runs at about 143 fps there, so absolute numbers are higher than on a 60 Hz display): region closed, main thread 9.3 % → 5.3 to 6.2 %, loop tick p50 0.1 → 0.0 ms, paints 0 of 977 frames; mouse window open, 14.1 % → 11.3 %; orbiting fake hands 15.6 % → 15.7 % and still fake hands 17.1 % → 16.8 % (fake hands produce a new `HandFrame` every render frame, so no reuse is possible there; the timing resolution of `performance.now` is 0.1 ms, so the allocation savings do not show in the p50/p95 columns). Nothing changes in the invariants: `buildMask` is still the only place that creates a mask (I2 now reads "at most once per frame"), the compositor still receives the same object as the restricted frame builder.
+
+#### UX-04 Compact guidance layer
+
+Depends on: UX-03. Motivation (user feedback on the deployed site, 2026-09-20): the guidance card at the bottom center covered too much of the board (480 × 146 px at 1280 × 720 with the mouse source, 640 × 164 px in presentation mode) and stayed at full size for as long as the message was unchanged.
+
+Steps:
+
+1. `Guide.tsx` and `app.css`: smaller card (max 480 px wide, 8/14 px padding, 13 px body, 14 px title), the three step pills become 18 px number dots and only the current step keeps its label (the others carry the label in `title`); the HUD variant follows (max 600 px, 18 px title).
+2. Auto-collapse: a message that has not changed for `COLLAPSE_MS` (6 s) collapses to a single line of step dots plus title; `.detail` and `.keys` are hidden by CSS but stay in the DOM (`toHaveText` in e2e and screen readers still read them); any change of step, tone, title, detail or keys expands the card again; the `error` tone never collapses (the user has to read how to fix the camera). `data-collapsed` for e2e.
+3. `uiState.guide`: `auto` (default), `full` (never collapse), `hidden` (the card is not rendered); chosen in the new "Giao diện" (Interface) section at the top of the settings column (`<select>` with `aria-label` "Hướng dẫn trên màn"), kept in the tab's `wct.ui` like the other UI state; unknown values fall back to `auto`.
+4. Tests: `guide.spec.ts` (section 7.30) measures the card in both states and both layouts; the `uiState` unit test covers the new field; `ux.spec` and `present.spec` are unchanged.
+
+Done criteria: at 1280 × 720 the full card is at most 500 × 120 px and the collapsed card at most 40 px tall; the old guidance e2e passes unchanged; the mode survives a reload.
+
+Implementation note (D-053, 2026-09-20): measured in `guide.spec` (Chromium headless 1280 × 720): full card 480 × 110 px (mouse source, three lines with the key hints) versus 480 × 146 before, collapsed 277 × 31 px (342 × 31 in Chrome with its wider system font); HUD 600 × 129 px full and 321 × 40 px collapsed versus 640 × 164 before. The collapse timer is a React effect keyed on the message, so a message that flickers keeps the card open; `present.spec` still finds the `.hud` card with opacity 1 while the floating layers hide.
+
+#### I18N-01 English option for the whole interface
+
+Depends on: UX-04 (shares the Interface section). Goal: every visible string of the landing page, stage top bar, guidance layer, settings column (all seven sections), on-canvas labels (classification label, hand labels) and the debug drawer chrome can be shown in English; Vietnamese stays the default so every existing e2e assertion (which uses Vietnamese labels and button names) is unchanged. The diagnostic lines of the debug drawer (`describe*` in `debug/`, `loop/`, `hands/`, `reveal/`, the `data-testid` lines) stay Vietnamese: they are contracts with the e2e suite, like the `note()` strings.
+
+Steps:
+
+1. `core/i18n/`: `lang.ts` (type `Lang = 'vi' | 'en'`, `readLang(storage, query)` with the order `?lang=` on the URL → localStorage `wct.lang` → `vi`, `writeLang`, a tiny external store `langStore` with `subscribe`), `vi.ts` (the reference dictionary; `Strings = typeof vi`, strings with parameters are functions), `en.ts` (`: Strings`, so a missing key fails `tsc`), `index.ts` (`t(lang)`). The module lives in `core/` so `classify/`, `hands/` and `mask/` can label the canvas under `lint:boundaries`.
+2. `app/useLang.ts`: `initLang()` in `main.tsx` before the first render (reads the hash query or the page query, sets `<html lang>`, the document title and the meta description); `setLang()` persists; `useLang()`/`useStrings()` via `useSyncExternalStore`. `LanguageSwitch.tsx`: a segmented Tiếng Việt | English button group (`aria-pressed`) at the top right of the landing page (also on the kiosk card) and in the Interface section.
+3. Components read `useStrings()`: `LandingPage`, `StagePage` (bar, camera messages, revoke, recording badge), `SettingsPanel`, `GridControls`, `FingerControls`, `SensitivityControls`, `DatasetControls` (+ `datasetText.describeRecorder(s, lang)`), `LogControls` (event names moved from `localLog.ts` into the dictionary), `DebugPanel` chrome. Pure functions take `lang` with the default `vi`: `buildGuidance(input, lang)`, `guideSteps(lang)`, `mouseKeys(lang)`, `fingertipsGuidance(statuses, req, lang)`, `fingerName`, `handName`, `subjectText(d, demo, lang)`, `consentScopeNote(scope, lang)`; the compositor gets `RenderOptions.lang` and the loop reads `deps.lang()` (StagePage passes `langStore.get`) so the classification and hand labels drawn on the canvas follow the choice; `LandingPreview` takes `lang` for the illustration label. The guidance subscription also listens to `langStore`, so switching language re-renders the card within one tick.
+4. `?lang=en` on the URL applies to that page load without overwriting the stored choice (kiosk links); the switch persists.
+5. Tests: unit `i18n.test.ts` (same key shape in both dictionaries, no Vietnamese diacritics in any English leaf, every leaf non-empty, `readLang` precedence, the store, `buildGuidance` in English for every camera phase, close reason of both sources and open state with the same step, tone and reason as Vietnamese, the label helpers); e2e `i18n.spec.ts` (section 7.31).
+
+Done criteria: after pressing English no visible text of the landing page, top bar or settings column contains Vietnamese diacritics (except the "Tiếng Việt" button); the choice survives a reload and the landing → stage transition; switching back restores every Vietnamese label the other specs rely on; no additional network request (the dictionaries are in the bundle).
+
+Implementation note (D-054, 2026-09-20): 191 string leaves per dictionary; the main chunk grows from 386.97 kB (gzip 126.42 kB) to 409.40 kB (gzip 133.03 kB) for both dictionaries, the switch and the guidance mode together; the aria-labels are translated too, so English users of screen readers get English names, and the e2e `i18n.spec` exercises the English `getByLabel` names (`Window source`, `Thumb finger`, `Point age`, `Write local log`, `Capture data`). Not translated: the diagnostic lines of the debug drawer, the console messages of the workers, the generated test report labels (already English) and the code comments (Vietnamese, unchanged).
+
 ## 7. Mandatory test suite
 
 ### 7.1 Mapping the plan's test table to how it is carried out
@@ -1624,6 +1673,38 @@ After ROI-03 the quadrilateral is a special case of the convex hull (`polygon`):
 | Kiosk | E2E `present.spec`: `/#/?mode=present` has `main.landing.kiosk`, the `data-variant=window` canvas exactly equals the viewport, no `img`, no scroll, no request outside the origin (ignoring the worker's same-origin `blob:`); contrast of title, introduction, consent label, three steps on the card ≥ 4.5:1 (title ≥ 3:1); tick then Bắt đầu → `#/app?mode=present` with `.stage.present` and the Trình diễn button already on | e2e | UX-03 |
 | Old layout still correct | E2E `ux.spec` (7.20): collapse the column → canvas wider (instead of taller), open debug → shorter, state kept across reload; fullscreen: `.chrome` absolute, canvas equal to `.stage`, auto-hide; `start.spec` (7.21): the illustration is `figure.landing-art canvas` `aria-hidden` with a figcaption, one screen, AA, no external resources; every other spec passes unchanged (labels, testids, button names unchanged) | e2e | UX-03 |
 | Screenshots | `npm run screenshots` additionally writes `stage-present-1280x720.png` and `landing-kiosk-1280x720.png` | script | UX-03 |
+
+### 7.29 Loop and render economy tests (PERF-02)
+
+| Test case | How it is checked | Type | Package |
+|---|---|---|---|
+| Shape comparison | Unit `revealShape`: windows equal by col, row, n; polygons equal vertex by vertex in order; different kind, vertex count, coordinate or order is different; same object is equal | unit | PERF-02 |
+| Cell caches | Unit `cells`: `cachedCells` returns the same array for the same object, equal to `listCells`, a different array for an equal but distinct object; `cachedOutlineEdges` is keyed by object and grid, recomputed for another grid and equal to `cellOutlineEdges` | unit | PERF-02 |
+| Static frames not painted | E2E `perf.spec` synthetic source: region closed → over 1 s `frames` grows by more than 10 and `paints` by 0, canvas all white; window open → `paints` equals `frames`; `coverAll` → after the closing paint `paints` stays constant; unticking Vạch lưới (Grid lines) → 1 to 3 paints then constant, canvas pure white; gate audit clean; record the counters | e2e | PERF-02 |
+| Mask reuse | E2E `perf.spec`: still mouse window → `maskBuilds` constant over 1 s; `moveWindow` → exactly +1 and the cell list of `FrameOutput` still has 144 cells at the new box; orbiting fake hands → builds > 50 % of frames and ≤ frames (fake hands produce a new `HandFrame` per render frame: upper bound; with the real worker the frames between two 30 Hz results reuse the mask, which e2e cannot emulate); record the counters | e2e | PERF-02 |
+| Main-thread share | Script `tools/measure-loop.mjs` (Chrome headless, CDP metrics, not in CI): main-thread share, fps, tick and render p50/p95, `paints`/`frames` in five states (closed, mouse, orbiting hands, still hands, closed again); numbers in the implementation note | script | PERF-02 |
+| Nothing else changes | Every pixel case (7.6, 7.8, 7.10), the hard gate (7.2), the overlay and soak (7.19) pass unchanged; `check:invariants` still finds `drawImage` only in the compositor and the restricted frame builder | e2e + lint | PERF-02 |
+
+### 7.30 Compact guidance tests (UX-04)
+
+| Test case | How it is checked | Type | Package |
+|---|---|---|---|
+| UI state | Unit `uiState`: `guide` is written and read back; an unknown value falls back to the default; an old record without the field takes `auto` | unit | UX-04 |
+| Compact card | E2E `guide.spec` synthetic source: the full card is ≤ 500 × 120 px, detail and key hints visible, only the current step shows its label, `pointer-events: none`; after 6 s `data-collapsed=1`, height ≤ 40 px, narrower than the full card, detail hidden but still has its text; opening a window (step 3) expands it again, then it collapses again; gate audit clean; record both sizes | e2e | UX-04 |
+| Modes | E2E `guide.spec`: Luôn đầy đủ (Always full) does not collapse after 6.5 s; Ẩn (Hidden) removes the card; the mode survives a reload; back to Tự thu gọn (Auto-collapse); with `getUserMedia` denied the `error` tone stays full after 6.5 s | e2e | UX-04 |
+| HUD | E2E `guide.spec`: in presentation mode the `.hud` card collapses to ≤ 48 px and keeps opacity 1 while the floating layers are idle; record both sizes | e2e | UX-04 |
+| Old guidance cases | `ux.spec` (7.20) and `present.spec` (7.28) pass unchanged (`guide-title`, `guide-detail`, `guide-keys`, `data-step`, `data-reason`, `.hud`) | e2e | UX-04 |
+
+### 7.31 English interface tests (I18N-01)
+
+| Test case | How it is checked | Type | Package |
+|---|---|---|---|
+| Dictionaries | Unit `i18n`: `vi` and `en` have the same key shape (strings, functions with the same arity, arrays of the same length); no English leaf contains Vietnamese diacritics (except the "Tiếng Việt" name); every leaf is non-empty; `vi` has more than 150 leaves | unit | I18N-01 |
+| Language reading | Unit `i18n`: `readLang` order is `?lang=` → storage → default, unknown values skipped, a blocked storage reads the default and `writeLang` does not throw; the store notifies only on change and unsubscribes | unit | I18N-01 |
+| Guidance in English | Unit `i18n`: every camera phase, every close reason for both sources (0 and 2 hands seen), worker loading and error, every open state with and without `limited`, face-candidate with a label: no diacritics, non-empty title, and the same step, tone and reason as the Vietnamese message; `guideSteps`, `mouseKeys`, `subjectText`, `fingerName`, `handName`, `fingertipsGuidance`, `describeRecorder` per language | unit | I18N-01 |
+| Landing and stage | E2E `i18n.spec`: default `<html lang="vi">` and Bắt đầu; pressing English switches `<html lang>`, Start, lead, pledges, figcaption, no diacritics in the copy, `wct.lang` = en; survives a reload; consent in English leads to the stage with Start camera, "Camera is off.", the English guidance title, Settings, Window source with Hands, Grid, Write local log, Capture data, no diacritics in the settings column and top bar; hands source shows Thumb finger, Point age, Reset sensitivity; switching back restores Bật camera, Nguồn cửa sổ, Ngón cái, the Vietnamese title; no fetch/xhr request | e2e | I18N-01 |
+| URL parameter and live switch | E2E `i18n.spec`: `?lang=en` with `wct.lang` = vi stored → English page and stored value untouched; synthetic source, window at (2, 4, 10) → step 3 "Looking for a face inside the window" without diacritics; pressing Tiếng Việt updates the title within a tick without reload; gate audit clean | e2e | I18N-01 |
+
 
 ## 8. Handover
 

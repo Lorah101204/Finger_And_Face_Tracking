@@ -40,6 +40,9 @@ const E2E_SECTIONS = {
   'stats.spec.ts': '7.19, 7.2',
   'ux.spec.ts': '7.20, 7.28, 7.2',
   'present.spec.ts': '7.28, 7.2',
+  'guide.spec.ts': '7.30, 7.2',
+  'i18n.spec.ts': '7.31, 7.2',
+  'perf.spec.ts': '7.29, 7.2',
   'sw.spec.ts': '7.27',
 }
 const UNIT_SECTIONS = {

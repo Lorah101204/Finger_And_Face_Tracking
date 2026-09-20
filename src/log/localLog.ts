@@ -23,15 +23,7 @@ export const LOG_EVENT_TYPES: readonly LogEventType[] = [
   'config-change',
 ]
 
-export const LOG_EVENT_TEXT: Record<LogEventType, string> = {
-  consent: 'đồng ý',
-  'camera-start': 'camera bật',
-  'camera-stop': 'camera dừng',
-  'camera-error': 'camera lỗi',
-  'reveal-open': 'vùng mở',
-  'reveal-close': 'vùng đóng',
-  'config-change': 'đổi cấu hình',
-}
+/** Chữ hiển thị theo ngôn ngữ nằm trong từ điển (`settings.log.events`, I18N-01). */
 
 export type LogPayload = Record<string, unknown>
 
