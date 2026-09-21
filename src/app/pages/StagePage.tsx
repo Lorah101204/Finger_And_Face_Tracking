@@ -175,7 +175,7 @@ export function StagePage() {
       latest: () => hands.latest,
     })
     // BRAND-01: lớp logo dựng từ SVG bundle (?raw: chuỗi trong bundle, không tải gì); công tắc ui.logo đặt vào lớp.
-    const logo = new LogoLayer(logoSvg, { ...DEFAULTS.brand.logo, wordmark: true })
+    const logo = new LogoLayer(logoSvg, DEFAULTS.brand.logo)
     const loop = createFrameLoop({
       store,
       epoch,
@@ -417,7 +417,6 @@ export function StagePage() {
         synthetic,
         probes,
         hands,
-        logo,
         setLogo: (on) => setUi({ logo: on }),
       })
       const g = wct()

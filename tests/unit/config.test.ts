@@ -60,7 +60,7 @@ describe('hands.pose (ROI-04)', () => {
     expect(p.debounceFrames * 50).toBeLessThanOrEqual(DEFAULTS.freshness.pointMaxAgeMs)
   })
 
-  it('BRAND-01: logo bật, 30 % bề rộng, neo góc, độ phủ ½, màu hợp lệ, hiện lại sau 800 ms', () => {
+  it('BRAND-01: logo bật, 30 % bề rộng stage, neo góc, font dự phòng sau Heavitas, textLength dương', () => {
     const b = DEFAULTS.brand.logo
     expect(b.enabled).toBe(true)
     expect(b.widthRatio).toBeGreaterThan(0)
@@ -70,11 +70,10 @@ describe('hands.pose (ROI-04)', () => {
     expect(b.marginRatio).toBeGreaterThanOrEqual(0)
     expect(b.marginRatio).toBeLessThan(0.5)
     expect(['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center']).toContain(b.anchor)
-    expect(b.minCoverage).toBeGreaterThan(0)
-    expect(b.minCoverage).toBeLessThanOrEqual(1)
-    for (const c of [b.fill, b.text, b.verify]) expect(c).toMatch(/^#[0-9a-f]{6}$/i)
+    // D-058: khớp ô chỉ khi 21 k ô không vượt snapMaxWidthRatio; phải ≥ widthRatio để lưới vừa vẫn khớp được.
+    expect(b.snapMaxWidthRatio).toBeGreaterThanOrEqual(b.widthRatio)
+    expect(b.snapMaxWidthRatio).toBeLessThanOrEqual(1)
     expect(b.fonts).toMatch(/^Heavitas,/)
     expect(b.textLength).toBeGreaterThan(0)
-    expect(b.reappearMs).toBeGreaterThanOrEqual(0)
   })
 })

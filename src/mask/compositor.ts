@@ -1,4 +1,4 @@
-// GRID-01: nền trắng và vạch lưới (vẽ sau nền trắng, bất biến I4); BRAND-01: khối logo giữa nền trắng và vạch lưới. MASK-01: render() vẽ camera chỉ trong các ô mở
+// GRID-01: nền trắng và vạch lưới (vẽ sau nền trắng, bất biến I4); BRAND-01: lớp logo sau vạch lưới, trước video. MASK-01: render() vẽ camera chỉ trong các ô mở
 // của mask (bất biến I2: dùng đúng RevealMask, không tự tính rect khác): clip bằng path hợp các ô mở (ROI-02, D-038;
 // hộp đầy thì một rect) rồi drawImage cameraRect → stageRect của hộp bao. Đây là nơi duy nhất drawImage lên output;
 // tools/check-invariants.mjs kiểm drawImage chỉ ở file này và restrictedFrame.ts, luôn có rect nguồn (9 tham số).
@@ -55,16 +55,16 @@ export const SLOT_RGBA: readonly (readonly [number, number, number, number])[] =
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
-/** BRAND-01: lớp logo dựng sẵn (mask/logoLayer.ts) vẽ lên nền trắng trước vạch lưới; không phải pixel camera. */
+/** BRAND-01: lớp logo dựng sẵn (mask/logoLayer.ts) vẽ lên nền trắng sau vạch lưới; không phải pixel camera. */
 export type LogoPainter = {
   readonly version: number
   draw(ctx: Ctx2D, layout: Layout): boolean
 }
 
 /**
- * Fill trắng toàn canvas, (BRAND-01) khối logo nếu có, rồi vẽ vạch lưới 1 px thiết bị tại mọi ranh giới ô, kể cả biên
- * bảng (vạch biên phải và dưới nằm trong bảng để không tràn ra ngoài): vạch lưới đi xuyên qua khối logo như bản mẫu.
- * Không vẽ gì khác.
+ * Fill trắng toàn canvas, vẽ vạch lưới 1 px thiết bị tại mọi ranh giới ô, kể cả biên bảng (vạch biên phải và dưới nằm
+ * trong bảng để không tràn ra ngoài), rồi (BRAND-01, D-058) lớp logo nếu có: nét khung của logo nằm trên vạch ô nên
+ * phải đè lên vạch, phần trong suốt của logo vẫn để lộ vạch (khảm). Không vẽ gì khác.
  */
 export function paintBackground(
   ctx: Ctx2D,
@@ -75,17 +75,18 @@ export function paintBackground(
   const { stage, board, c, cols, rows } = layout
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, stage.w, stage.h)
+  if (showLines && c > 0) {
+    ctx.fillStyle = GRID_LINE_COLOR
+    for (let k = 0; k <= cols; k++) {
+      const x = k === cols ? board.x + board.w - 1 : board.x + k * c
+      ctx.fillRect(x, board.y, 1, board.h)
+    }
+    for (let k = 0; k <= rows; k++) {
+      const y = k === rows ? board.y + board.h - 1 : board.y + k * c
+      ctx.fillRect(board.x, y, board.w, 1)
+    }
+  }
   if (logo && c > 0) logo.draw(ctx, layout)
-  if (!showLines || c === 0) return
-  ctx.fillStyle = GRID_LINE_COLOR
-  for (let k = 0; k <= cols; k++) {
-    const x = k === cols ? board.x + board.w - 1 : board.x + k * c
-    ctx.fillRect(x, board.y, 1, board.h)
-  }
-  for (let k = 0; k <= rows; k++) {
-    const y = k === rows ? board.y + board.h - 1 : board.y + k * c
-    ctx.fillRect(board.x, y, board.w, 1)
-  }
 }
 
 export type RenderOptions = {

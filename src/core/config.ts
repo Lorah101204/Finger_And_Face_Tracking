@@ -147,10 +147,10 @@ export const DEFAULTS = {
     partialMinVisible: 0.6,
   },
   /**
-   * BRAND-01 (D-056): logo chiến dịch khảm vào màn che (core/brandLogo.ts, mask/logoLayer.ts). Rect logo theo bảng,
-   * không theo số ô; ô logo khi ≥ minCoverage diện tích nằm dưới hợp ba khung; khối đặc `fill` với chữ `text` và
-   * "VERIFY:" `verify` (SVG gốc: navy #1f3566, xanh lá #99b43e); ẩn khi vùng mở, hiện lại reappearMs sau lần đóng gần
-   * nhất. `enabled` là mặc định của công tắc "Logo trên màn che" (ui.logo, ?logo=0|1).
+   * BRAND-01 (D-056, D-057, D-058): logo chiến dịch (ảnh gốc) khảm vào màn che (core/brandLogo.ts, mask/logoLayer.ts).
+   * Logo đặt lên lưới bảng theo module k ô (21 k × 8 k ô, viền ba khung trùng vạch ô) với k cho bề rộng gần widthRatio ×
+   * stage nhất; lưới quá thô (21 k ô vượt snapMaxWidthRatio × stage) thì cỡ cố định theo stage, không khớp ô. Ô đang mở
+   * hiện camera thay cho phần logo ở ô đó. `enabled` là mặc định của công tắc "Logo trên màn che" (ui.logo, ?logo=0|1).
    */
   brand: {
     logo: {
@@ -159,15 +159,11 @@ export const DEFAULTS = {
       maxHeightRatio: 0.6,
       marginRatio: 0.025,
       anchor: 'top-left' as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center',
-      minCoverage: 0.5,
-      fill: '#1f3566',
-      text: '#ffffff',
-      verify: '#99b43e',
+      snapMaxWidthRatio: 0.5,
       /** Dòng "AI ETHIC CAMPAIGN" trong SVG gốc là chữ sống font Heavitas; máy không có font thì dùng dự phòng. */
       fonts: "Heavitas, 'Arial Black', 'Segoe UI Black', sans-serif",
       /** Bề rộng dòng chữ trong đơn vị viewBox (bản xuất raster: x 330 → 598); font dự phòng bị ép vào bề rộng này. */
       textLength: 268,
-      reappearMs: 800,
     },
   },
 } as const

@@ -215,9 +215,9 @@ describe('render', () => {
     expect(stroke).toBeGreaterThan(draw)
   })
 
-  // BRAND-01 (mục 7.33): lớp logo vẽ ngay sau nền trắng và trước vạch lưới (vạch đi xuyên khối); trước video; không
-  // có logo thì không thêm lời gọi nào.
-  it('logo: sau nền trắng, trước vạch lưới và video; null thì không vẽ', () => {
+  // BRAND-01 (mục 7.33, D-058): lớp logo vẽ sau vạch lưới (nét khung đè vạch) và trước video; không có logo thì không
+  // thêm lời gọi nào.
+  it('logo: sau vạch lưới, trước video; null thì không vẽ', () => {
     const s = new StubCtx()
     const logo = {
       version: 1,
@@ -229,10 +229,12 @@ describe('render', () => {
     }
     render(ctxOf(s), L, { showLines: true, mirror: true, drawable: DRAWABLE, mask, logo })
     expect(s.calls[0]).toBe('fillRect 0,0,1280,720')
-    expect(s.calls[1]).toBe('logo')
-    expect(s.calls[2]).toMatch(/^fillRect /)
+    const at = s.calls.indexOf('logo')
     expect(s.calls.filter((c) => c === 'logo')).toHaveLength(1)
-    expect(s.calls.findIndex((c) => c.startsWith('drawImage'))).toBeGreaterThan(2)
+    // Trước logo chỉ có nền trắng và vạch lưới (cols + rows + 2 fillRect); sau logo mới tới video.
+    expect(at).toBe(1 + (L.cols + 1) + (L.rows + 1))
+    expect(s.calls.slice(1, at).every((c) => c.startsWith('fillRect '))).toBe(true)
+    expect(s.calls.findIndex((c) => c.startsWith('drawImage'))).toBeGreaterThan(at)
     const plain = new StubCtx()
     render(ctxOf(plain), L, { showLines: true, mirror: true, drawable: DRAWABLE, mask, logo: null })
     expect(plain.calls).not.toContain('logo')

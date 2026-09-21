@@ -340,10 +340,12 @@ export type LogoSnap = {
   enabled: boolean
   visible: boolean
   ready: boolean
-  wordmark: boolean
   rect: Rect | null
-  box: { col: number; row: number; w: number; h: number } | null
-  cellCount: number
+  /** Ba khung "VERIFY:", "Human", "AI ETHIC CAMPAIGN" trong px stage. */
+  frames: Rect[]
+  /** D-058: viền khung trên vạch ô (module k × c px); false khi lưới thô và logo giữ cỡ cố định. */
+  snapped: boolean
+  module: number
 }
 
 /** ROI-01: trạng thái HandWindowSource qua window.__wct.handWindow. */

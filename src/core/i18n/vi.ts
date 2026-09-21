@@ -350,7 +350,7 @@ export const vi = {
       guideHidden: 'Ẩn',
       logo: 'Logo trên màn che',
       logoAria: 'Logo trên màn che',
-      logoHint: 'Logo chiến dịch khảm vào các ô của màn che; ẩn khi vùng mở.',
+      logoHint: 'Logo chiến dịch ở góc màn che; ô đang mở hiện camera thay cho logo.',
       guideHint:
         'Tự thu gọn: thông điệp hiện đầy đủ khi đổi rồi còn một dòng; lỗi camera luôn hiện đầy đủ.',
     },

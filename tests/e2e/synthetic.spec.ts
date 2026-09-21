@@ -70,7 +70,6 @@ test('nguồn tổng hợp: không gọi camera thật; cửa sổ bên phải x
     'fingers',
     'raisedOnly',
     'logo',
-    'logoWordmark',
     'delayWorker',
     'faceMaxAge',
   ])

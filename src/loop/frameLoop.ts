@@ -15,8 +15,8 @@
 // dùng lại RevealMask cũ, không rasterize; (b) danh sách ô của FrameOutput lấy từ cache theo đối tượng mask; (c) không
 // có gì động trên màn (vùng đóng, không overlay tay, không đầu ngón) và layout, vạch lưới không đổi thì bỏ qua render
 // của frame đó (canvas giữ nguyên nền trắng đã vẽ); `paints` đếm số frame có vẽ để đo.
-// BRAND-01: lớp logo (deps.logo) vẽ khi vùng đóng và đã qua reappearMs kể từ frame mở gần nhất; ẩn ngay khi mở;
-// hiện, ẩn hay lớp chữ sẵn sàng (version) đều là một lần vẽ lại rồi lại tĩnh.
+// BRAND-01: lớp logo (deps.logo) vẽ trong nền tĩnh; vùng mở đè video lên theo ô (compositor). Công tắc hay ảnh sẵn
+// sàng (version) đổi là một lần vẽ lại rồi lại tĩnh.
 import { DEFAULTS } from '../core/config'
 import type { EpochCounter } from '../core/epoch'
 import { createLatencyWindow, type LatencyStats } from '../core/latency'
@@ -92,7 +92,7 @@ export type LoopSnapshot = {
   /** PERF-02: số frame có gọi render (frame tĩnh không vẽ lại) và số lần buildMask (hình không đổi thì không dựng lại). */
   paints: number
   maskBuilds: number
-  /** BRAND-01: lớp logo đang được vẽ trên màn che (bật, vùng đóng và đã qua reappearMs). */
+  /** BRAND-01: lớp logo đang được vẽ trên màn che (công tắc bật). */
   logoVisible: boolean
   reveal: RevealState
   mask: RevealMask | null
@@ -155,7 +155,7 @@ export type FrameLoopDeps = {
   gate?: CloseGate
   /** I18N-01: ngôn ngữ của nhãn vẽ lên canvas (đọc mỗi lần vẽ); mặc định tiếng Việt. */
   lang?: () => Lang
-  /** BRAND-01: lớp logo hiện tại (null khi công tắc tắt); vòng lặp tự ẩn khi vùng mở và hiện lại sau reappearMs. */
+  /** BRAND-01: lớp logo hiện tại (null khi công tắc tắt); vẽ trước vạch lưới, vùng mở đè video lên theo ô. */
   logo?: () => LogoPainter | null
 }
 
@@ -207,10 +207,9 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
   let paintedDynamic = false
   let paintLayout: Layout | null = null
   let paintLines: boolean | null = null
-  // BRAND-01: lớp logo và version đã vẽ lần gần nhất; thời điểm frame mở gần nhất (logo hiện lại sau reappearMs).
+  // BRAND-01: lớp logo và version đã vẽ lần gần nhất.
   let paintLogo: LogoPainter | null = null
   let paintLogoVersion = 0
-  let lastOpenTs = -Infinity
   let logoVisible = false
   let lastTs = 0
   let reveal: RevealState = closedState('user')
@@ -301,15 +300,16 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     syncFaceGate()
     fingers = []
     maskKey = null
-    lastOpenTs = performance.now()
-    logoVisible = false
     const { layout, settings } = store.getSnapshot()
+    const logoNow = logo?.() ?? null
+    logoVisible = logoNow !== null
     if (ctx) {
       paints++
       paintedDynamic = false
       paintLayout = layout
       paintLines = settings.showLines
-      paintLogo = null
+      paintLogo = logoNow
+      paintLogoVersion = logoNow?.version ?? 0
       render(ctx, layout, {
         showLines: settings.showLines,
         mirror: settings.mirror,
@@ -318,7 +318,7 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
         faces: [],
         hands: null,
         fingers: [],
-        logo: null,
+        logo: logoNow,
       })
     }
     emitOutput(performance.now(), null)
@@ -496,18 +496,13 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
       faces = labelFaces(faces)
     }
     const mask = reveal.kind === 'open' ? reveal.mask : null
-    // BRAND-01: logo ẩn ngay khi vùng mở, hiện lại reappearMs sau frame mở gần nhất (tay mất thoáng qua không nháy).
-    if (mask !== null) lastOpenTs = now
-    const logoLayer = logo?.() ?? null
-    const logoNow =
-      logoLayer !== null && mask === null && now - lastOpenTs >= DEFAULTS.brand.logo.reappearMs
-        ? logoLayer
-        : null
+    // BRAND-01: lớp logo (null khi công tắc tắt); vùng mở đè video lên phần logo trong ô mở (compositor).
+    const logoNow = logo?.() ?? null
     logoVisible = logoNow !== null
 
     if (ctx) {
       // PERF-02 (c): vẽ khi có nội dung động (vùng mở, overlay tay, đầu ngón), khi frame trước có nội dung động (để
-      // xóa), hoặc khi layout, vạch lưới hay lớp logo (hiện/ẩn, version) đổi; frame tĩnh giữ nguyên canvas (nền trắng,
+      // xóa), hoặc khi layout, vạch lưới hay lớp logo (công tắc, version) đổi; frame tĩnh giữ nguyên canvas (nền trắng,
       // logo và lưới đã vẽ).
       const handOverlay = handsActive && hands && hands.latest && hands.latest.hands.length > 0
       const dynamic = mask !== null || handOverlay === true || fingers.length > 0

@@ -1,13 +1,14 @@
-// BRAND-01 (D-056): logo chiến dịch khảm vào màn che. Hình học thuần, không DOM: ba khung của logo là thuộc tính rect
-// trong src/assets/logo-verify-human.svg (nét 3,78 px vẽ giữa cạnh); hợp mép ngoài của ba khung là bóng logo và hộp
-// bao của nó là LOGO_CROP (551,15 × 209,45 đơn vị viewBox, tỉ lệ 2,631). Rect logo tính từ cỡ stage (tỉ lệ bề rộng,
-// trần chiều cao, lề, neo góc) rồi kẹp vào bảng, không đọc cols/rows, nên cỡ hiển thị không đổi theo số ô; ô logo là ô có ít nhất
-// minCoverage diện tích nằm dưới hợp ba khung (chính xác cho hình chữ nhật: bao hàm–loại trừ). wordmarkSvg() dựng lớp
-// chữ từ SVG gốc: bỏ khung (lớp fill:none), mực navy → màu chữ, mực xanh lá → màu VERIFY, dòng chữ sống font Heavitas
-// thay bằng một <text> có textLength để font dự phòng vẫn chiếm đúng bề rộng, gốc <svg> có width/height bằng viewBox
+// BRAND-01 (D-056, sửa D-057, D-058): logo chiến dịch khảm vào màn che. Hình học thuần, không DOM: ba khung của logo là
+// thuộc tính rect trong src/assets/logo-verify-human.svg (nét 3,78 px vẽ giữa cạnh); hộp bao mép ngoài của ba khung là
+// LOGO_CROP (551,15 × 209,45 đơn vị viewBox, tỉ lệ 2,631). D-058: ba khung nằm trên một lưới module 21 × 8 ô (đơn vị
+// = bề rộng khung / 15; sai lệch mọi cạnh ≤ 0,1 ô), nên logo đặt lên đúng lưới bảng với module = k ô thì viền khung
+// trùng vạch ô; k chọn để bề rộng gần widthRatio × stage nhất; lưới quá thô (21 k ô vượt snapMaxWidthRatio × stage)
+// thì về cỡ cố định theo stage (D-057) không khớp ô. Vùng mở cắt logo theo từng ô vì compositor vẽ video trong clip
+// hợp ô mở đè lên. logoSvg() chuẩn bị SVG gốc để nạp qua Image: giữ nguyên khung và màu, chỉ thay dòng chữ sống font
+// Heavitas bằng một <text> có textLength để font dự phòng vẫn chiếm đúng bề rộng, và đặt width/height gốc bằng viewBox
 // để rect nguồn của drawImage tính theo đơn vị viewBox. Chỉ import trong core/.
-import { EMPTY_CELLS, type CellGrid, type CellSet } from './cells'
-import type { CellBox, Rect, Size } from './types'
+import type { CellGrid } from './cells'
+import type { Rect, Size } from './types'
 
 export const LOGO_VIEWBOX = { w: 700, h: 400 } as const
 /** Bề dày nét khung trong SVG (stroke-width). */
@@ -45,7 +46,7 @@ export function unionRect(rects: readonly Rect[]): Rect {
 /** Hộp bao mép ngoài của ba khung trong đơn vị viewBox: phần SVG được vẽ vào rect logo. */
 export const LOGO_CROP: Rect = unionRect(LOGO_FRAMES_SVG.map((r) => outer(r, LOGO_STROKE)))
 export const LOGO_ASPECT = LOGO_CROP.w / LOGO_CROP.h
-/** Ba khung (mép ngoài) chuẩn hóa trong [0, 1]² theo LOGO_CROP. */
+/** Ba khung (mép ngoài) chuẩn hóa trong [0, 1]² theo LOGO_CROP (probe, e2e định vị vùng chữ). */
 export const LOGO_FRAMES: readonly Rect[] = LOGO_FRAMES_SVG.map((r) => {
   const o = outer(r, LOGO_STROKE)
   return {
@@ -56,16 +57,38 @@ export const LOGO_FRAMES: readonly Rect[] = LOGO_FRAMES_SVG.map((r) => {
   }
 })
 
+/**
+ * D-058: lưới module của logo (21 × 8 ô, đơn vị = bề rộng khung / 15 = 26,09 đơn vị viewBox): "VERIFY:" 15 × 3 ô từ cột
+ * 6, "Human" 15 × 3 ô từ cột 0, "AI ETHIC CAMPAIGN" 12 × 2 ô từ cột 9 hàng 6. Unit test so với LOGO_FRAMES_SVG (≤ 0,1 ô).
+ */
+export const LOGO_GRID = { w: 21, h: 8 } as const
+export const LOGO_FRAME_CELLS: readonly Rect[] = [
+  { x: 6, y: 0, w: 15, h: 3 },
+  { x: 0, y: 3, w: 15, h: 3 },
+  { x: 9, y: 6, w: 12, h: 2 },
+]
+
 export type LogoAnchor = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
 
 export type LogoPlacement = {
-  /** Bề rộng logo theo bề rộng bảng (0 < r ≤ 1). */
+  /** Bề rộng logo theo bề rộng stage (0 < r ≤ 1). */
   widthRatio: number
-  /** Trần chiều cao theo chiều cao bảng; vượt thì thu theo tỉ lệ. */
+  /** Trần chiều cao theo chiều cao stage; vượt thì thu theo tỉ lệ. */
   maxHeightRatio: number
-  /** Lề tới mép bảng theo bề rộng bảng (không dùng với neo giữa). */
+  /** Lề tới mép stage theo bề rộng stage (không dùng với neo giữa). */
   marginRatio: number
   anchor: LogoAnchor
+  /** D-058: khớp ô chỉ khi 21 k ô không vượt chừng này bề rộng stage; quá thì về cỡ cố định không khớp ô. */
+  snapMaxWidthRatio: number
+}
+
+export type LogoGeometry = {
+  rect: Rect
+  /** Ba khung trong px stage (mép = tâm nét); khớp ô thì mỗi cạnh nằm trên một vạch ô. */
+  frames: Rect[]
+  snapped: boolean
+  /** Cỡ một ô module (k × c px) khi khớp ô; 0 khi không. */
+  module: number
 }
 
 /**
@@ -119,90 +142,62 @@ export function logoFramesIn(rect: Rect): Rect[] {
   }))
 }
 
-function intersect(a: Rect, b: Rect): Rect | null {
-  const x0 = Math.max(a.x, b.x)
-  const y0 = Math.max(a.y, b.y)
-  const x1 = Math.min(a.x + a.w, b.x + b.w)
-  const y1 = Math.min(a.y + a.h, b.y + b.h)
-  if (x1 <= x0 || y1 <= y0) return null
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
-}
-
 /**
- * Phần diện tích của `cell` nằm dưới hợp các khung (0 đến 1), bao hàm–loại trừ trên mọi tổ hợp khung (ba khung: bảy
- * số hạng); chính xác vì giao của các hình chữ nhật song song trục vẫn là hình chữ nhật.
+ * D-058: vị trí logo trên lưới bảng. Khớp ô: module k = round(widthRatio × stage.w / (21 c)) ≥ 1, logo 21 k × 8 k ô
+ * tại góc theo anchor với lề round(marginRatio × stage.w / c) ô, kẹp vào bảng; ba khung là LOGO_FRAME_CELLS nhân k c
+ * nên mọi cạnh khung nằm trên vạch ô. Không khớp (c = 0, 21 k ô quá snapMaxWidthRatio × stage, vượt trần chiều cao
+ * hay không đủ ô): rect cố định theo stage (logoRect) với ba khung theo tỉ lệ SVG. null khi bảng rỗng.
  */
-export function coverage(frames: readonly Rect[], cell: Rect): number {
-  if (cell.w <= 0 || cell.h <= 0) return 0
-  const parts = frames.map((f) => intersect(f, cell)).filter((r): r is Rect => r !== null)
-  const n = parts.length
-  let area = 0
-  for (let mask = 1; mask < 1 << n; mask++) {
-    let acc: Rect | null = null
-    let bits = 0
-    let empty = false
-    for (let i = 0; i < n; i++) {
-      if (!(mask & (1 << i))) continue
-      bits++
-      const next: Rect | null = acc === null ? parts[i] : intersect(acc, parts[i])
-      if (next === null) {
-        empty = true
-        break
+export function logoGeometry(
+  grid: CellGrid & { stage: Size },
+  p: LogoPlacement,
+): LogoGeometry | null {
+  const { stage, board, c, cols, rows } = grid
+  if (c > 0 && stage.w > 0 && stage.h > 0) {
+    const k = Math.max(1, Math.round((p.widthRatio * stage.w) / (LOGO_GRID.w * c)))
+    const wCells = LOGO_GRID.w * k
+    const hCells = LOGO_GRID.h * k
+    const w = wCells * c
+    const h = hCells * c
+    if (
+      w <= p.snapMaxWidthRatio * stage.w &&
+      h <= p.maxHeightRatio * stage.h &&
+      wCells <= cols &&
+      hCells <= rows
+    ) {
+      const m = Math.round((p.marginRatio * stage.w) / c)
+      const clampC = (v: number) => Math.min(Math.max(v, 0), cols - wCells)
+      const clampR = (v: number) => Math.min(Math.max(v, 0), rows - hCells)
+      const left = clampC(m)
+      const right = clampC(cols - m - wCells)
+      const top = clampR(m)
+      const bottom = clampR(rows - m - hCells)
+      const cx = clampC(Math.floor((cols - wCells) / 2))
+      const cy = clampR(Math.floor((rows - hCells) / 2))
+      const at: Record<LogoAnchor, [number, number]> = {
+        'top-left': [left, top],
+        'top-right': [right, top],
+        'bottom-left': [left, bottom],
+        'bottom-right': [right, bottom],
+        center: [cx, cy],
       }
-      acc = next
-    }
-    if (!empty && acc) area += (bits % 2 === 1 ? 1 : -1) * acc.w * acc.h
-  }
-  return area / (cell.w * cell.h)
-}
-
-/**
- * Tập ô logo trên lưới: ô có ít nhất minCoverage diện tích dưới hợp ba khung của `rect`. Quét đúng dải ô mà rect chạm;
- * kết quả gói trong hộp bao nhỏ nhất như rasterizePolygon. EMPTY_CELLS khi c = 0 hay không ô nào đạt.
- */
-export function logoCells(rect: Rect, grid: CellGrid, minCoverage = 0.5): CellSet {
-  const { cols, rows, c, board } = grid
-  if (c <= 0 || rect.w <= 0 || rect.h <= 0) return EMPTY_CELLS
-  const frames = logoFramesIn(rect)
-  const c0 = Math.max(0, Math.floor((rect.x - board.x) / c))
-  const c1 = Math.min(cols - 1, Math.ceil((rect.x + rect.w - board.x) / c) - 1)
-  const r0 = Math.max(0, Math.floor((rect.y - board.y) / c))
-  const r1 = Math.min(rows - 1, Math.ceil((rect.y + rect.h - board.y) / c) - 1)
-  if (c1 < c0 || r1 < r0) return EMPTY_CELLS
-  const w = c1 - c0 + 1
-  const h = r1 - r0 + 1
-  const cells = new Uint8Array(w * h)
-  let count = 0
-  let bc0 = Infinity
-  let bc1 = -Infinity
-  let br0 = Infinity
-  let br1 = -Infinity
-  for (let row = r0; row <= r1; row++) {
-    for (let col = c0; col <= c1; col++) {
-      const cell: Rect = { x: board.x + col * c, y: board.y + row * c, w: c, h: c }
-      if (coverage(frames, cell) + 1e-9 < minCoverage) continue
-      cells[(row - r0) * w + (col - c0)] = 1
-      count++
-      bc0 = Math.min(bc0, col)
-      bc1 = Math.max(bc1, col)
-      br0 = Math.min(br0, row)
-      br1 = Math.max(br1, row)
+      const [col0, row0] = at[p.anchor]
+      const rect: Rect = { x: board.x + col0 * c, y: board.y + row0 * c, w, h }
+      const u = k * c
+      const frames = LOGO_FRAME_CELLS.map((f) => ({
+        x: rect.x + f.x * u,
+        y: rect.y + f.y * u,
+        w: f.w * u,
+        h: f.h * u,
+      }))
+      return { rect, frames, snapped: true, module: u }
     }
   }
-  if (count === 0) return EMPTY_CELLS
-  const box: CellBox = { col: bc0, row: br0, w: bc1 - bc0 + 1, h: br1 - br0 + 1 }
-  const packed = new Uint8Array(box.w * box.h)
-  for (let j = 0; j < box.h; j++)
-    for (let i = 0; i < box.w; i++)
-      packed[j * box.w + i] = cells[(box.row + j - r0) * w + (box.col + i - c0)]
-  return { box, cells: packed, cellCount: count }
+  const rect = logoRect(stage, board, p)
+  return rect ? { rect, frames: logoFramesIn(rect), snapped: false, module: 0 } : null
 }
 
-export type WordmarkColors = {
-  /** Màu thay cho mực navy (chữ "Human", dòng chiến dịch). */
-  text: string
-  /** Màu thay cho mực xanh lá ("VERIFY:"). */
-  verify: string
+export type LogoTextOptions = {
   /** Chuỗi font-family cho dòng chữ sống (font gốc trước, dự phòng sau). */
   fonts: string
   /** Bề rộng dòng chữ trong đơn vị viewBox; font dự phòng bị ép vào đúng bề rộng này. */
@@ -210,24 +205,13 @@ export type WordmarkColors = {
 }
 
 /**
- * SVG lớp chữ từ SVG logo gốc: bỏ mọi <rect> thuộc lớp có fill:none (khung), đổi màu mực navy và xanh lá theo
- * `colors`, thay <text> (dòng chữ sống với tspan giãn chữ cho font Heavitas) bằng một <text> phẳng cùng class, cùng
- * transform, có textLength/lengthAdjust và font-family nội tuyến. Thuần chuỗi, không phụ thuộc tên lớp.
+ * SVG để nạp qua Image từ SVG logo gốc: khung, path và màu giữ nguyên; mỗi <text> (dòng chữ sống với tspan giãn chữ
+ * cho font Heavitas) thành một <text> phẳng cùng class, cùng transform, có textLength/lengthAdjust và font-family nội
+ * tuyến; gốc <svg> có width/height bằng viewBox (Chrome lấy cỡ nội tại của SVG không có width/height là 300 × 150 theo
+ * tỉ lệ viewBox, làm rect nguồn của drawImage lệch). Thuần chuỗi, không phụ thuộc tên lớp.
  */
-export function wordmarkSvg(source: string, colors: WordmarkColors): string {
-  let s = source
-  const style = /<style>([\s\S]*?)<\/style>/.exec(s)?.[1] ?? ''
-  const noFill = new Set<string>()
-  for (const m of style.matchAll(/((?:\.[\w-]+\s*,\s*)*\.[\w-]+)\s*\{([^}]*)\}/g)) {
-    if (!/fill\s*:\s*none/i.test(m[2])) continue
-    for (const cls of m[1].split(',')) noFill.add(cls.trim().slice(1))
-  }
-  for (const cls of noFill) {
-    s = s.replace(new RegExp(`<rect\\s+class="${cls}"[^>]*?/>`, 'g'), '')
-  }
-  s = s.replace(new RegExp(`fill\\s*:\\s*${LOGO_NAVY}`, 'gi'), `fill:${colors.text}`)
-  s = s.replace(new RegExp(`fill\\s*:\\s*${LOGO_GREEN}`, 'gi'), `fill:${colors.verify}`)
-  s = s.replace(/<text([^>]*)>([\s\S]*?)<\/text>/g, (_m, attrs: string, inner: string) => {
+export function logoSvg(source: string, opts: LogoTextOptions): string {
+  let s = source.replace(/<text([^>]*)>([\s\S]*?)<\/text>/g, (_m, attrs: string, inner: string) => {
     const text = inner
       .replace(/<[^>]+>/g, '')
       .replace(/\s+/g, ' ')
@@ -237,16 +221,14 @@ export function wordmarkSvg(source: string, colors: WordmarkColors): string {
     const a = [
       cls ? `class="${cls}"` : '',
       tf ? `transform="${tf}"` : '',
-      `textLength="${colors.textLength}"`,
+      `textLength="${opts.textLength}"`,
       'lengthAdjust="spacingAndGlyphs"',
-      `style="font-family:${colors.fonts.replace(/"/g, "'")}"`,
+      `style="font-family:${opts.fonts.replace(/"/g, "'")}"`,
     ]
       .filter(Boolean)
       .join(' ')
     return `<text ${a}>${text}</text>`
   })
-  // Chrome lấy cỡ nội tại của SVG không có width/height là 300 × 150 theo tỉ lệ viewBox, nên rect nguồn của
-  // drawImage (đơn vị viewBox) sẽ lệch: đặt width/height bằng viewBox để một đơn vị viewBox là một px nguồn.
   s = s.replace(/<svg\b([^>]*)>/, (m, attrs: string) => {
     if (/\swidth=/.test(attrs)) return m
     const vb = /viewBox="\s*[\d.-]+\s+[\d.-]+\s+([\d.]+)\s+([\d.]+)\s*"/.exec(attrs)

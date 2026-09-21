@@ -1,40 +1,43 @@
-// BRAND-01 (D-056): lớp logo trên màn che. Hình học từ core/brandLogo.ts (rect theo bảng, ô theo độ phủ); lớp chữ là
-// SVG gốc đã biến đổi (wordmarkSvg) nạp qua Image từ blob URL cùng origin (không có gì rời trình duyệt, I9). Mỗi layout
-// dựng một canvas ngoài màn đúng bằng hộp bao các ô logo: tô từng ô màu `fill`, rồi (khi có chữ) clip vào hợp ô và
-// drawImage LOGO_CROP của SVG vào rect logo ở cỡ cố định (chữ không bị băm, chỉ bị khối cắt ở lưới thô). Compositor
-// vẽ canvas này bằng một drawImage 9 tham số trước vạch lưới. Không phải pixel camera (I4): nguồn drawImage duy nhất ở
-// đây là Image của asset bundle và canvas riêng; tools/check-invariants.mjs cho phép file này với cùng quy tắc 9 tham số.
-import { LOGO_CROP, logoCells, logoRect, wordmarkSvg, type LogoPlacement } from '../core/brandLogo'
-import { cachedCells, type CellSet } from '../core/cells'
+// BRAND-01 (D-056, D-057, D-058): lớp logo trên màn che: ảnh logo gốc (SVG bundle qua logoSvg, nạp bằng Image từ blob
+// URL cùng origin, I9) vẽ theo hình học của core/brandLogo.ts. Khớp ô (D-058): ba khung vẽ riêng, mỗi khung là một
+// drawImage từ rect khung trong SVG (kể cả nửa nét) vào rect ô của khung trên bảng, nên nét khung của SVG nằm đúng trên
+// vạch ô và chữ bên trong co giãn theo khung (≤ 5 %). Không khớp: một drawImage LOGO_CROP vào rect cố định. Mỗi layout
+// dựng một canvas ngoài màn một lần (không rasterize lại mỗi frame khi vùng mở); compositor vẽ canvas đó bằng một
+// drawImage 9 tham số sau vạch lưới (nét khung đè vạch, phần trong suốt vẫn thấy vạch) và trước video: video trong clip
+// hợp ô mở đè lên nên ô nào mở thì mất phần logo ở ô đó, mép cắt đi theo ô (khảm). Không phải pixel camera (I4):
+// nguồn drawImage duy nhất ở đây là Image của asset bundle và canvas riêng; tools/check-invariants.mjs cho phép file
+// này với cùng quy tắc 9 tham số. Chưa nạp xong thì không vẽ gì.
+import {
+  LOGO_CROP,
+  LOGO_FRAMES_SVG,
+  LOGO_STROKE,
+  logoGeometry,
+  logoSvg,
+  type LogoGeometry,
+  type LogoPlacement,
+} from '../core/brandLogo'
 import type { Layout } from '../core/coords'
 import type { Rect } from '../core/types'
 
 export type LogoLayerOptions = LogoPlacement & {
-  minCoverage: number
-  fill: string
-  text: string
-  verify: string
   fonts: string
   textLength: number
-  /** Vẽ chữ lên khối (tắt thì chỉ khối đặc: kịch bản e2e đo màu ô). */
-  wordmark: boolean
   /** Công tắc "Logo trên màn che" (ui.logo); vòng lặp bỏ lớp khi tắt. */
   enabled: boolean
 }
 
-export type LogoGeometry = { rect: Rect; cells: CellSet }
-
 type Canvas2D = OffscreenCanvas | HTMLCanvasElement
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
+/** Canvas của lớp phủ rect logo nới `pad` px mỗi phía (nửa nét khung tràn ra ngoài vạch ô). */
 type Painted = {
   layout: Layout
   version: number
   canvas: Canvas2D
-  w: number
-  h: number
   x: number
   y: number
+  w: number
+  h: number
 }
 
 function createCanvas(w: number, h: number): Canvas2D | null {
@@ -52,24 +55,19 @@ export class LogoLayer {
   readonly #opts: LogoLayerOptions
   #img: HTMLImageElement | null = null
   #ready = false
-  /** Tăng khi lớp chữ sẵn sàng hay tùy chọn vẽ đổi; vòng lặp vẽ lại khi thấy khác. */
+  /** Tăng khi ảnh sẵn sàng; vòng lặp vẽ lại khi thấy khác. */
   #version = 1
   readonly #geometry = new WeakMap<Layout, LogoGeometry | null>()
   #painted: Painted | null = null
 
-  /** `svg`: nội dung SVG gốc (import ?raw); null thì chỉ khối đặc. */
+  /** `svg`: nội dung SVG gốc (import ?raw); null thì không có logo. */
   constructor(svg: string | null, opts: LogoLayerOptions) {
     this.#opts = { ...opts }
     if (svg && typeof Image !== 'undefined' && typeof Blob !== 'undefined') this.#load(svg)
   }
 
   #load(svg: string): void {
-    const markup = wordmarkSvg(svg, {
-      text: this.#opts.text,
-      verify: this.#opts.verify,
-      fonts: this.#opts.fonts,
-      textLength: this.#opts.textLength,
-    })
+    const markup = logoSvg(svg, { fonts: this.#opts.fonts, textLength: this.#opts.textLength })
     const url = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml' }))
     const img = new Image()
     img.onload = () => {
@@ -79,7 +77,7 @@ export class LogoLayer {
       this.#version++
     }
     img.onerror = () => {
-      // Không nạp được chữ: giữ khối đặc.
+      // Không nạp được: không có logo (màn che trơn).
       URL.revokeObjectURL(url)
     }
     img.src = url
@@ -91,37 +89,32 @@ export class LogoLayer {
   get version(): number {
     return this.#version
   }
-  get wordmark(): boolean {
-    return this.#opts.wordmark
-  }
   get enabled(): boolean {
     return this.#opts.enabled
   }
   setEnabled(on: boolean): void {
     this.#opts.enabled = on
   }
-  setWordmark(on: boolean): void {
-    if (on === this.#opts.wordmark) return
-    this.#opts.wordmark = on
-    this.#version++
-  }
 
-  /** Rect và tập ô logo cho layout (tính một lần mỗi đối tượng layout); null khi bảng rỗng hay không ô nào. */
+  /** Hình học logo cho layout (tính một lần mỗi đối tượng layout); null khi bảng rỗng. */
   geometry(layout: Layout): LogoGeometry | null {
     let g = this.#geometry.get(layout)
     if (g === undefined) {
-      const rect = logoRect(layout.stage, layout.board, this.#opts)
-      const cells = rect ? logoCells(rect, layout, this.#opts.minCoverage) : null
-      g = rect && cells && cells.cellCount > 0 ? { rect, cells } : null
+      g = logoGeometry(layout, this.#opts)
       this.#geometry.set(layout, g)
     }
     return g
   }
 
-  /** Vẽ lớp logo (đã dựng sẵn) lên ctx; trả về false khi không có gì để vẽ. */
+  /** Rect logo cho layout; null khi bảng rỗng. */
+  rect(layout: Layout): Rect | null {
+    return this.geometry(layout)?.rect ?? null
+  }
+
+  /** Vẽ lớp logo (đã dựng sẵn) lên ctx; false khi chưa có ảnh hay không có chỗ. */
   draw(ctx: Ctx2D, layout: Layout): boolean {
     const g = this.geometry(layout)
-    if (!g) return false
+    if (!g || !this.#img) return false
     const p = this.#paint(layout, g)
     if (!p) return false
     ctx.drawImage(p.canvas, 0, 0, p.w, p.h, p.x, p.y, p.w, p.h)
@@ -131,38 +124,54 @@ export class LogoLayer {
   #paint(layout: Layout, g: LogoGeometry): Painted | null {
     const hit = this.#painted
     if (hit && hit.layout === layout && hit.version === this.#version) return hit
-    const { c, board } = layout
-    const { box } = g.cells
-    const w = box.w * c
-    const h = box.h * c
-    const x = board.x + box.col * c
-    const y = board.y + box.row * c
+    const img = this.#img
+    if (!img) return null
+    // Tỉ lệ px stage trên đơn vị viewBox của từng khung (khớp ô: mỗi khung một tỉ lệ; không khớp: chung).
+    const scales = g.frames.map((f, i) => ({
+      x: f.w / LOGO_FRAMES_SVG[i].w,
+      y: f.h / LOGO_FRAMES_SVG[i].h,
+    }))
+    const pad =
+      Math.ceil((LOGO_STROKE / 2) * Math.max(...scales.map((s) => Math.max(s.x, s.y)))) + 1
+    const w = g.rect.w + 2 * pad
+    const h = g.rect.h + 2 * pad
     const canvas = createCanvas(w, h)
     const gctx = canvas ? ((canvas as HTMLCanvasElement).getContext('2d') as Ctx2D | null) : null
     if (!canvas || !gctx) return null
-    const cells = cachedCells(g.cells)
-    gctx.fillStyle = this.#opts.fill
-    for (const cell of cells)
-      gctx.fillRect((cell.col - box.col) * c, (cell.row - box.row) * c, c, c)
-    if (this.#opts.wordmark && this.#img) {
-      gctx.save()
-      gctx.beginPath()
-      for (const cell of cells) gctx.rect((cell.col - box.col) * c, (cell.row - box.row) * c, c, c)
-      gctx.clip()
+    const x = g.rect.x - pad
+    const y = g.rect.y - pad
+    if (g.snapped) {
+      // Từng khung: rect khung SVG nới nửa nét → rect ô nới nửa nét đã co giãn; tâm nét rơi đúng vạch ô.
+      g.frames.forEach((f, i) => {
+        const src = LOGO_FRAMES_SVG[i]
+        const sx = scales[i].x
+        const sy = scales[i].y
+        gctx.drawImage(
+          img,
+          src.x - LOGO_STROKE / 2,
+          src.y - LOGO_STROKE / 2,
+          src.w + LOGO_STROKE,
+          src.h + LOGO_STROKE,
+          f.x - x - (LOGO_STROKE / 2) * sx,
+          f.y - y - (LOGO_STROKE / 2) * sy,
+          f.w + LOGO_STROKE * sx,
+          f.h + LOGO_STROKE * sy,
+        )
+      })
+    } else {
       gctx.drawImage(
-        this.#img,
+        img,
         LOGO_CROP.x,
         LOGO_CROP.y,
         LOGO_CROP.w,
         LOGO_CROP.h,
-        g.rect.x - x,
-        g.rect.y - y,
+        pad,
+        pad,
         g.rect.w,
         g.rect.h,
       )
-      gctx.restore()
     }
-    this.#painted = { layout, version: this.#version, canvas, w, h, x, y }
+    this.#painted = { layout, version: this.#version, canvas, x, y, w, h }
     return this.#painted
   }
 }

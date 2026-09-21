@@ -4,7 +4,6 @@
 // kiểm cửa sổ theo tay. Chỉ cài khi ?debug=1; không có gì rời trình duyệt (I9).
 import type { SyntheticCameraSource, SyntheticScene } from '../camera/syntheticCameraSource'
 import type { HandPipeline } from '../hands/handPipeline'
-import type { LogoLayer } from '../mask/logoLayer'
 import { normalizeFingers, type StageStore } from '../loop/store'
 import type { MouseWindowSource } from '../reveal/mouseWindowSource'
 import { fakeHandFrame, type FakeHandsSpec } from './fakeHands'
@@ -16,8 +15,7 @@ export type ScenarioDeps = {
   synthetic: SyntheticCameraSource | null
   probes: Probes
   hands?: HandPipeline
-  /** BRAND-01: lớp logo và công tắc ui.logo (setUi của StagePage). */
-  logo?: LogoLayer
+  /** BRAND-01: công tắc ui.logo (setUi của StagePage). */
   setLogo?: (on: boolean) => void
 }
 
@@ -42,7 +40,7 @@ declare global {
 type Handler = (...args: number[]) => unknown
 
 export function installScenarios(deps: ScenarioDeps): () => void {
-  const { mouse, store, synthetic, probes, hands, logo, setLogo } = deps
+  const { mouse, store, synthetic, probes, hands, setLogo } = deps
   let fakeSpec: FakeHandsSpec | null = null
   const ensureMouseSource = () => {
     if (store.getSnapshot().settings.windowSource !== 'mouse') {
@@ -85,11 +83,6 @@ export function installScenarios(deps: ScenarioDeps): () => void {
     logo: (v) => {
       setLogo?.(v !== 0)
       return { logo: v !== 0 }
-    },
-    /** BRAND-01: vẽ chữ lên khối (1) hay chỉ khối đặc (0) để e2e đo màu ô. */
-    logoWordmark: (v) => {
-      logo?.setWordmark(v !== 0)
-      return { wordmark: logo?.wordmark ?? null }
     },
     /** FACE-02: worker mặt trễ thêm ms trước khi trả kết quả (kiểm kết quả về muộn). */
     delayWorker: (ms) => {

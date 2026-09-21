@@ -1,34 +1,36 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  coverage,
   LOGO_ASPECT,
   LOGO_CROP,
+  LOGO_FRAME_CELLS,
   LOGO_FRAMES,
   LOGO_FRAMES_SVG,
   LOGO_GREEN,
+  LOGO_GRID,
   LOGO_NAVY,
   LOGO_STROKE,
-  logoCells,
   logoFramesIn,
+  logoGeometry,
   logoRect,
+  logoSvg,
   unionRect,
-  wordmarkSvg,
   type LogoPlacement,
 } from '../../src/core/brandLogo'
-import { cachedCells, cellAt, EMPTY_CELLS } from '../../src/core/cells'
 import { DEFAULTS } from '../../src/core/config'
 import { computeLayout } from '../../src/core/coords'
 import type { Rect } from '../../src/core/types'
 
-// BRAND-01 (mục 7.33, D-056): hình học logo thuần trong Node: hằng số khớp SVG bundle; rect theo bảng, không theo số
-// ô; ô theo độ phủ ≥ ½ (bao hàm–loại trừ); lớp chữ dựng từ SVG gốc (bỏ khung, đổi màu, dòng chữ sống có textLength).
+// BRAND-01 (mục 7.33, D-056, D-057): hình học logo thuần trong Node: hằng số khớp SVG bundle; rect theo stage, không
+// theo số ô; SVG nạp qua Image giữ nguyên khung và màu, chỉ làm phẳng dòng chữ sống (textLength, font dự phòng) và
+// đặt width/height gốc.
 const SVG = readFileSync(new URL('../../src/assets/logo-verify-human.svg', import.meta.url), 'utf8')
 const PLACE: LogoPlacement = {
   widthRatio: DEFAULTS.brand.logo.widthRatio,
   maxHeightRatio: DEFAULTS.brand.logo.maxHeightRatio,
   marginRatio: DEFAULTS.brand.logo.marginRatio,
   anchor: DEFAULTS.brand.logo.anchor,
+  snapMaxWidthRatio: DEFAULTS.brand.logo.snapMaxWidthRatio,
 }
 const CAM = { w: 1280, h: 720 }
 const STAGE = { w: 1280, h: 720 }
@@ -74,6 +76,89 @@ describe('hằng số logo', () => {
     expect(LOGO_FRAMES[1].x).toBe(0)
     expect(LOGO_FRAMES[2].y).toBeGreaterThan(0.7)
     expect(unionRect([])).toEqual({ x: 0, y: 0, w: 0, h: 0 })
+  })
+
+  it('D-058: lưới module 21 × 8 ô (đơn vị = bề rộng khung / 15) khớp ba rect khung của SVG với sai lệch ≤ 0,1 ô mọi cạnh', () => {
+    const u = LOGO_FRAMES_SVG[0].w / 15
+    const x0 = LOGO_FRAMES_SVG[1].x
+    const y0 = LOGO_FRAMES_SVG[0].y
+    expect(LOGO_GRID).toEqual({ w: 21, h: 8 })
+    expect(LOGO_FRAME_CELLS).toHaveLength(3)
+    let worst = 0
+    LOGO_FRAME_CELLS.forEach((cell, i) => {
+      const f = LOGO_FRAMES_SVG[i]
+      for (const d of [
+        (f.x - x0) / u - cell.x,
+        (f.y - y0) / u - cell.y,
+        f.w / u - cell.w,
+        f.h / u - cell.h,
+      ]) {
+        expect(Math.abs(d)).toBeLessThanOrEqual(0.1)
+        worst = Math.max(worst, Math.abs(d))
+      }
+    })
+    expect(worst).toBeGreaterThan(0.05)
+    // Hợp ba khung ô là đúng 21 × 8.
+    expect(unionRect(LOGO_FRAME_CELLS)).toEqual({ x: 0, y: 0, w: 21, h: 8 })
+  })
+})
+
+describe('logoGeometry: khớp ô theo module (D-058) hay cỡ cố định', () => {
+  it('64 và 128 cột trên 1280 × 720: logo 21 × 8 ô module (420 × 160 px), lề 2 hay 3 ô, mọi cạnh khung trên vạch ô; 256 cột cùng cỡ với k = 4', () => {
+    for (const [cols, k] of [
+      [64, 1],
+      [128, 2],
+      [256, 4],
+    ] as const) {
+      const L = layoutAt(cols, (cols * 9) / 16)
+      const g = logoGeometry(L, PLACE)!
+      expect(g.snapped).toBe(true)
+      expect(g.module).toBe(k * L.c)
+      expect(g.rect.w).toBe(420)
+      expect(g.rect.h).toBe(160)
+      const m = Math.round((PLACE.marginRatio * 1280) / L.c)
+      expect(g.rect.x).toBe(L.board.x + m * L.c)
+      expect(g.rect.y).toBe(L.board.y + m * L.c)
+      for (const f of g.frames) {
+        for (const v of [f.x - L.board.x, f.y - L.board.y, f.w, f.h]) expect(v % L.c).toBe(0)
+      }
+      expect(g.frames[0]).toEqual({
+        x: g.rect.x + 6 * g.module,
+        y: g.rect.y,
+        w: 15 * g.module,
+        h: 3 * g.module,
+      })
+      expect(unionRect(g.frames)).toEqual(g.rect)
+    }
+  })
+
+  it('32 cột (ô 40 px): 21 ô = 840 px vượt snapMaxWidthRatio nên về cỡ cố định 384 × 146 không khớp ô; nới snapMaxWidthRatio thì khớp ô 840 px', () => {
+    const L = layoutAt(32, 18)
+    const g = logoGeometry(L, PLACE)!
+    expect(g.snapped).toBe(false)
+    expect(g.module).toBe(0)
+    expect(g.rect).toEqual(logoRect(L.stage, L.board, PLACE))
+    expect(g.frames).toEqual(logoFramesIn(g.rect))
+    const wide = logoGeometry(L, { ...PLACE, snapMaxWidthRatio: 0.7 })!
+    expect(wide.snapped).toBe(true)
+    expect(wide.rect.w).toBe(840)
+    expect(wide.rect.h).toBe(320)
+  })
+
+  it('neo: phải và dưới tính bằng ô từ mép bảng, giữa căn giữa; lề kẹp trong bảng; không đủ ô hay c = 0 → cỡ cố định; bảng rỗng → null', () => {
+    const L = layoutAt(64, 36)
+    const tr = logoGeometry(L, { ...PLACE, anchor: 'top-right' })!
+    expect(tr.rect.x).toBe(L.board.x + (64 - 2 - 21) * L.c)
+    const br = logoGeometry(L, { ...PLACE, anchor: 'bottom-right' })!
+    expect(br.rect.y).toBe(L.board.y + (36 - 2 - 8) * L.c)
+    const ce = logoGeometry(L, { ...PLACE, anchor: 'center' })!
+    expect(ce.rect.x).toBe(L.board.x + Math.floor((64 - 21) / 2) * L.c)
+    expect(ce.rect.y).toBe(L.board.y + Math.floor((36 - 8) / 2) * L.c)
+    // Lưới 20 × 20 ô: không đủ 21 cột → cỡ cố định.
+    const small = layoutAt(20, 20)
+    expect(logoGeometry(small, PLACE)!.snapped).toBe(false)
+    expect(logoGeometry({ ...L, c: 0 }, PLACE)!.snapped).toBe(false)
+    expect(logoGeometry({ ...L, board: { x: 0, y: 0, w: 0, h: 0 }, c: 0 }, PLACE)).toBeNull()
   })
 })
 
@@ -138,6 +223,13 @@ describe('logoRect: cỡ theo stage, kẹp vào bảng, không theo số ô', ()
     // Bảng thụt sâu hơn lề (ô to): kẹp vào mép bảng.
     const inset: Rect = { x: 100, y: 50, w: 1080, h: 620 }
     expect(logoRect(STAGE, inset, PLACE)).toEqual({ x: 100, y: 50, w, h })
+    // Ba khung trong px stage theo rect: hợp của chúng là chính rect.
+    const frames = logoFramesIn({ x: 32, y: 32, w, h })
+    const u = unionRect(frames)
+    expect(u.x).toBeCloseTo(32, 6)
+    expect(u.y).toBeCloseTo(32, 6)
+    expect(u.w).toBeCloseTo(w, 6)
+    expect(u.h).toBeCloseTo(h, 6)
     expect(logoRect(STAGE, inset, { ...PLACE, anchor: 'bottom-right' })).toEqual({
       x: 1180 - w,
       y: 670 - h,
@@ -167,127 +259,42 @@ describe('logoRect: cỡ theo stage, kẹp vào bảng, không theo số ô', ()
   })
 })
 
-describe('coverage: phần diện tích ô dưới hợp các khung', () => {
-  const cell: Rect = { x: 0, y: 0, w: 20, h: 20 }
-  it('phủ kín 1; nửa ô 0,5; hai khung chồng lên cùng nửa vẫn 0,5 (bao hàm–loại trừ); ngoài ô 0; ô rỗng 0', () => {
-    expect(coverage([{ x: -5, y: -5, w: 30, h: 30 }], cell)).toBe(1)
-    expect(coverage([{ x: 0, y: 0, w: 10, h: 20 }], cell)).toBe(0.5)
-    expect(
-      coverage(
-        [
-          { x: 0, y: 0, w: 10, h: 20 },
-          { x: 0, y: 0, w: 10, h: 20 },
-        ],
-        cell,
-      ),
-    ).toBe(0.5)
-    expect(
-      coverage(
-        [
-          { x: 0, y: 0, w: 10, h: 20 },
-          { x: 10, y: 0, w: 10, h: 20 },
-          { x: 5, y: 5, w: 10, h: 10 },
-        ],
-        cell,
-      ),
-    ).toBe(1)
-    expect(coverage([{ x: 30, y: 30, w: 5, h: 5 }], cell)).toBe(0)
-    expect(coverage([{ x: 0, y: 0, w: 10, h: 20 }], { x: 0, y: 0, w: 0, h: 20 })).toBe(0)
-  })
-})
+describe('logoSvg: SVG gốc để nạp qua Image', () => {
+  const opts = { fonts: DEFAULTS.brand.logo.fonts, textLength: DEFAULTS.brand.logo.textLength }
 
-describe('logoCells: ô theo độ phủ ≥ ½', () => {
-  it('64 cột: khoảng 97 ô (69 % rect), hộp bao ô lệch tối đa một ô so với rect; 128 cột gấp gần bốn; 32 cột gần một phần tư', () => {
-    const counts: Record<number, number> = {}
-    for (const cols of [32, 64, 128]) {
-      const L = layoutAt(cols, cols / 2)
-      const rect = logoRect(L.stage, L.board, PLACE)!
-      const set = logoCells(rect, L, 0.5)
-      counts[cols] = set.cellCount
-      const bx0 = L.board.x + set.box.col * L.c
-      const by0 = L.board.y + set.box.row * L.c
-      const bx1 = bx0 + set.box.w * L.c
-      const by1 = by0 + set.box.h * L.c
-      expect(bx0).toBeGreaterThanOrEqual(rect.x - L.c)
-      expect(by0).toBeGreaterThanOrEqual(rect.y - L.c)
-      expect(bx1).toBeLessThanOrEqual(rect.x + rect.w + L.c)
-      expect(by1).toBeLessThanOrEqual(rect.y + rect.h + L.c)
-      expect(bx0).toBeLessThanOrEqual(rect.x + L.c)
-      expect(bx1).toBeGreaterThanOrEqual(rect.x + rect.w - L.c)
-      for (const { col, row } of cachedCells(set)) {
-        expect(col).toBeGreaterThanOrEqual(0)
-        expect(row).toBeGreaterThanOrEqual(0)
-        expect(col).toBeLessThan(L.cols)
-        expect(row).toBeLessThan(L.rows)
-      }
-    }
-    const expected64 = (0.694 * 384 * 146) / 400
-    expect(counts[64]).toBeGreaterThan(expected64 * 0.85)
-    expect(counts[64]).toBeLessThan(expected64 * 1.15)
-    expect(counts[128] / counts[64]).toBeGreaterThan(3.3)
-    expect(counts[128] / counts[64]).toBeLessThan(4.7)
-    expect(counts[64] / counts[32]).toBeGreaterThan(3)
-    expect(counts[64] / counts[32]).toBeLessThan(5)
-  })
-
-  it('ô đúng nửa dưới khung là ô logo, 49 % thì không; c = 0 hay rect rỗng → EMPTY_CELLS', () => {
-    const grid = { cols: 10, rows: 10, c: 20, board: { x: 0, y: 0, w: 200, h: 200 } }
-    // Khung "Human" bắt đầu ở x = 0 của rect; đặt rect sao cho mép trái ở giữa cột 1 (x = 30) và rect đủ cao để
-    // một hàng ô nằm trọn trong khung theo chiều dọc (rect rộng hơn bảng: ô ngoài bảng bị bỏ).
-    const rect: Rect = { x: 30, y: 0, w: 400, h: Math.round(400 / LOGO_ASPECT) }
-    const set = logoCells(rect, grid, 0.5)
-    const human = logoFramesIn(rect)[1]
-    const rowMid = Math.floor((human.y + human.h / 2) / 20)
-    expect(human.y).toBeLessThanOrEqual(rowMid * 20)
-    expect(human.y + human.h).toBeGreaterThanOrEqual(rowMid * 20 + 20)
-    expect(set.box.col + set.box.w).toBeLessThanOrEqual(grid.cols)
-    expect(cellAt(set, 1, rowMid)).toBe(true)
-    const shifted = logoCells({ ...rect, x: 30.5 }, grid, 0.5)
-    expect(cellAt(shifted, 1, rowMid)).toBe(false)
-    expect(logoCells(rect, { ...grid, c: 0 }, 0.5)).toBe(EMPTY_CELLS)
-    expect(logoCells({ ...rect, w: 0 }, grid, 0.5)).toBe(EMPTY_CELLS)
-    expect(logoCells({ x: 500, y: 500, w: 50, h: 20 }, grid, 0.5)).toBe(EMPTY_CELLS)
-  })
-})
-
-describe('wordmarkSvg: lớp chữ từ SVG gốc', () => {
-  const colors = {
-    text: DEFAULTS.brand.logo.text,
-    verify: DEFAULTS.brand.logo.verify,
-    fonts: DEFAULTS.brand.logo.fonts,
-    textLength: DEFAULTS.brand.logo.textLength,
-  }
-
-  it('bỏ ba rect khung (lớp fill:none), navy → màu chữ, xanh lá giữ; dòng chữ sống thành <text> phẳng có textLength và font dự phòng', () => {
-    const out = wordmarkSvg(SVG, colors)
-    expect((SVG.match(/<rect class="cls-6"/g) ?? []).length).toBe(3)
-    expect(out).not.toContain('<rect class="cls-6"')
-    // Hai ô vuông xanh lá của dấu hai chấm và các path chữ vẫn còn.
+  it('giữ nguyên ba rect khung, mọi path và hai màu mực; dòng chữ sống thành <text> phẳng có textLength và font dự phòng; gốc có width/height bằng viewBox', () => {
+    const out = logoSvg(SVG, opts)
+    expect((out.match(/<rect class="cls-6"/g) ?? []).length).toBe(3)
     expect((out.match(/<rect class="cls-7"/g) ?? []).length).toBe(2)
-    expect((out.match(/<path class="cls-8"/g) ?? []).length).toBe(
-      (SVG.match(/<path class="cls-8"/g) ?? []).length,
-    )
-    expect(out).not.toContain(`fill:${LOGO_NAVY}`)
-    expect(out).toContain(`fill:${colors.text}`)
+    expect((out.match(/<path /g) ?? []).length).toBe((SVG.match(/<path /g) ?? []).length)
+    expect(out).toContain(`fill:${LOGO_NAVY}`)
     expect(out).toContain(`fill:${LOGO_GREEN}`)
+    expect(out).toContain(`stroke:${LOGO_NAVY}`)
     expect(out).not.toContain('<tspan')
     const text = /<text([^>]*)>([^<]*)<\/text>/.exec(out)!
     expect(text[2]).toBe('AI ETHIC CAMPAIGN')
     expect(text[1]).toContain('class="cls-1"')
     expect(text[1]).toContain('transform="translate(330.14 281.35)"')
-    expect(text[1]).toContain(`textLength="${colors.textLength}"`)
+    expect(text[1]).toContain(`textLength="${opts.textLength}"`)
     expect(text[1]).toContain('lengthAdjust="spacingAndGlyphs"')
     expect(text[1]).toContain("style=\"font-family:Heavitas, 'Arial Black'")
     expect(out.startsWith('<svg width="700" height="400" ')).toBe(true)
     expect(out).toContain('viewBox="0 0 700 400"')
     expect(SVG).not.toMatch(/<svg[^>]*\swidth=/)
+    // Ngoài <text> và gốc <svg>, phần còn lại không đổi.
+    const strip = (x: string) =>
+      x.replace(/<text[\s\S]*?<\/text>/g, '').replace(/<svg[^>]*>/, '<svg>')
+    expect(strip(out)).toBe(strip(SVG))
   })
 
-  it('màu VERIFY tùy chọn thay cho xanh lá; nguồn không đổi', () => {
+  it('SVG đã có width thì giữ; không có <text> thì không đổi gì ngoài gốc; nguồn không bị sửa', () => {
     const before = SVG
-    const out = wordmarkSvg(SVG, { ...colors, verify: '#dfe025' })
-    expect(out).toContain('fill:#dfe025')
-    expect(out).not.toContain(`fill:${LOGO_GREEN}`)
+    expect(logoSvg('<svg width="10" height="5" viewBox="0 0 10 5"><rect/></svg>', opts)).toBe(
+      '<svg width="10" height="5" viewBox="0 0 10 5"><rect/></svg>',
+    )
+    expect(logoSvg('<svg viewBox="0 0 10 5"><rect/></svg>', opts)).toBe(
+      '<svg width="10" height="5" viewBox="0 0 10 5"><rect/></svg>',
+    )
     expect(SVG).toBe(before)
   })
 })

@@ -356,8 +356,7 @@ export const en: Strings = {
       guideHidden: 'Hidden',
       logo: 'Logo on the cover',
       logoAria: 'Logo on the cover',
-      logoHint:
-        'The campaign logo inlaid into the cells of the cover; hidden while a region is open.',
+      logoHint: 'The campaign logo in the corner of the cover; open cells show the camera instead.',
       guideHint:
         'Auto-collapse: the message shows in full when it changes, then shrinks to one line; camera errors always show in full.',
     },
