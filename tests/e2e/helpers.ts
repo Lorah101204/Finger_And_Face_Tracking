@@ -28,6 +28,7 @@ export type StageSnap = {
     windowSource: 'mouse' | 'hands'
     handednessSwap: boolean
     fingers: number[]
+    raisedOnly: boolean
     sensitivity: {
       minCutoff: number
       beta: number
@@ -138,6 +139,19 @@ export type HandTrackSnap = {
   palmCenterCam: { x: number; y: number }
   bboxCam: Rect
   landmarksCam: { x: number; y: number }[]
+  landmarksWorld?: { x: number; y: number; z: number }[]
+  /** ROI-04: ngón duỗi/gập theo track. */
+  pose?: Record<
+    number,
+    {
+      raised: boolean
+      ratio: number
+      angle: number | null
+      abduction: number | null
+      inPalm: boolean
+      streak: number
+    }
+  >
   lastSeenTs: number
   frameId: number
 }
@@ -199,6 +213,8 @@ export type LoopSnap = {
   /** PERF-02: số frame có vẽ và số lần buildMask. */
   paints: number
   maskBuilds: number
+  /** BRAND-01: lớp logo đang được vẽ. */
+  logoVisible: boolean
   reveal: { kind: 'closed'; reason: string } | { kind: 'open'; mask: MaskSnap }
   mask: MaskSnap | null
   epoch: number
@@ -303,7 +319,14 @@ export type FaceSnap = {
   lastError: string | null
 }
 /** ROI-01: tay giả lập (src/debug/fakeHands.ts), px camera chưa mirror. */
-export type FakeHandSpec = { x: number; y: number; spread?: number; score?: number }
+export type FakeHandSpec = {
+  x: number
+  y: number
+  spread?: number
+  score?: number
+  /** ROI-04: ngón đang giơ (mặc định cả năm). */
+  raised?: (4 | 8 | 12 | 16 | 20)[]
+}
 export type FakeHandsSpec = {
   left?: FakeHandSpec | null
   right?: FakeHandSpec | null
@@ -312,6 +335,17 @@ export type FakeHandsSpec = {
   jitter?: number
   orbit?: { radius: number; periodMs: number }
 }
+/** BRAND-01: lớp logo qua window.__wct.logo (src/debug/logoProbe.ts). */
+export type LogoSnap = {
+  enabled: boolean
+  visible: boolean
+  ready: boolean
+  wordmark: boolean
+  rect: Rect | null
+  box: { col: number; row: number; w: number; h: number } | null
+  cellCount: number
+}
+
 /** ROI-01: trạng thái HandWindowSource qua window.__wct.handWindow. */
 export type HandWindowSnap = {
   solves: number
@@ -444,6 +478,7 @@ declare global {
       face?: { snapshot: () => FaceSnap }
       hands?: { snapshot: () => HandsSnap }
       handWindow?: { snapshot: () => HandWindowSnap }
+      logo?: { snapshot: () => LogoSnap }
       stats?: { snapshot: () => StatsSnap }
       classifier?: { snapshot: () => ClassifierSnap }
       /** LOG-02: nhật ký cục bộ (src/debug/logProbe.ts). */
@@ -498,7 +533,8 @@ declare global {
 export const CONSENT_KEY = 'wct.consent'
 export const CONSENT_VERSION = '2026-09-17'
 export const LANDING_URL = /\/(#\/)?$/
-export const APP_URL = /#\/app$/
+/** URL sân khấu; openApp thêm `?logo=0` (BRAND-01) nên chấp nhận query. */
+export const APP_URL = /#\/app(\?[^#]*)?$/
 
 /** Màu vạch lưới (src/mask/compositor.ts GRID_LINE_RGBA). */
 export const GRID_GRAY = [230, 230, 230, 255]
@@ -558,11 +594,13 @@ export async function seedConsent(page: Page, value: string = CONSENT_VERSION): 
 
 /**
  * Mở #/app (kèm query, ví dụ '?debug=1&source=synthetic') trong một document mới: với hash routing, goto cùng document
- * không nạp lại trang và cache đồng ý.
+ * không nạp lại trang và cache đồng ý. BRAND-01: thêm `logo=0` khi query chưa nói gì về logo, để mọi ca pixel hiện có
+ * chạy trên màn che trơn; logo.spec bật rõ bằng `logo=1`.
  */
 export async function openApp(page: Page, query = ''): Promise<void> {
+  const q = /[?&]logo=/.test(query) ? query : query ? `${query}&logo=0` : '?logo=0'
   await page.goto('about:blank')
-  await page.goto(`/#/app${query}`)
+  await page.goto(`/#/app${q}`)
 }
 
 /**
@@ -595,6 +633,10 @@ export function readHands(page: Page): Promise<HandsSnap> {
 
 export function readHandWindow(page: Page): Promise<HandWindowSnap> {
   return page.evaluate(() => window.__wct!.handWindow!.snapshot())
+}
+
+export function readLogo(page: Page): Promise<LogoSnap> {
+  return page.evaluate(() => window.__wct!.logo!.snapshot())
 }
 
 export function readStats(page: Page): Promise<StatsSnap> {

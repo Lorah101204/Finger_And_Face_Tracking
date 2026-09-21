@@ -15,6 +15,8 @@
 // dùng lại RevealMask cũ, không rasterize; (b) danh sách ô của FrameOutput lấy từ cache theo đối tượng mask; (c) không
 // có gì động trên màn (vùng đóng, không overlay tay, không đầu ngón) và layout, vạch lưới không đổi thì bỏ qua render
 // của frame đó (canvas giữ nguyên nền trắng đã vẽ); `paints` đếm số frame có vẽ để đo.
+// BRAND-01: lớp logo (deps.logo) vẽ khi vùng đóng và đã qua reappearMs kể từ frame mở gần nhất; ẩn ngay khi mở;
+// hiện, ẩn hay lớp chữ sẵn sàng (version) đều là một lần vẽ lại rồi lại tĩnh.
 import { DEFAULTS } from '../core/config'
 import type { EpochCounter } from '../core/epoch'
 import { createLatencyWindow, type LatencyStats } from '../core/latency'
@@ -46,7 +48,7 @@ import { fingertipsGuidance, toPoints } from '../hands/fingertips'
 import type { ClassifierClient, ClassifyTask } from '../classify/classifierClient'
 import { decideSubject } from '../classify/subjectRule'
 import { buildMask } from '../mask/buildMask'
-import { render } from '../mask/compositor'
+import { render, type LogoPainter } from '../mask/compositor'
 import type { RestrictedFrameBuilder, RestrictedStats } from '../mask/restrictedFrame'
 import { noWindow, type WindowSource, type WindowSourceKind } from '../reveal/windowSource'
 import type { CloseGate } from './closeGate'
@@ -90,6 +92,8 @@ export type LoopSnapshot = {
   /** PERF-02: số frame có gọi render (frame tĩnh không vẽ lại) và số lần buildMask (hình không đổi thì không dựng lại). */
   paints: number
   maskBuilds: number
+  /** BRAND-01: lớp logo đang được vẽ trên màn che (bật, vùng đóng và đã qua reappearMs). */
+  logoVisible: boolean
   reveal: RevealState
   mask: RevealMask | null
   epoch: number
@@ -151,6 +155,8 @@ export type FrameLoopDeps = {
   gate?: CloseGate
   /** I18N-01: ngôn ngữ của nhãn vẽ lên canvas (đọc mỗi lần vẽ); mặc định tiếng Việt. */
   lang?: () => Lang
+  /** BRAND-01: lớp logo hiện tại (null khi công tắc tắt); vòng lặp tự ẩn khi vùng mở và hiện lại sau reappearMs. */
+  logo?: () => LogoPainter | null
 }
 
 export const EMPTY_OUTPUT: FrameOutput = {
@@ -164,8 +170,20 @@ export const EMPTY_OUTPUT: FrameOutput = {
 }
 
 export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
-  const { store, epoch, sources, frame, probes, restricted, face, hands, gate, classifier, lang } =
-    deps
+  const {
+    store,
+    epoch,
+    sources,
+    frame,
+    probes,
+    restricted,
+    face,
+    hands,
+    gate,
+    classifier,
+    lang,
+    logo,
+  } = deps
   const consume = restricted?.consume ?? ((f: RestrictedFrame) => f.input.close())
   const buildIntervalMs = 1000 / (restricted?.targetHz ?? DEFAULTS.face.targetHz)
   // FACE-02: mặt giữ tới kết quả kế; hết hạn nếu worker ngừng trả (4 lần tuổi tối đa) để overlay không đứng hình.
@@ -189,11 +207,17 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
   let paintedDynamic = false
   let paintLayout: Layout | null = null
   let paintLines: boolean | null = null
+  // BRAND-01: lớp logo và version đã vẽ lần gần nhất; thời điểm frame mở gần nhất (logo hiện lại sau reappearMs).
+  let paintLogo: LogoPainter | null = null
+  let paintLogoVersion = 0
+  let lastOpenTs = -Infinity
+  let logoVisible = false
   let lastTs = 0
   let reveal: RevealState = closedState('user')
   let lastLayout = store.getSnapshot().layout
   let lastMirror = store.getSnapshot().settings.mirror
   let lastFingers = store.getSnapshot().settings.fingers
+  let lastRaisedOnly = store.getSnapshot().settings.raisedOnly
   let fingers: FingerStatus[] = []
   let lastSource: WindowSource | null = null
   let nextTaskId = 1
@@ -277,12 +301,15 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     syncFaceGate()
     fingers = []
     maskKey = null
+    lastOpenTs = performance.now()
+    logoVisible = false
     const { layout, settings } = store.getSnapshot()
     if (ctx) {
       paints++
       paintedDynamic = false
       paintLayout = layout
       paintLines = settings.showLines
+      paintLogo = null
       render(ctx, layout, {
         showLines: settings.showLines,
         mirror: settings.mirror,
@@ -291,6 +318,7 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
         faces: [],
         hands: null,
         fingers: [],
+        logo: null,
       })
     }
     emitOutput(performance.now(), null)
@@ -396,11 +424,13 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     if (
       layout !== lastLayout ||
       settings.mirror !== lastMirror ||
-      settings.fingers !== lastFingers
+      settings.fingers !== lastFingers ||
+      settings.raisedOnly !== lastRaisedOnly
     ) {
       lastLayout = layout
       lastMirror = settings.mirror
       lastFingers = settings.fingers
+      lastRaisedOnly = settings.raisedOnly
       if (reveal.kind === 'open') close('config-changed')
     }
     if (source !== lastSource) {
@@ -466,17 +496,28 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
       faces = labelFaces(faces)
     }
     const mask = reveal.kind === 'open' ? reveal.mask : null
+    // BRAND-01: logo ẩn ngay khi vùng mở, hiện lại reappearMs sau frame mở gần nhất (tay mất thoáng qua không nháy).
+    if (mask !== null) lastOpenTs = now
+    const logoLayer = logo?.() ?? null
+    const logoNow =
+      logoLayer !== null && mask === null && now - lastOpenTs >= DEFAULTS.brand.logo.reappearMs
+        ? logoLayer
+        : null
+    logoVisible = logoNow !== null
 
     if (ctx) {
       // PERF-02 (c): vẽ khi có nội dung động (vùng mở, overlay tay, đầu ngón), khi frame trước có nội dung động (để
-      // xóa), hoặc khi layout hay vạch lưới đổi; frame tĩnh giữ nguyên canvas (nền trắng và lưới đã vẽ).
+      // xóa), hoặc khi layout, vạch lưới hay lớp logo (hiện/ẩn, version) đổi; frame tĩnh giữ nguyên canvas (nền trắng,
+      // logo và lưới đã vẽ).
       const handOverlay = handsActive && hands && hands.latest && hands.latest.hands.length > 0
       const dynamic = mask !== null || handOverlay === true || fingers.length > 0
       if (
         dynamic ||
         paintedDynamic ||
         paintLayout !== layout ||
-        paintLines !== settings.showLines
+        paintLines !== settings.showLines ||
+        paintLogo !== logoNow ||
+        (logoNow !== null && paintLogoVersion !== logoNow.version)
       ) {
         const r0 = performance.now()
         render(ctx, layout, {
@@ -489,12 +530,15 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
           now,
           fingers,
           lang: lang?.(),
+          logo: logoNow,
         })
         renderWin.push(performance.now() - r0)
         paints++
         paintedDynamic = dynamic
         paintLayout = layout
         paintLines = settings.showLines
+        paintLogo = logoNow
+        paintLogoVersion = logoNow?.version ?? 0
       }
       probes?.emitOutputFrame(ctx, { epoch: epoch.current, frameId: frames, ts: now })
     }
@@ -570,6 +614,7 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
       ctx = null
       maskKey = null
       paintLayout = null
+      paintLogo = null
     },
     snapshot() {
       return {
@@ -577,6 +622,7 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
         frames,
         paints,
         maskBuilds,
+        logoVisible,
         reveal,
         mask: reveal.kind === 'open' ? reveal.mask : null,
         epoch: epoch.current,

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { pointInPolygon } from '../../src/core/cells'
 import { HAND_LANDMARKS } from '../../src/core/handLandmarks'
 import { FAKE_HAND_IDS, fakeHandFrame } from '../../src/debug/fakeHands'
+import { PALM_POLYGON_INDEX, fingerMetrics } from '../../src/hands/fingerPose'
 
 // ROI-01 (TEST-00): tay giả lập có 21 landmark, đầu ngón cái và trỏ đúng vị trí, id cố định, tuổi theo ageMs,
 // rung có biên và lặp lại được.
@@ -77,5 +79,51 @@ describe('fakeHandFrame orbit', () => {
       fakeHandFrame({ ...spec, orbit: { radius: 50, periodMs: 0 } }, 999, 1).hands[0]
         .landmarksCam[4],
     ).toEqual({ x: 450, y: 350 })
+  })
+})
+
+// ROI-04 (mục 7.32): tay giả có world landmarks và pose do bộ phân loại thật tính; `raised` uốn các ngón khác vào lòng bàn
+// tay (đầu ngón trong đa giác lòng bàn tay, tỉ lệ dưới 0,9); ngón giơ giữ đúng offset ROI-03 (tip 4, 8 không đổi).
+describe('raised (ROI-04)', () => {
+  it('mặc định cả năm ngón giơ với world landmarks 21 điểm; raised [4, 8] gập ba ngón còn lại vào lòng bàn tay', () => {
+    const all = fakeHandFrame({ left: { x: 440, y: 360, spread: 200 } }, 1000, 1).hands[0]
+    expect(all.landmarksWorld).toHaveLength(HAND_LANDMARKS)
+    expect([4, 8, 12, 16, 20].map((t) => all.pose![t as 4].raised)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+    ])
+    const two = fakeHandFrame({ left: { x: 440, y: 360, spread: 200, raised: [4, 8] } }, 1000, 1)
+      .hands[0]
+    expect(two.landmarksCam[4]).toEqual({ x: 440, y: 460 })
+    expect(two.landmarksCam[8]).toEqual({ x: 440, y: 260 })
+    expect([4, 8, 12, 16, 20].map((t) => two.pose![t as 4].raised)).toEqual([
+      true,
+      true,
+      false,
+      false,
+      false,
+    ])
+    const palm = PALM_POLYGON_INDEX.map((i) => two.landmarksCam[i])
+    for (const tip of [12, 16, 20] as const) {
+      expect(pointInPolygon(two.landmarksCam[tip], palm)).toBe(true)
+      const m = fingerMetrics(two.landmarksCam, two.landmarksWorld, tip)!
+      expect(m.ratio).toBeLessThan(0.9)
+      expect(m.angle!).toBeLessThan(120)
+    }
+    for (const tip of [8] as const) {
+      expect(pointInPolygon(two.landmarksCam[tip], palm)).toBe(false)
+      const m = fingerMetrics(two.landmarksCam, two.landmarksWorld, tip)!
+      expect(m.ratio).toBeGreaterThanOrEqual(1.05)
+      expect(m.angle!).toBeGreaterThanOrEqual(135)
+    }
+    expect(
+      fingerMetrics(two.landmarksCam, two.landmarksWorld, 4)!.abduction!,
+    ).toBeGreaterThanOrEqual(1)
+    // Nắm tay: raised [] gập cả năm.
+    const fist = fakeHandFrame({ left: { x: 440, y: 360, raised: [] } }, 1000, 1).hands[0]
+    expect([4, 8, 12, 16, 20].every((t) => !fist.pose![t as 4].raised)).toBe(true)
   })
 })

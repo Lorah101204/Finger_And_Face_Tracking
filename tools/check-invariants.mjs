@@ -22,9 +22,12 @@ const RF_FORBIDDEN = [/\bdocument\b/, /querySelector/, /getElementById/, /HTMLCa
 // syntheticCameraSource vẽ VÀO canvas camera tổng hợp (nó là camera), không phải lên output.
 // CLS-02: classifier.worker vẽ bitmap của RestrictedFrame về cạnh input của model trên canvas riêng trong worker; worker
 // không có đường nào tới video hay canvas output (lint:boundaries) nên nguồn drawImage chỉ có thể là buffer giới hạn.
+// BRAND-01: logoLayer dựng lớp logo trên canvas riêng từ Image của asset SVG bundle (không phải camera) và compositor
+// vẽ canvas đó lên output; cùng quy tắc 9 tham số.
 const DRAW_FILES = new Set([
   'src/mask/compositor.ts',
   'src/mask/restrictedFrame.ts',
+  'src/mask/logoLayer.ts',
   'src/camera/syntheticCameraSource.ts',
   'src/classify/classifier.worker.ts',
 ])

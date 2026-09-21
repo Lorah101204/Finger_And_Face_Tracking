@@ -7,6 +7,7 @@ import {
   expectGateClean,
   installGateAudit,
   installGumCounter,
+  note,
   openApp,
   readHands,
   readLoop,
@@ -396,5 +397,72 @@ test.describe('hai bàn tay thật (cục bộ)', () => {
     await page.getByLabel('Nguồn cửa sổ').selectOption('mouse')
     await expect.poll(async () => (await readLoop(page)).output.points.length).toBe(0)
     await expectGateClean(page, 0)
+  })
+})
+
+// ROI-04 (mục 7.32): tư thế thật một tay từ ảnh spike: pointing_up.jpg (chỉ ngón trỏ giơ, ngón cái gập vào lòng bàn tay)
+// và thumbs_up.jpg (chỉ ngón cái giơ). Chạy cục bộ khi có asset (npm run spikes:fetch).
+const POINT_FILE = 'public/spike-assets/pointing_up.jpg'
+const THUMB_FILE = 'public/spike-assets/thumbs_up.jpg'
+
+test.describe('ngón đang giơ trên tay thật (ROI-04, cục bộ)', () => {
+  test('pointing_up.jpg: pose chỉ ngón trỏ giơ, bốn ngón folded, few-points nêu số ngón gập; thumbs_up.jpg: chỉ ngón cái giơ', async ({
+    page,
+  }) => {
+    test.skip(
+      !existsSync(POINT_FILE) || !existsSync(THUMB_FILE),
+      `cần ${POINT_FILE} và ${THUMB_FILE}`,
+    )
+    test.setTimeout(300_000)
+    await openSynthetic(page)
+    await selectHands(page)
+    // Tuổi điểm 1000 ms để trong headless (suy luận ~100 ms) điểm không thành stale-point trước khi xét gập.
+    await page.getByLabel('Tuổi điểm').fill('1000')
+    const raisedOf = () =>
+      page.evaluate(() => {
+        const h = window.__wct!.hands!.snapshot().latest?.hands[0]
+        if (!h?.pose) return null
+        return [4, 8, 12, 16, 20].filter((t) => h.pose![t]!.raised)
+      })
+    for (const [src, w, h, expected, stat] of [
+      ['/spike-assets/pointing_up.jpg', 358, 376, [8], /phải 1\/5 \(4 folded\)/],
+      ['/spike-assets/thumbs_up.jpg', 382, 406, [4], /phải 1\/5 \(4 folded\)/],
+    ] as const) {
+      // Ảnh vẽ tỉ lệ 1,5 vào giữa khung 1280 × 720.
+      const img = {
+        x: Math.round(640 - 0.75 * w),
+        y: Math.round(360 - 0.75 * h),
+        w: Math.round(1.5 * w),
+        h: Math.round(1.5 * h),
+      }
+      await page.evaluate(
+        ([s, i]) => window.__scenario!.scene({ fps: 8, person: null, face: { src: s, ...i } }),
+        [src, img] as const,
+      )
+      await page.waitForFunction(
+        () => (window.__wct?.hands?.snapshot().latest?.hands.length ?? 0) === 1,
+        undefined,
+        { timeout: 90_000 },
+      )
+      const r0 = await page.evaluate(() => window.__wct!.hands!.snapshot().client.stats.results)
+      await page.waitForFunction(
+        (n) => window.__wct!.hands!.snapshot().client.stats.results >= n + 8,
+        r0,
+        { timeout: 90_000 },
+      )
+      const hand = await page.evaluate(() => window.__wct!.hands!.snapshot().latest!.hands[0])
+      expect(hand.handedness).toBe('right')
+      expect(hand.landmarksWorld).toHaveLength(21)
+      await expect.poll(raisedOf, { timeout: 15_000 }).toEqual(expected)
+      await expect
+        .poll(async () => (await readLoop(page)).reveal)
+        .toEqual({
+          kind: 'closed',
+          reason: 'few-points',
+        })
+      await expect(page.getByTestId('fingers-stat')).toHaveText(stat)
+      await expect(page.getByTestId('guide-detail')).toHaveText(/4 đầu ngón đang gập/)
+      note(`${src}: ngón giơ ${JSON.stringify(expected)}, pose ${JSON.stringify(hand.pose)}`)
+    }
   })
 })

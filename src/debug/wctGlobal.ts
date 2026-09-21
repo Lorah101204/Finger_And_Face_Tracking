@@ -2,6 +2,7 @@
 import type { CameraSnapshot } from '../camera/cameraState'
 import type { FaceSnapshot } from '../face/faceClient'
 import type { HandPipelineSnapshot } from '../hands/handPipeline'
+import type { LogoSnapshot } from './logoProbe'
 import type { LoopSnapshot } from '../loop/frameLoop'
 import type { StageState } from '../loop/store'
 import type { HandWindowSnapshot } from '../reveal/handWindowSource'
@@ -31,6 +32,8 @@ export type WctGlobal = {
   loop?: { snapshot: () => LoopSnapshot; events: EventTarget }
   /** FACE-01: trạng thái FaceClient. */
   face?: { snapshot: () => FaceSnapshot }
+  /** BRAND-01: lớp logo trên màn che (công tắc, đang vẽ, rect và ô theo layout). */
+  logo?: { snapshot: () => LogoSnapshot }
   /** HAND-01: trạng thái hand pipeline (worker, tracker, HandFrame mới nhất). */
   hands?: { snapshot: () => HandPipelineSnapshot }
   /** ROI-01: trạng thái HandWindowSource (solver, cửa sổ đã giải). */

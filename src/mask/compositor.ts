@@ -1,4 +1,4 @@
-// GRID-01: nền trắng và vạch lưới (vẽ sau nền trắng, bất biến I4). MASK-01: render() vẽ camera chỉ trong các ô mở
+// GRID-01: nền trắng và vạch lưới (vẽ sau nền trắng, bất biến I4); BRAND-01: khối logo giữa nền trắng và vạch lưới. MASK-01: render() vẽ camera chỉ trong các ô mở
 // của mask (bất biến I2: dùng đúng RevealMask, không tự tính rect khác): clip bằng path hợp các ô mở (ROI-02, D-038;
 // hộp đầy thì một rect) rồi drawImage cameraRect → stageRect của hộp bao. Đây là nơi duy nhất drawImage lên output;
 // tools/check-invariants.mjs kiểm drawImage chỉ ở file này và restrictedFrame.ts, luôn có rect nguồn (9 tham số).
@@ -55,14 +55,27 @@ export const SLOT_RGBA: readonly (readonly [number, number, number, number])[] =
 
 type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
+/** BRAND-01: lớp logo dựng sẵn (mask/logoLayer.ts) vẽ lên nền trắng trước vạch lưới; không phải pixel camera. */
+export type LogoPainter = {
+  readonly version: number
+  draw(ctx: Ctx2D, layout: Layout): boolean
+}
+
 /**
- * Fill trắng toàn canvas rồi vẽ vạch lưới 1 px thiết bị tại mọi ranh giới ô, kể cả biên bảng (vạch biên phải và
- * dưới nằm trong bảng để không tràn ra ngoài). Không vẽ gì khác.
+ * Fill trắng toàn canvas, (BRAND-01) khối logo nếu có, rồi vẽ vạch lưới 1 px thiết bị tại mọi ranh giới ô, kể cả biên
+ * bảng (vạch biên phải và dưới nằm trong bảng để không tràn ra ngoài): vạch lưới đi xuyên qua khối logo như bản mẫu.
+ * Không vẽ gì khác.
  */
-export function paintBackground(ctx: Ctx2D, layout: Layout, showLines: boolean): void {
+export function paintBackground(
+  ctx: Ctx2D,
+  layout: Layout,
+  showLines: boolean,
+  logo: LogoPainter | null = null,
+): void {
   const { stage, board, c, cols, rows } = layout
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, stage.w, stage.h)
+  if (logo && c > 0) logo.draw(ctx, layout)
   if (!showLines || c === 0) return
   ctx.fillStyle = GRID_LINE_COLOR
   for (let k = 0; k <= cols; k++) {
@@ -91,6 +104,8 @@ export type RenderOptions = {
   fingers?: readonly FingerStatus[]
   /** I18N-01: ngôn ngữ của nhãn vẽ lên canvas (nhãn phân loại, nhãn tay); mặc định tiếng Việt. */
   lang?: Lang
+  /** BRAND-01: lớp logo vẽ trên nền trắng trước vạch lưới; null hay bỏ trống thì không vẽ (vòng lặp ẩn khi vùng mở). */
+  logo?: LogoPainter | null
 }
 
 /**
@@ -100,7 +115,7 @@ export type RenderOptions = {
  * dời. Không có mask thì không vẽ video (I4); không có đường nào drawImage toàn khung. Thứ tự: video → mặt → viền.
  */
 export function render(ctx: Ctx2D, layout: Layout, opts: RenderOptions): void {
-  paintBackground(ctx, layout, opts.showLines)
+  paintBackground(ctx, layout, opts.showLines, opts.logo ?? null)
   const { mask, drawable } = opts
   if (mask && mask.cellCount > 0) drawWindow(ctx, layout, mask, drawable, opts)
   if (opts.hands && opts.hands.hands.length > 0)
@@ -110,15 +125,23 @@ export function render(ctx: Ctx2D, layout: Layout, opts: RenderOptions): void {
 
 /**
  * ROI-03 (thay chấm slot của HAND-02): chấm 8 px màu theo tay tại pStage của từng đầu ngón; điểm cũ, ngoài bảng,
- * chưa rõ tay hoặc uncertain vẽ mờ. Chỉ fillRect trên nền trắng: không có pixel camera.
+ * chưa rõ tay hoặc uncertain vẽ mờ. ROI-04: ngón đang gập (folded) vẽ ô rỗng để người vận hành thấy model coi ngón nào
+ * là gập. Chỉ fillRect, strokeRect trên nền trắng: không có pixel camera.
  */
 export function drawFingertips(ctx: Ctx2D, fingers: readonly FingerStatus[]): void {
   ctx.save()
+  ctx.lineWidth = 2
   for (const s of fingers) {
-    ctx.globalAlpha = s.valid ? 1 : 0.4
-    ctx.fillStyle = FINGER_COLORS[s.hand]
     const x = Math.round(s.pStage.x)
     const y = Math.round(s.pStage.y)
+    if (s.reason === 'folded') {
+      ctx.globalAlpha = 0.7
+      ctx.strokeStyle = FINGER_COLORS[s.hand]
+      ctx.strokeRect(x - 3, y - 3, 6, 6)
+      continue
+    }
+    ctx.globalAlpha = s.valid ? 1 : 0.4
+    ctx.fillStyle = FINGER_COLORS[s.hand]
     ctx.fillRect(x - 4, y - 4, 8, 8)
   }
   ctx.restore()

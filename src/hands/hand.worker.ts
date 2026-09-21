@@ -86,6 +86,10 @@ function toResult(frame: HandRawFrame, res: HandLandmarkerResult, inferMs: numbe
       label: res.handedness[i]?.[0]?.categoryName ?? '',
       score: res.handedness[i]?.[0]?.score ?? 0,
       landmarksNorm: lm.map((p) => [p.x, p.y, p.z] as [number, number, number]),
+      // ROI-04: world landmarks (mét) cho fingerPose; chỉ số, không có pixel nào.
+      worldLandmarks: (res.worldLandmarks[i] ?? []).map(
+        (p) => [p.x, p.y, p.z] as [number, number, number],
+      ),
     })),
   }
 }

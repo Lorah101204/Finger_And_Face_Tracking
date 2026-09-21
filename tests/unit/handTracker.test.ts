@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import type { FingerTip } from '../../src/core/types'
 import type { HandDetection } from '../../src/hands/handLandmarker'
 import { HandTracker } from '../../src/hands/handTracker'
 
@@ -171,5 +173,90 @@ describe('HandTracker', () => {
     tr.update([det('right', 600, 300), det('right', 700, 300)], 3, 200, W, H)
     const amb = tr.update([det('right', 650, 300), det('right', 750, 300)], 4, 233, W, H)
     expect(amb.uncertain).toBe(true)
+  })
+})
+
+// ROI-04 (mục 7.32): pose giữ theo track qua các frame (debounce), không cập nhật ở frame uncertain, track tạo lại thì
+// phân loại ngay từ frame đầu.
+type FixtureHand = {
+  image: string
+  width: number
+  height: number
+  raised: FingerTip[]
+  landmarksNorm: [number, number, number][]
+  worldLandmarks: [number, number, number][]
+}
+const POSE_FIXTURE = JSON.parse(
+  readFileSync(new URL('./fixtures/hands-pose.json', import.meta.url), 'utf8'),
+) as { hands: FixtureHand[] }
+
+/** Detection từ fixture, dời tới (x, y) theo tâm lòng bàn tay của nó. */
+function fixtureDet(
+  h: FixtureHand,
+  handedness: 'left' | 'right',
+  x: number,
+  y: number,
+): HandDetection {
+  const raw = h.landmarksNorm.map(([nx, ny]) => ({ x: nx * h.width, y: ny * h.height }))
+  const palm = [0, 5, 9, 13, 17].map((i) => raw[i])
+  const cx = palm.reduce((a, p) => a + p.x, 0) / 5
+  const cy = palm.reduce((a, p) => a + p.y, 0) / 5
+  const landmarksCam = raw.map((p) => ({ x: p.x - cx + x, y: p.y - cy + y }))
+  return {
+    handedness,
+    score: 0.95,
+    landmarksCam,
+    landmarksWorld: h.worldLandmarks.map(([wx, wy, wz]) => ({ x: wx, y: wy, z: wz })),
+    palmCenterCam: { x, y },
+    bboxCam: { x: x - 100, y: y - 100, w: 200, h: 200 },
+  }
+}
+const raisedOf = (h: { pose?: Record<number, { raised: boolean }> }) =>
+  ([4, 8, 12, 16, 20] as const).filter((t) => h.pose?.[t].raised)
+
+describe('pose theo track (ROI-04)', () => {
+  const open = POSE_FIXTURE.hands[1]
+  const point = POSE_FIXTURE.hands.find((h) => h.image === 'pointing_up.jpg')!
+
+  it('track mới phân loại ngay; đổi tư thế cần ba frame; landmarksWorld là bản sao', () => {
+    const tr = new HandTracker()
+    const f0 = tr.update([fixtureDet(open, 'right', 640, 360)], 0, 0, W, H)
+    expect(raisedOf(f0.hands[0])).toEqual([4, 8, 12, 16, 20])
+    expect(f0.hands[0].landmarksWorld).toHaveLength(21)
+    f0.hands[0].landmarksWorld![0].x = 999
+    expect(tr.tracks[0].landmarksWorld![0].x).not.toBe(999)
+    for (let k = 1; k <= 2; k++) {
+      const f = tr.update([fixtureDet(point, 'right', 640, 360)], k, k * DT, W, H)
+      expect(f.hands[0].id).toBe(1)
+      expect(raisedOf(f.hands[0])).toEqual([4, 8, 12, 16, 20])
+    }
+    const f3 = tr.update([fixtureDet(point, 'right', 640, 360)], 3, 3 * DT, W, H)
+    expect(f3.hands[0].id).toBe(1)
+    expect(raisedOf(f3.hands[0])).toEqual([8])
+  })
+
+  it('frame uncertain không cập nhật pose; track bị xóa rồi tạo lại thì phân loại ngay theo tư thế mới', () => {
+    const tr = new HandTracker({ dropMs: 100, dropFrames: 1 })
+    tr.update([fixtureDet(open, 'left', 300, 360), fixtureDet(open, 'right', 340, 360)], 0, 0, W, H)
+    // Hai detection cùng nhãn, cùng vị trí giữa hai track: track trái có hai ứng viên chi phí bằng nhau → uncertain,
+    // pose giữ nguyên.
+    const fu = tr.update(
+      [fixtureDet(point, 'left', 320, 360), fixtureDet(point, 'left', 320, 360)],
+      1,
+      DT,
+      W,
+      H,
+    )
+    expect(fu.uncertain).toBe(true)
+    expect(fu.hands.map(raisedOf)).toEqual([
+      [4, 8, 12, 16, 20],
+      [4, 8, 12, 16, 20],
+    ])
+    // Vắng 200 ms: track xóa; xuất hiện lại với tư thế chỉ trỏ → id mới, pose theo frame đầu.
+    tr.update([], 2, 200, W, H)
+    expect(tr.tracks).toHaveLength(0)
+    const fn = tr.update([fixtureDet(point, 'right', 640, 360)], 3, 233, W, H)
+    expect(fn.hands[0].id).toBeGreaterThan(2)
+    expect(raisedOf(fn.hands[0])).toEqual([8])
   })
 })

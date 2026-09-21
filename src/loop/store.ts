@@ -24,6 +24,8 @@ export type StageSettings = {
   handednessSwap: boolean
   /** ROI-03 (D-047, thay bốn slot của HAND-02): đầu ngón dùng cho mọi tay, đã sắp và bỏ trùng, không rỗng; đổi thì epoch++ và cửa sổ đang mở đóng với config-changed (UC-03). */
   fingers: FingerTip[]
+  /** ROI-04 (D-055): chỉ đầu ngón đang giơ tham gia vùng mở; đổi thì epoch++ và cửa sổ đang mở đóng với config-changed. */
+  raisedOnly: boolean
   /** ROI-01 (UC-09): độ nhạy (One Euro, hysteresis, nMin, tuổi điểm); áp dụng ngay, không đổi epoch. */
   sensitivity: Sensitivity
 }
@@ -65,6 +67,7 @@ export function createStageStore(
     windowSource: 'mouse',
     handednessSwap: DEFAULTS.hands.handednessSwap,
     fingers: [...DEFAULTS.hands.fingers],
+    raisedOnly: DEFAULTS.hands.raisedOnly,
     sensitivity: defaultSensitivity(),
     ...initial,
   }
@@ -110,9 +113,11 @@ export function createStageStore(
       const sens = clampSensitivity(next.sensitivity)
       const sensChanged = !sameSensitivity(sens, settings.sensitivity)
       next.sensitivity = sensChanged ? sens : settings.sensitivity
+      const raisedChanged = next.raisedOnly !== settings.raisedOnly
       const changed =
         geometry ||
         fingersChanged ||
+        raisedChanged ||
         sensChanged ||
         next.showLines !== settings.showLines ||
         next.windowSource !== settings.windowSource ||
@@ -123,7 +128,7 @@ export function createStageStore(
       if (geometry) {
         epoch.bump()
         layout = relayout()
-      } else if (fingersChanged || sourceChanged) {
+      } else if (fingersChanged || raisedChanged || sourceChanged) {
         epoch.bump()
       }
       emit()

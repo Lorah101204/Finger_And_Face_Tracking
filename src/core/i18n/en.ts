@@ -216,6 +216,9 @@ export const en: Strings = {
     stale: (n: number) => `${n} stale fingertip${n === 1 ? '' : 's'}`,
     lowScore: (n: number) => `${n} fingertip${n === 1 ? '' : 's'} with uncertain hand`,
     more: 'raise more fingers',
+    folded: (n: number) => `${n} folded fingertip${n === 1 ? '' : 's'}`,
+    allFolded: (minPoints: number, minHands: number) =>
+      `Every fingertip is folded: spread the fingers you want to use (at least ${minPoints} fingertips from ${minHands} hands are needed).`,
     summary: (valid: number, minPoints: number, minHands: number, parts: string) =>
       `Seeing ${valid} valid fingertip${valid === 1 ? '' : 's'}, need at least ${minPoints} from ${minHands} hands: ${parts}.`,
   },
@@ -252,6 +255,10 @@ export const en: Strings = {
       swap: 'Swap left/right',
       swapTitle: 'D-010: turn on if the real webcam labels the hands the wrong way round',
       swapHint: 'when the webcam labels the hands the wrong way round',
+      raisedOnly: 'Raised fingers only',
+      raisedOnlyTitle:
+        'ROI-04 (D-055): raised or folded is decided from landmark geometry; off means every selected fingertip takes part',
+      raisedOnlyHint: 'folded or hidden fingers do not take part in the region',
     },
     fingers: {
       title: 'Fingertips used',
@@ -347,6 +354,10 @@ export const en: Strings = {
       guideAuto: 'Auto-collapse',
       guideFull: 'Always full',
       guideHidden: 'Hidden',
+      logo: 'Logo on the cover',
+      logoAria: 'Logo on the cover',
+      logoHint:
+        'The campaign logo inlaid into the cells of the cover; hidden while a region is open.',
       guideHint:
         'Auto-collapse: the message shows in full when it changes, then shrinks to one line; camera errors always show in full.',
     },

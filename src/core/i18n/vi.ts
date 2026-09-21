@@ -210,6 +210,9 @@ export const vi = {
     stale: (n: number) => `${n} đầu ngón cũ`,
     lowScore: (n: number) => `${n} đầu ngón chưa rõ tay`,
     more: 'giơ thêm ngón',
+    folded: (n: number) => `${n} đầu ngón đang gập`,
+    allFolded: (minPoints: number, minHands: number) =>
+      `Mọi đầu ngón đang gập: xòe các ngón muốn dùng ra (cần ít nhất ${minPoints} đầu ngón của ${minHands} tay).`,
     summary: (valid: number, minPoints: number, minHands: number, parts: string) =>
       `Đang thấy ${valid} đầu ngón hợp lệ, cần ít nhất ${minPoints} của ${minHands} tay: ${parts}.`,
   },
@@ -246,6 +249,10 @@ export const vi = {
       swap: 'Đảo trái/phải',
       swapTitle: 'D-010: bật nếu webcam thật gán nhãn tay ngược',
       swapHint: 'khi webcam gán nhãn tay ngược',
+      raisedOnly: 'Chỉ ngón đang giơ',
+      raisedOnlyTitle:
+        'ROI-04 (D-055): ngón duỗi hay gập quyết định từ hình học landmark; tắt thì mọi đầu ngón đã chọn đều tham gia',
+      raisedOnlyHint: 'ngón gập hay bị che không tham gia vùng mở',
     },
     fingers: {
       title: 'Đầu ngón dùng',
@@ -341,6 +348,9 @@ export const vi = {
       guideAuto: 'Tự thu gọn',
       guideFull: 'Luôn đầy đủ',
       guideHidden: 'Ẩn',
+      logo: 'Logo trên màn che',
+      logoAria: 'Logo trên màn che',
+      logoHint: 'Logo chiến dịch khảm vào các ô của màn che; ẩn khi vùng mở.',
       guideHint:
         'Tự thu gọn: thông điệp hiện đầy đủ khi đổi rồi còn một dòng; lỗi camera luôn hiện đầy đủ.',
     },

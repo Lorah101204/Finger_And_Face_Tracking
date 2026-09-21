@@ -114,6 +114,19 @@ export function GridControls({ store }: { store: StageStore }) {
             <span className="hint">{w.swapHint}</span>
           </div>
         )}
+        {hands && (
+          <div className="acts">
+            <label className="check" title={w.raisedOnlyTitle}>
+              <input
+                type="checkbox"
+                checked={settings.raisedOnly}
+                onChange={(e) => store.setSettings({ raisedOnly: e.target.checked })}
+              />
+              {w.raisedOnly}
+            </label>
+            <span className="hint">{w.raisedOnlyHint}</span>
+          </div>
+        )}
       </section>
     </>
   )

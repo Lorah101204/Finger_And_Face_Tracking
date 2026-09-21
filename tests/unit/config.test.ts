@@ -46,3 +46,35 @@ describe('DEFAULTS', () => {
     expect(DEFAULTS.reveal.hysteresisCells).toBeLessThan(0.5)
   })
 })
+
+// ROI-04 (D-055): công tắc bật mặc định; ngưỡng gập thấp hơn ngưỡng duỗi (dải Schmitt); debounce ≥ 1 và ngắn hơn
+// tuổi điểm ở nhịp tay mục tiêu (3 frame ở 20 Hz = 150 ms).
+describe('hands.pose (ROI-04)', () => {
+  it('raisedOnly true; ngưỡng theo cặp thấp < cao; debounceFrames × 50 ms ≤ tuổi điểm', () => {
+    const p = DEFAULTS.hands.pose
+    expect(DEFAULTS.hands.raisedOnly).toBe(true)
+    expect(p.ratioFolded).toBeLessThan(p.ratioRaised)
+    expect(p.angleFolded).toBeLessThan(p.angleRaised)
+    expect(p.abductionFolded).toBeLessThan(p.abductionRaised)
+    expect(p.debounceFrames).toBeGreaterThanOrEqual(1)
+    expect(p.debounceFrames * 50).toBeLessThanOrEqual(DEFAULTS.freshness.pointMaxAgeMs)
+  })
+
+  it('BRAND-01: logo bật, 30 % bề rộng, neo góc, độ phủ ½, màu hợp lệ, hiện lại sau 800 ms', () => {
+    const b = DEFAULTS.brand.logo
+    expect(b.enabled).toBe(true)
+    expect(b.widthRatio).toBeGreaterThan(0)
+    expect(b.widthRatio).toBeLessThanOrEqual(1)
+    expect(b.maxHeightRatio).toBeGreaterThan(0)
+    expect(b.maxHeightRatio).toBeLessThanOrEqual(1)
+    expect(b.marginRatio).toBeGreaterThanOrEqual(0)
+    expect(b.marginRatio).toBeLessThan(0.5)
+    expect(['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center']).toContain(b.anchor)
+    expect(b.minCoverage).toBeGreaterThan(0)
+    expect(b.minCoverage).toBeLessThanOrEqual(1)
+    for (const c of [b.fill, b.text, b.verify]) expect(c).toMatch(/^#[0-9a-f]{6}$/i)
+    expect(b.fonts).toMatch(/^Heavitas,/)
+    expect(b.textLength).toBeGreaterThan(0)
+    expect(b.reappearMs).toBeGreaterThanOrEqual(0)
+  })
+})

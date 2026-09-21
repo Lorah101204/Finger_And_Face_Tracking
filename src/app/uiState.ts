@@ -2,7 +2,8 @@
 // của tab (khóa wct.ui): giữ qua lần tải lại trong cùng tab, không lan sang tab khác (kiosk, D-021). Thuần để unit
 // test trong Node: storage tiêm vào, giá trị hỏng hay storage bị chặn thì dùng mặc định. UX-03 (D-049) thêm `present`:
 // chế độ trình diễn (mọi panel là lớp nổi tự ẩn), mặc định theo tham số URL `mode=present`, giá trị đã lưu được ưu tiên.
-// UX-04 thêm `guide`: lớp hướng dẫn tự thu gọn (mặc định), luôn đầy đủ, hoặc ẩn.
+// UX-04 thêm `guide`: lớp hướng dẫn tự thu gọn (mặc định), luôn đầy đủ, hoặc ẩn. BRAND-01 thêm `logo`: logo khảm trên
+// màn che (mặc định theo DEFAULTS.brand.logo.enabled; `?logo=0|1` ghi đè lúc mở trang).
 export type GuideMode = 'auto' | 'full' | 'hidden'
 
 export const GUIDE_MODES: readonly GuideMode[] = ['auto', 'full', 'hidden']
@@ -12,6 +13,7 @@ export type UiState = {
   debugOpen: boolean
   present: boolean
   guide: GuideMode
+  logo: boolean
 }
 
 export const UI_KEY = 'wct.ui'
@@ -31,6 +33,7 @@ export function readUiState(storage: StorageLike | null, defaults: UiState): UiS
       debugOpen: typeof p.debugOpen === 'boolean' ? p.debugOpen : defaults.debugOpen,
       present: typeof p.present === 'boolean' ? p.present : defaults.present,
       guide: isGuideMode(p.guide) ? p.guide : defaults.guide,
+      logo: typeof p.logo === 'boolean' ? p.logo : defaults.logo,
     }
   } catch {
     return { ...defaults }

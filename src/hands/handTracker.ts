@@ -6,8 +6,11 @@
 // ngưỡng); nhãn ngược liên tiếp relabelFrames frame thì track đổi handedness nhưng giữ id. Xóa track cần cả hai: quá
 // trackDropMs kể từ lần thấy cuối và vắng trong ít nhất trackDropFrames lần cập nhật liên tiếp (pipeline chậm hơn
 // 150 ms mỗi frame không xóa track chỉ vì một lần bỏ lỡ; frame uncertain tính là một lần vắng). Thuần, unit test Node.
+// ROI-04 (D-055): mỗi track giữ `pose` (ngón duỗi/gập, hands/fingerPose.ts) qua các frame: cập nhật khi track được ghép
+// (frame uncertain không cập nhật vì landmark có thể của tay kia), track mới phân loại ngay, track xóa thì mất.
 import { DEFAULTS } from '../core/config'
-import type { HandFrame, HandTrack, Size } from '../core/types'
+import type { HandFrame, HandPose, HandTrack, Size } from '../core/types'
+import { classifyFingers, type FingerPoseOptions } from './fingerPose'
 import type { HandDetection } from './handLandmarker'
 
 export type HandTrackerOptions = {
@@ -17,6 +20,8 @@ export type HandTrackerOptions = {
   dropFrames?: number
   handednessPenalty?: number
   relabelFrames?: number
+  /** ROI-04: ngưỡng của fingerPose (mặc định DEFAULTS.hands.pose). */
+  pose?: FingerPoseOptions
 }
 
 export type HandTrackerStats = {
@@ -28,7 +33,7 @@ export type HandTrackerStats = {
   matched: number
 }
 
-type Internal = HandTrack & { mismatch: number; missed: number }
+type Internal = HandTrack & { mismatch: number; missed: number; pose: HandPose }
 type Pair = { t: number; d: number; cost: number }
 
 export class HandTracker {
@@ -38,6 +43,7 @@ export class HandTracker {
   #dropFrames: number
   #penalty: number
   #relabelFrames: number
+  #poseOpts: FingerPoseOptions
   #tracks: Internal[] = []
   #nextId = 1
   #size: Size | null = null
@@ -58,6 +64,7 @@ export class HandTracker {
     this.#dropFrames = opts.dropFrames ?? d.trackDropFrames
     this.#penalty = opts.handednessPenalty ?? d.handednessPenalty
     this.#relabelFrames = opts.relabelFrames ?? d.relabelFrames
+    this.#poseOpts = opts.pose ?? {}
   }
 
   get tracks(): readonly HandTrack[] {
@@ -126,10 +133,12 @@ export class HandTracker {
         palmCenterCam: { ...d.palmCenterCam },
         bboxCam: { ...d.bboxCam },
         landmarksCam: d.landmarksCam.map((p) => ({ ...p })),
+        ...(d.landmarksWorld ? { landmarksWorld: d.landmarksWorld.map((p) => ({ ...p })) } : {}),
         lastSeenTs: ts,
         frameId,
         mismatch: 0,
         missed: 0,
+        pose: classifyFingers(d.landmarksCam, d.landmarksWorld, null, this.#poseOpts),
       }
       this.#tracks.push(track)
       this.#stats.created++
@@ -180,6 +189,9 @@ export class HandTracker {
     t.palmCenterCam = { ...d.palmCenterCam }
     t.bboxCam = { ...d.bboxCam }
     t.landmarksCam = d.landmarksCam.map((p) => ({ ...p }))
+    if (d.landmarksWorld) t.landmarksWorld = d.landmarksWorld.map((p) => ({ ...p }))
+    else delete t.landmarksWorld
+    t.pose = classifyFingers(d.landmarksCam, d.landmarksWorld, t.pose, this.#poseOpts)
     t.lastSeenTs = ts
     t.frameId = frameId
   }
@@ -193,7 +205,13 @@ function strip(t: Internal): HandTrack {
     palmCenterCam: { ...t.palmCenterCam },
     bboxCam: { ...t.bboxCam },
     landmarksCam: t.landmarksCam.map((p) => ({ ...p })),
+    ...(t.landmarksWorld ? { landmarksWorld: t.landmarksWorld.map((p) => ({ ...p })) } : {}),
+    pose: clonePose(t.pose),
     lastSeenTs: t.lastSeenTs,
     frameId: t.frameId,
   }
+}
+
+function clonePose(p: HandPose): HandPose {
+  return { 4: { ...p[4] }, 8: { ...p[8] }, 12: { ...p[12] }, 16: { ...p[16] }, 20: { ...p[20] } }
 }

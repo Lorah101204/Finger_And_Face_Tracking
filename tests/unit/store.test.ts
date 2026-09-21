@@ -15,6 +15,7 @@ describe('createStageStore', () => {
       windowSource: 'mouse',
       handednessSwap: false,
       fingers: [4, 8, 12, 16, 20],
+      raisedOnly: true,
       sensitivity: {
         minCutoff: 1,
         beta: 0.02,
@@ -112,6 +113,22 @@ describe('createStageStore', () => {
     expect(calls).toBe(2)
     store.setCamSize(null)
     expect(store.getSnapshot().layout.cam).toEqual({ w: 1280, h: 720 })
+    expect(store.getSnapshot().epoch).toBe(e0 + 2)
+  })
+})
+
+// ROI-04 (mục 7.32): công tắc "Chỉ ngón đang giơ" là cấu hình như đầu ngón dùng: đổi thì epoch++, không đổi thì thôi.
+describe('raisedOnly (ROI-04)', () => {
+  it('mặc định bật; đổi thì epoch++; đặt lại cùng giá trị không đổi epoch', () => {
+    const store = createStageStore(createEpochCounter())
+    expect(store.getSnapshot().settings.raisedOnly).toBe(true)
+    const e0 = store.getSnapshot().epoch
+    store.setSettings({ raisedOnly: true })
+    expect(store.getSnapshot().epoch).toBe(e0)
+    store.setSettings({ raisedOnly: false })
+    expect(store.getSnapshot().settings.raisedOnly).toBe(false)
+    expect(store.getSnapshot().epoch).toBe(e0 + 1)
+    store.setSettings({ raisedOnly: true })
     expect(store.getSnapshot().epoch).toBe(e0 + 2)
   })
 })

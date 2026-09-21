@@ -214,6 +214,32 @@ describe('render', () => {
     expect(draw).toBeGreaterThan(0)
     expect(stroke).toBeGreaterThan(draw)
   })
+
+  // BRAND-01 (mục 7.33): lớp logo vẽ ngay sau nền trắng và trước vạch lưới (vạch đi xuyên khối); trước video; không
+  // có logo thì không thêm lời gọi nào.
+  it('logo: sau nền trắng, trước vạch lưới và video; null thì không vẽ', () => {
+    const s = new StubCtx()
+    const logo = {
+      version: 1,
+      draw(ctx: unknown, layout: unknown) {
+        expect(layout).toBe(L)
+        ;(ctx as StubCtx).calls.push('logo')
+        return true
+      },
+    }
+    render(ctxOf(s), L, { showLines: true, mirror: true, drawable: DRAWABLE, mask, logo })
+    expect(s.calls[0]).toBe('fillRect 0,0,1280,720')
+    expect(s.calls[1]).toBe('logo')
+    expect(s.calls[2]).toMatch(/^fillRect /)
+    expect(s.calls.filter((c) => c === 'logo')).toHaveLength(1)
+    expect(s.calls.findIndex((c) => c.startsWith('drawImage'))).toBeGreaterThan(2)
+    const plain = new StubCtx()
+    render(ctxOf(plain), L, { showLines: true, mirror: true, drawable: DRAWABLE, mask, logo: null })
+    expect(plain.calls).not.toContain('logo')
+    const noLines = new StubCtx()
+    render(ctxOf(noLines), L, { showLines: false, mirror: true, drawable: null, mask: null, logo })
+    expect(noLines.calls).toEqual(['fillRect 0,0,1280,720', 'logo'])
+  })
 })
 
 // HAND-01 bước 5: overlay tay vẽ trên nền trắng (fillRect, strokeRect, fillText), cả khi không có mask; sau viền.

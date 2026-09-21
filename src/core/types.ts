@@ -3,6 +3,8 @@
 // File này không được import gì từ camera/, hands/, mask/... để face/ và classify/ dùng được an toàn (bất biến I1).
 
 export type Point = { x: number; y: number }
+/** ROI-04: điểm 3D (world landmarks của MediaPipe, mét, gốc ở tâm hình học bàn tay). */
+export type Point3 = { x: number; y: number; z: number }
 export type Rect = { x: number; y: number; w: number; h: number }
 export type Size = { w: number; h: number }
 
@@ -133,6 +135,21 @@ export type Handedness = 'left' | 'right'
 /** Chỉ số landmark đầu ngón theo MediaPipe: cái 4, trỏ 8, giữa 12, áp út 16, út 20. */
 export type FingerTip = 4 | 8 | 12 | 16 | 20
 
+/**
+ * ROI-04 (D-055): ngón đang giơ hay gập theo hình học landmark (hands/fingerPose.ts), kèm độ đo để debug và hiệu chỉnh:
+ * ratio = |cổ tay→đầu| / |cổ tay→PIP|, angle = góc tại PIP (độ, null khi không có world landmarks), abduction = tỉ lệ dang
+ * của ngón cái, inPalm = đầu ngón nằm trong đa giác lòng bàn tay; streak = số frame liên tiếp bỏ phiếu phía kia (debounce).
+ */
+export type FingerPose = {
+  raised: boolean
+  ratio: number
+  angle: number | null
+  abduction: number | null
+  inPalm: boolean
+  streak: number
+}
+export type HandPose = Record<FingerTip, FingerPose>
+
 /** HAND-01: kết quả thô của hand.worker cho một frame gốc (nhãn Left/Right của model, chưa chuẩn hóa). */
 export type HandResult = {
   frameId: number
@@ -142,7 +159,13 @@ export type HandResult = {
   /** kích thước bitmap đã suy luận, px camera */
   width: number
   height: number
-  hands: { label: string; score: number; landmarksNorm: [number, number, number][] }[]
+  hands: {
+    label: string
+    score: number
+    landmarksNorm: [number, number, number][]
+    /** ROI-04: world landmarks (mét) khi worker gửi; thiếu thì fingerPose dùng tỉ lệ 2D. */
+    worldLandmarks?: [number, number, number][]
+  }[]
 }
 
 /** HAND-01: một tay đang được theo dõi với id ổn định; tọa độ px camera, chưa mirror. */
@@ -155,6 +178,10 @@ export type HandTrack = {
   bboxCam: Rect
   /** 21 landmark theo thứ tự MediaPipe */
   landmarksCam: Point[]
+  /** ROI-04: world landmarks (mét) khi có. */
+  landmarksWorld?: Point3[]
+  /** ROI-04: ngón duỗi/gập của track (tracker giữ qua các frame); thiếu thì mọi ngón coi là giơ. */
+  pose?: HandPose
   lastSeenTs: number
   frameId: number
 }
@@ -162,8 +189,12 @@ export type HandTrack = {
 /** HAND-01 bước 4: đầu ra mỗi frame của HandTracker; uncertain khi có hai phương án ghép gần nhau (giữ track cũ). */
 export type HandFrame = { frameId: number; ts: number; hands: HandTrack[]; uncertain: boolean }
 
-/** ROI-03: lý do một đầu ngón không hợp lệ (mục 5.8); low-score khi nhãn tay của track không đủ tin cậy. */
-export type FingerReason = 'stale-point' | 'out-of-board' | 'ambiguous-hands' | 'low-score'
+/**
+ * ROI-03: lý do một đầu ngón không hợp lệ (mục 5.8); low-score khi nhãn tay của track không đủ tin cậy. ROI-04: folded khi
+ * ngón đang gập hay bị che (chỉ khi settings.raisedOnly).
+ */
+export type FingerReason =
+  'stale-point' | 'out-of-board' | 'ambiguous-hands' | 'low-score' | 'folded'
 
 /** ROI-03: trạng thái một đầu ngón (một track × một ngón đã chọn) tại thời điểm render. */
 export type FingerStatus = {

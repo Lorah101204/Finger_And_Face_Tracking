@@ -10,7 +10,14 @@ import {
 // UX-01 (mục 7.20): trạng thái panel lưu trong storage của tab; giá trị hỏng, thiếu hay storage ném lỗi thì về mặc định.
 // UX-03 (mục 7.28): thêm `present` (chế độ trình diễn), bản ghi cũ thiếu trường thì lấy mặc định.
 // UX-04 (mục 7.30): thêm `guide` (auto, full, hidden); giá trị lạ về mặc định.
-const DEFAULTS: UiState = { settingsOpen: true, debugOpen: false, present: false, guide: 'auto' }
+// BRAND-01 (mục 7.33): thêm `logo` (boolean); bản ghi cũ thiếu trường hay sai kiểu thì lấy mặc định.
+const DEFAULTS: UiState = {
+  settingsOpen: true,
+  debugOpen: false,
+  present: false,
+  guide: 'auto',
+  logo: true,
+}
 
 function memory(
   initial: Record<string, string> = {},
@@ -28,18 +35,26 @@ function memory(
 describe('uiState', () => {
   it('ghi rồi đọc lại đúng; thiếu khóa hay storage null thì mặc định (bản sao)', () => {
     const s = memory()
-    writeUiState(s, { settingsOpen: false, debugOpen: true, present: true, guide: 'hidden' })
+    writeUiState(s, {
+      settingsOpen: false,
+      debugOpen: true,
+      present: true,
+      guide: 'hidden',
+      logo: false,
+    })
     expect(JSON.parse(s.data[UI_KEY])).toEqual({
       settingsOpen: false,
       debugOpen: true,
       present: true,
       guide: 'hidden',
+      logo: false,
     })
     expect(readUiState(s, DEFAULTS)).toEqual({
       settingsOpen: false,
       debugOpen: true,
       present: true,
       guide: 'hidden',
+      logo: false,
     })
     expect(readUiState(memory(), DEFAULTS)).toEqual(DEFAULTS)
     expect(readUiState(memory(), DEFAULTS)).not.toBe(DEFAULTS)
@@ -56,7 +71,14 @@ describe('uiState', () => {
         memory({ [UI_KEY]: JSON.stringify({ settingsOpen: 'yes', debugOpen: true }) }),
         DEFAULTS,
       ),
-    ).toEqual({ settingsOpen: true, debugOpen: true, present: false, guide: 'auto' })
+    ).toEqual({ settingsOpen: true, debugOpen: true, present: false, guide: 'auto', logo: true })
+    // BRAND-01: logo sai kiểu về mặc định.
+    expect(readUiState(memory({ [UI_KEY]: JSON.stringify({ logo: 'off' }) }), DEFAULTS).logo).toBe(
+      true,
+    )
+    expect(readUiState(memory({ [UI_KEY]: JSON.stringify({ logo: false }) }), DEFAULTS).logo).toBe(
+      false,
+    )
     // UX-04: guide lạ về mặc định, giá trị hợp lệ giữ nguyên.
     expect(
       readUiState(memory({ [UI_KEY]: JSON.stringify({ guide: 'big' }) }), DEFAULTS).guide,
@@ -70,7 +92,7 @@ describe('uiState', () => {
         ...DEFAULTS,
         present: true,
       }),
-    ).toEqual({ settingsOpen: false, debugOpen: false, present: true, guide: 'auto' })
+    ).toEqual({ settingsOpen: false, debugOpen: false, present: true, guide: 'auto', logo: true })
   })
 
   it('storage ném lỗi (bị chặn) thì đọc về mặc định và ghi không ném', () => {

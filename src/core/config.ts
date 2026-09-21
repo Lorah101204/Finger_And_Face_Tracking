@@ -64,6 +64,22 @@ export const DEFAULTS = {
     warmupSize: 256,
     /** HAND-02, ROI-03: điểm nhãn tay tối thiểu để đầu ngón của track hợp lệ (track score theo tay đã gán). */
     minTrackScore: 0.5,
+    /** ROI-04 (D-055): chỉ đầu ngón đang giơ (theo hình học landmark) tham gia vùng mở; tắt thì như ROI-03. */
+    raisedOnly: true,
+    /**
+     * ROI-04 (D-055): ngưỡng duỗi/gập (tools/probe-fingers.mjs, 2026-09-21, ảnh spike: duỗi tỉ lệ 1,19–1,34 và góc PIP
+     * 144–175°, gập 0,61–0,83 và 74–104°; ngón cái dang 0,92–1,18 duỗi, 0,75 gập). Dải giữa hai ngưỡng giữ trạng thái
+     * cũ; đổi trạng thái cần debounceFrames HandFrame liên tiếp. Tạm thời tới khi hiệu chỉnh với webcam (R-02).
+     */
+    pose: {
+      ratioRaised: 1.05,
+      ratioFolded: 0.9,
+      angleRaised: 135,
+      angleFolded: 120,
+      abductionRaised: 1.0,
+      abductionFolded: 0.85,
+      debounceFrames: 3,
+    },
     /**
      * D-045 (QA-02): `auto` = GPU khi WebGL chạy trên phần cứng (RTX 3050: 29 Hz so với CPU 11 Hz), CPU khi renderer
      * là phần mềm như SwiftShader của headless (GPU 2 Hz so với CPU 9,5 Hz) hay thiếu WebGL; `hands/handDelegate.ts`
@@ -129,6 +145,30 @@ export const DEFAULTS = {
     labelMaxAgeMs: 1500,
     /** Mặt partial mà phần landmark còn trong vùng mở dưới mức này thì unknown. */
     partialMinVisible: 0.6,
+  },
+  /**
+   * BRAND-01 (D-056): logo chiến dịch khảm vào màn che (core/brandLogo.ts, mask/logoLayer.ts). Rect logo theo bảng,
+   * không theo số ô; ô logo khi ≥ minCoverage diện tích nằm dưới hợp ba khung; khối đặc `fill` với chữ `text` và
+   * "VERIFY:" `verify` (SVG gốc: navy #1f3566, xanh lá #99b43e); ẩn khi vùng mở, hiện lại reappearMs sau lần đóng gần
+   * nhất. `enabled` là mặc định của công tắc "Logo trên màn che" (ui.logo, ?logo=0|1).
+   */
+  brand: {
+    logo: {
+      enabled: true,
+      widthRatio: 0.3,
+      maxHeightRatio: 0.6,
+      marginRatio: 0.025,
+      anchor: 'top-left' as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center',
+      minCoverage: 0.5,
+      fill: '#1f3566',
+      text: '#ffffff',
+      verify: '#99b43e',
+      /** Dòng "AI ETHIC CAMPAIGN" trong SVG gốc là chữ sống font Heavitas; máy không có font thì dùng dự phòng. */
+      fonts: "Heavitas, 'Arial Black', 'Segoe UI Black', sans-serif",
+      /** Bề rộng dòng chữ trong đơn vị viewBox (bản xuất raster: x 330 → 598); font dự phòng bị ép vào bề rộng này. */
+      textLength: 268,
+      reappearMs: 800,
+    },
   },
 } as const
 

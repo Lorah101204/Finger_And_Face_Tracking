@@ -6,7 +6,7 @@
 import { DEFAULTS } from '../core/config'
 import { PALM_INDEX } from '../core/handLandmarks'
 import { bboxOfPoints } from '../core/rect'
-import type { HandResult, Handedness, Point, Rect } from '../core/types'
+import type { HandResult, Handedness, Point, Point3, Rect } from '../core/types'
 
 export { FINGER_TIPS, HAND_LANDMARKS, PALM_INDEX, TIP_INDEX } from '../core/handLandmarks'
 
@@ -15,6 +15,8 @@ export type HandDetection = {
   /** điểm của nhãn model cho tay này */
   score: number
   landmarksCam: Point[]
+  /** ROI-04: world landmarks (mét) khi worker gửi đủ 21 điểm. */
+  landmarksWorld?: Point3[]
   palmCenterCam: Point
   bboxCam: Rect
 }
@@ -71,10 +73,16 @@ export function resultToDetections(
     }))
     const bboxCam = bboxOfPoints(landmarksCam)
     if (!bboxCam) continue
+    const world = h.worldLandmarks
+    const landmarksWorld =
+      world && world.length === landmarksCam.length
+        ? world.map(([x, y, z]) => ({ x, y, z }))
+        : undefined
     out.push({
       handedness,
       score: h.score,
       landmarksCam,
+      ...(landmarksWorld ? { landmarksWorld } : {}),
       palmCenterCam: palmCenter(landmarksCam),
       bboxCam,
     })

@@ -21,6 +21,8 @@ export type HandWindowContext = {
   /** Số tay tối thiểu (mặc định hands.minHands). */
   minHands?: number
   sensitivity?: Sensitivity
+  /** ROI-04: chỉ ngón đang giơ (mặc định hands.raisedOnly). */
+  raisedOnly?: boolean
 }
 
 export type HandWindowOptions = {
@@ -54,6 +56,7 @@ export class HandWindowSource implements WindowSource {
   #lastLayout: Layout | null = null
   #lastMirror: boolean | null = null
   #lastFingers: readonly FingerTip[] | null = null
+  #lastRaisedOnly: boolean | null = null
   #measure: HullMeasure | null = null
   #lastReason: CloseReason | null = null
   #solves = 0
@@ -69,16 +72,22 @@ export class HandWindowSource implements WindowSource {
     const { layout, mirror, fingers: configs } = ctx
     const sens = ctx.sensitivity ?? defaultSensitivity()
     const minHands = ctx.minHands ?? DEFAULTS.hands.minHands
+    const raisedOnly = ctx.raisedOnly ?? DEFAULTS.hands.raisedOnly
     const changed =
       this.#lastLayout !== null &&
-      (layout !== this.#lastLayout || mirror !== this.#lastMirror || configs !== this.#lastFingers)
+      (layout !== this.#lastLayout ||
+        mirror !== this.#lastMirror ||
+        configs !== this.#lastFingers ||
+        raisedOnly !== this.#lastRaisedOnly)
     this.#lastLayout = layout
     this.#lastMirror = mirror
     this.#lastFingers = configs
+    this.#lastRaisedOnly = raisedOnly
     if (changed) this.#reset()
     const frame = this.#latest()
     const fingers = evaluateFingertips(frame, configs, layout, mirror, now, {
       maxAgeMs: sens.pointMaxAgeMs,
+      raisedOnly,
     })
     const reason = fingertipsCloseReason(fingers, { minHands })
     if (!frame || reason !== null) {

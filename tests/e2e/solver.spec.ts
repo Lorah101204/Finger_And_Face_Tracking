@@ -386,3 +386,108 @@ test('năm đầu ngón mỗi tay (mặc định): vùng mở là bao lồi củ
   await setFakeHands(page, null)
   await expectGateClean(page)
 })
+
+test('chỉ ngón đang giơ (ROI-04): trái 3 ngón, phải 2 ngón → bao lồi 5 điểm khớp tính lại trong Node, 5 điểm folded; gập thêm một ngón thì thu lại cùng epoch; nắm một tay thì few-points nêu số ngón gập; tắt công tắc thì về 10 điểm với epoch mới', async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  const st = await openHands(page, null)
+  const L = st.layout as Layout
+  expect(st.settings.raisedOnly).toBe(true)
+  await expect(page.getByLabel('Chỉ ngón đang giơ')).toBeChecked()
+  const base = handsAtCell(L, 32, 18, 8.2)
+  // Trái: cái, trỏ, giữa; phải: cái, trỏ → năm đỉnh (hai ngón cái là hai đỉnh dưới, ba đầu ngón trên).
+  const spec = {
+    ...base,
+    left: { ...base.left!, raised: [4, 8, 12] as (4 | 8 | 12)[] },
+    right: { ...base.right!, raised: [4, 8] as (4 | 8)[] },
+  }
+  await setFakeHands(page, spec)
+  await expect
+    .poll(async () => (await readLoop(page)).reveal.kind, { timeout: 15_000 })
+    .toBe('open')
+  const l = await readLoop(page)
+  expect(l.output.points).toHaveLength(10)
+  const valid = l.output.points.filter((p) => p.valid)
+  expect(valid.map((p) => `${p.hand}:${p.tip}`).sort()).toEqual(
+    ['left:4', 'left:8', 'left:12', 'right:4', 'right:8'].sort(),
+  )
+  expect(l.output.points.filter((p) => p.reason === 'folded')).toHaveLength(5)
+  // Tính lại trong Node: cùng tay giả → chỉ đầu ngón đang giơ → bao lồi → tập ô.
+  const frame = fakeHandFrame(spec, 1000, 1)
+  const fingers = evaluateFingertips(frame, [4, 8, 12, 16, 20], L, st.settings.mirror, 1000)
+  const raised = fingers.filter((f) => f.valid)
+  expect(raised).toHaveLength(5)
+  const hull = convexHull(raised.map((f) => f.pStage))
+  const cells = rasterizePolygon(hull, L, {
+    hysteresisCells: st.settings.sensitivity.hysteresisCells,
+  })
+  expect(hull).toHaveLength(5)
+  expect(l.mask!.shape.polygonStage).toHaveLength(5)
+  expect(l.mask!.box).toEqual(cells.box)
+  expect(l.mask!.cellCount).toBe(cells.cellCount)
+  const key = (c: { col: number; row: number }) => `${c.col},${c.row}`
+  expect(new Set(l.output.reveal!.cells.map(key))).toEqual(new Set(listCells(cells).map(key)))
+  await expect(page.getByTestId('fingers-stat')).toHaveText(
+    /trái 3\/5 \(2 folded\) · phải 2\/5 \(3 folded\)/,
+  )
+  note(
+    `3 + 2 ngón giơ: bao lồi ${hull.length} đỉnh, ${cells.cellCount} ô, hộp ${cells.box.w}×${cells.box.h}`,
+  )
+
+  // Gập ngón cái phải (một đỉnh dưới của bao lồi): 4 điểm, bao lồi mất góc dưới phải nên ít ô hơn; epoch giữ nguyên
+  // (chỉ là điểm rời bao lồi, không phải đổi cấu hình).
+  const e0 = l.epoch
+  await setFakeHands(page, { ...spec, right: { ...spec.right, raised: [8] } })
+  await expect
+    .poll(async () => (await readLoop(page)).output.points.filter((p) => p.valid).length)
+    .toBe(4)
+  const l2 = await readLoop(page)
+  expect(l2.reveal.kind).toBe('open')
+  expect(l2.epoch).toBe(e0)
+  expect(l2.mask!.shape.polygonStage).toHaveLength(4)
+  expect(l2.mask!.cellCount).toBeLessThan(l.mask!.cellCount)
+
+  // Nắm tay phải: chỉ còn một tay có điểm → few-points, hướng dẫn nêu số ngón gập (2 trái + 5 phải).
+  await setFakeHands(page, { ...spec, right: { ...spec.right, raised: [] } })
+  await expect
+    .poll(async () => (await readLoop(page)).reveal)
+    .toEqual({ kind: 'closed', reason: 'few-points' })
+  await expect(page.getByTestId('guide-detail')).toHaveText(/7 đầu ngón đang gập/)
+  await expectCanvasWhite(page)
+
+  // Tắt công tắc (kịch bản): cấu hình đổi → epoch++; mọi đầu ngón đã chọn tham gia (kể cả ngón gập ở lòng bàn tay).
+  await page.evaluate(() => window.__scenario!.run('raisedOnly', 0))
+  await expect.poll(async () => (await readStage(page)).settings.raisedOnly).toBe(false)
+  await expect(page.getByLabel('Chỉ ngón đang giơ')).not.toBeChecked()
+  await expect
+    .poll(async () => (await readLoop(page)).output.points.filter((p) => p.valid).length, {
+      timeout: 10_000,
+    })
+    .toBe(10)
+  const l3 = await readLoop(page)
+  expect(l3.epoch).toBeGreaterThan(e0)
+  expect(l3.reveal.kind).toBe('open')
+  const spec3 = { ...spec, right: { ...spec.right, raised: [] as 4[] } }
+  const all = evaluateFingertips(
+    fakeHandFrame(spec3, 1000, 1),
+    [4, 8, 12, 16, 20],
+    L,
+    st.settings.mirror,
+    1000,
+    { raisedOnly: false },
+  )
+  const cells3 = rasterizePolygon(convexHull(all.map((f) => f.pStage)), L, {
+    hysteresisCells: st.settings.sensitivity.hysteresisCells,
+  })
+  expect(l3.mask!.box).toEqual(cells3.box)
+  expect(l3.mask!.cellCount).toBe(cells3.cellCount)
+  // Bật lại bằng công tắc trong cột cài đặt: epoch++ lần nữa, đóng config-changed rồi lại few-points (tay phải nắm).
+  await page.getByLabel('Chỉ ngón đang giơ').check()
+  await expect.poll(async () => (await readStage(page)).settings.raisedOnly).toBe(true)
+  await expect
+    .poll(async () => (await readLoop(page)).reveal)
+    .toEqual({ kind: 'closed', reason: 'few-points' })
+  expect((await readLoop(page)).epoch).toBeGreaterThan(l3.epoch)
+  await expectGateClean(page)
+})

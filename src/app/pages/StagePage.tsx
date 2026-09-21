@@ -14,6 +14,7 @@ import { installClassifierProbe } from '../../debug/classifierProbe'
 import { installEnvProbe, readWebgl } from '../../debug/envProbe'
 import { documentWarmList, warmServiceWorker } from '../registerSw'
 import { installLogProbe } from '../../debug/logProbe'
+import { installLogoProbe } from '../../debug/logoProbe'
 import { openIdbLogStore } from '../../log/idbStore'
 import {
   createLocalLog,
@@ -46,6 +47,8 @@ import { createStageStore } from '../../loop/store'
 import { HandClient } from '../../hands/handClient'
 import { createHandPipeline } from '../../hands/handPipeline'
 import { paintBackground } from '../../mask/compositor'
+import { LogoLayer } from '../../mask/logoLayer'
+import logoSvg from '../../assets/logo-verify-human.svg?raw'
 import { createRestrictedFrameBuilder } from '../../mask/restrictedFrame'
 import { HandWindowSource } from '../../reveal/handWindowSource'
 import { MouseWindowSource } from '../../reveal/mouseWindowSource'
@@ -115,6 +118,8 @@ export function StagePage() {
   const forceWasm = searchParams.get('ep') === 'wasm'
   // UX-03: `mode=present` mở sẵn chế độ trình diễn (kiosk); giá trị đã lưu trong tab được ưu tiên như debugOpen.
   const presentParam = searchParams.get('mode') === 'present'
+  // BRAND-01: `logo=0|1` đè công tắc "Logo trên màn che" cho lần mở này (link kiosk, e2e); không có thì giá trị đã lưu.
+  const logoParam = searchParams.get('logo')
   const [runtime] = useState(() => {
     const epoch = createEpochCounter()
     // D-045: delegate tay theo renderer WebGL; tuổi điểm mặc định theo delegate (CPU chậm hơn nên tuổi lớn hơn).
@@ -164,10 +169,13 @@ export function StagePage() {
           fingers: s.settings.fingers,
           minHands: DEFAULTS.hands.minHands,
           sensitivity: s.settings.sensitivity,
+          raisedOnly: s.settings.raisedOnly,
         }
       },
       latest: () => hands.latest,
     })
+    // BRAND-01: lớp logo dựng từ SVG bundle (?raw: chuỗi trong bundle, không tải gì); công tắc ui.logo đặt vào lớp.
+    const logo = new LogoLayer(logoSvg, { ...DEFAULTS.brand.logo, wordmark: true })
     const loop = createFrameLoop({
       store,
       epoch,
@@ -180,6 +188,7 @@ export function StagePage() {
       classifier,
       gate: synthetic ? visibilityGate() : cameraGate(camera),
       lang: () => langStore.get(),
+      logo: () => (logo.enabled ? logo : null),
     })
     // PERF-01: sampler 4 Hz đọc bộ đếm của vòng lặp, FaceClient và hand pipeline; panel debug và window.__wct.stats.
     const stats = createStats({
@@ -236,6 +245,7 @@ export function StagePage() {
       handDelegate,
       localLog,
       logStore,
+      logo,
     }
   })
   const {
@@ -256,18 +266,26 @@ export function StagePage() {
     handDelegate,
     localLog,
     logStore,
+    logo,
   } = runtime
   const snap = useSyncExternalStore(camera.subscribe, camera.getSnapshot)
   const stage = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const [selected, setSelected] = useState('')
   const lang = useLang()
   const s = useStrings()
-  const [ui, setUi] = useUiState({
-    settingsOpen: !presentParam,
-    debugOpen: debug,
-    present: presentParam,
-    guide: 'auto',
-  })
+  const [ui, setUi] = useUiState(
+    {
+      settingsOpen: !presentParam,
+      debugOpen: debug,
+      present: presentParam,
+      guide: 'auto',
+      logo: DEFAULTS.brand.logo.enabled,
+    },
+    logoParam === null ? undefined : { logo: logoParam !== '0' },
+  )
+  useEffect(() => {
+    logo.setEnabled(ui.logo)
+  }, [ui.logo, logo])
   const fs = useFullscreen(rootRef)
   // Chế độ lớp phủ: toàn màn hình hoặc trình diễn; không tương tác thì ẩn lớp nổi (canvas không đổi cỡ, D-041).
   const overlay = fs.active || ui.present
@@ -281,16 +299,18 @@ export function StagePage() {
 
   useStageCanvas(canvasRef, store)
 
-  // Vẽ ngay khi layout hoặc cài đặt vạch đổi, không chờ rAF (frameLoop vẽ lại mỗi frame khi chạy).
+  // Vẽ ngay khi layout hoặc cài đặt vạch đổi, không chờ rAF (frameLoop vẽ lại mỗi frame khi chạy); vòng lặp quyết
+  // định logo hiện hay ẩn ở frame kế (BRAND-01).
   useEffect(() => {
     const ctx = canvasRef.current?.getContext('2d')
     if (!ctx) return
-    paintBackground(ctx, stage.layout, stage.settings.showLines)
-  }, [stage.layout, stage.settings.showLines])
+    paintBackground(ctx, stage.layout, stage.settings.showLines, ui.logo ? logo : null)
+  }, [stage.layout, stage.settings.showLines, ui.logo, logo])
 
   useEffect(() => {
     const uninstallCamera = installCameraProbe(camera, camera.getSnapshot)
     const uninstallStage = installStageProbe(store)
+    const uninstallLogo = installLogoProbe(logo, store, loop)
     const uninstallLoop = installLoopProbe(loop)
     const uninstallFace = installFaceProbe(face)
     const uninstallHands = installHandProbe(hands)
@@ -391,7 +411,15 @@ export function StagePage() {
     }
     let uninstallDebug = () => {}
     if (probes.enabled) {
-      const uninstallScenarios = installScenarios({ mouse, store, synthetic, probes, hands })
+      const uninstallScenarios = installScenarios({
+        mouse,
+        store,
+        synthetic,
+        probes,
+        hands,
+        logo,
+        setLogo: (on) => setUi({ logo: on }),
+      })
       const g = wct()
       g.probes = probes
       uninstallDebug = () => {
@@ -413,6 +441,7 @@ export function StagePage() {
       offHist()
       uninstallCamera()
       uninstallStage()
+      uninstallLogo()
       uninstallLoop()
       camera.dispose()
       restricted.dispose()
@@ -448,6 +477,8 @@ export function StagePage() {
     classifier,
     localLog,
     logStore,
+    logo,
+    setUi,
   ])
 
   const active = status === 'active'
@@ -658,6 +689,7 @@ export function StagePage() {
             stats={stats}
             probes={probes}
             classifier={classifier}
+            logo={logo}
           />
         </div>
         <SettingsPanel

@@ -6,6 +6,8 @@ import { describeEnv, readEnv } from '../debug/envProbe'
 import { cameraCloseReason } from '../camera/cameraState'
 import { describeFace } from '../debug/faceProbe'
 import { describeHands } from '../debug/handProbe'
+import { describeLogo, readLogo } from '../debug/logoProbe'
+import type { LogoLayer } from '../mask/logoLayer'
 import type { Probes } from '../debug/probes'
 import { describeStats, type Stats } from '../debug/stats'
 import type { FaceClient } from '../face/faceClient'
@@ -41,6 +43,8 @@ export type DebugPanelProps = {
   probes: Probes
   /** CLS-02: dòng phân loại. */
   classifier?: ClassifierClient
+  /** BRAND-01: lớp logo cho dòng logo-stat. */
+  logo?: LogoLayer
 }
 
 export function DebugPanel({
@@ -55,6 +59,7 @@ export function DebugPanel({
   stats,
   probes,
   classifier,
+  logo,
 }: DebugPanelProps) {
   const thumbRef = useRef<HTMLCanvasElement>(null)
   // QA-02: môi trường không đổi trong đời trang, đọc một lần (tạo context WebGL để lấy renderer).
@@ -77,6 +82,11 @@ export function DebugPanel({
   })
   const fingersText = useSyncExternalStore(subscribeTick, () =>
     describeFingertips(loop.snapshot().fingers),
+  )
+  const logoText = useSyncExternalStore(subscribeTick, () =>
+    logo
+      ? describeLogo(readLogo(logo, store.getSnapshot().layout, loop.snapshot().logoVisible))
+      : 'logo: không có',
   )
   const statsText = useSyncExternalStore(stats.subscribe, () => describeStats(stats.snapshot()))
   const classifierText = useSyncExternalStore(subscribeTick, () =>
@@ -145,6 +155,9 @@ export function DebugPanel({
           </span>
           <span className="stat" data-testid="solver-stat">
             {solverText}
+          </span>
+          <span className="stat" data-testid="logo-stat">
+            {logoText}
           </span>
           <span className="stat" data-testid="env-stat">
             {envText}

@@ -4,6 +4,8 @@
 // uncertain, điểm trong bảng, tuổi (now − lần thấy cuối của track) ≤ tuổi điểm và score đủ. Điểm không hợp lệ chỉ bị
 // loại khỏi bao lồi; vùng đóng khi không còn đủ minPoints điểm hợp lệ của đủ minHands tay (mục 5.8). Thuần, unit test
 // trong Node; HandWindowSource và vòng lặp dùng chung.
+// ROI-04 (D-055): với raisedOnly (mặc định), đầu ngón của ngón đang gập theo track.pose (fingerPose.ts) là `folded`: bị
+// loại như điểm cũ, tính là thiếu (few-points) khi không đủ điểm; hướng dẫn nêu số ngón gập.
 import { DEFAULTS } from '../core/config'
 import { DEFAULT_LANG, t, type Lang } from '../core/i18n'
 import { cameraToStage, pointInBoard, type Layout } from '../core/coords'
@@ -22,6 +24,8 @@ export type FingertipOptions = {
   maxAgeMs?: number
   /** mặc định hands.minTrackScore */
   minScore?: number
+  /** ROI-04: chỉ ngón đang giơ (mặc định hands.raisedOnly); false thì như ROI-03. */
+  raisedOnly?: boolean
 }
 
 export type HullRequirement = {
@@ -60,6 +64,7 @@ export function evaluateFingertips(
   if (!frame) return []
   const maxAge = opts.maxAgeMs ?? DEFAULTS.freshness.pointMaxAgeMs
   const minScore = opts.minScore ?? DEFAULTS.hands.minTrackScore
+  const raisedOnly = opts.raisedOnly ?? DEFAULTS.hands.raisedOnly
   const out: FingerStatus[] = []
   for (const track of frame.hands) {
     for (const tip of fingers) {
@@ -82,6 +87,8 @@ export function evaluateFingertips(
       if (frame.uncertain) out.push({ ...base, reason: 'ambiguous-hands' })
       else if (!pointInBoard(pStage, layout)) out.push({ ...base, reason: 'out-of-board' })
       else if (ageMs > maxAge) out.push({ ...base, reason: 'stale-point' })
+      else if (raisedOnly && track.pose && !track.pose[tip].raised)
+        out.push({ ...base, reason: 'folded' })
       else if (track.score < minScore) out.push({ ...base, reason: 'low-score' })
       else out.push({ ...base, valid: true })
     }
@@ -100,12 +107,12 @@ export function validPoints(statuses: readonly FingerStatus[]): FingerStatus[] {
   return statuses.filter((s) => s.valid)
 }
 
-const REASON_ORDER: readonly FingerReason[] = ['out-of-board', 'stale-point', 'low-score']
+const REASON_ORDER: readonly FingerReason[] = ['out-of-board', 'stale-point', 'folded', 'low-score']
 
 /**
  * Lý do đóng theo ưu tiên của mục 5.8; null khi đủ minPoints điểm hợp lệ của đủ minHands tay. Chưa đủ: lý do trội
- * trong các điểm không hợp lệ (ngoài bảng > cũ > chưa rõ tay, chưa rõ tay tính như thiếu); mọi điểm đều hợp lệ mà vẫn
- * thiếu (thiếu tay, chọn ít ngón) hay không thấy tay nào → few-points.
+ * trong các điểm không hợp lệ (ngoài bảng > cũ > gập > chưa rõ tay; gập và chưa rõ tay tính như thiếu); mọi điểm đều
+ * hợp lệ mà vẫn thiếu (thiếu tay, chọn ít ngón) hay không thấy tay nào → few-points.
  */
 export function fingertipsCloseReason(
   statuses: readonly FingerStatus[],
@@ -125,7 +132,7 @@ export function fingertipsCloseReason(
       bestN = n
     }
   }
-  if (best === null || best === 'low-score') return 'few-points'
+  if (best === null || best === 'low-score' || best === 'folded') return 'few-points'
   return best
 }
 
@@ -166,6 +173,10 @@ export function fingertipsGuidance(
   if (stale) parts.push(f.stale(stale))
   const low = count('low-score')
   if (low) parts.push(f.lowScore(low))
+  const folded = count('folded')
+  // ROI-04: mọi điểm đang thấy đều gập → câu riêng bảo xòe ngón; có ngón gập thì nêu số.
+  if (folded && folded === statuses.length) return f.allFolded(minPoints, minHands)
+  if (folded) parts.push(f.folded(folded))
   if (parts.length === 0) parts.push(f.more)
   return f.summary(valid.length, minPoints, minHands, parts.join('; '))
 }

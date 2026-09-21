@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULTS } from '../../src/core/config'
 import { cameraToStage, computeLayout } from '../../src/core/coords'
-import type { FingerTip, HandFrame, HandTrack } from '../../src/core/types'
+import type { FingerPose, FingerTip, HandFrame, HandPose, HandTrack } from '../../src/core/types'
 import {
   describeFingertips,
   evaluateFingertips,
@@ -189,5 +189,92 @@ describe('evaluateFingertips', () => {
     expect(describeFingertips([])).toBe('')
     expect(validPoints(st)).toHaveLength(2)
     expect(DEFAULTS.hands.fingers).toEqual(ALL)
+  })
+})
+
+// ROI-04 (mục 7.32, D-055): ngón gập theo track.pose là `folded`, bị loại như điểm cũ; thiếu điểm vì gập → few-points;
+// hướng dẫn nêu số ngón gập; raisedOnly false thì như ROI-03; không có pose thì mọi ngón coi là giơ.
+function poseOf(raised: FingerTip[]): HandPose {
+  const one = (t: FingerTip): FingerPose => ({
+    raised: raised.includes(t),
+    ratio: raised.includes(t) ? 1.3 : 0.6,
+    angle: null,
+    abduction: null,
+    inPalm: !raised.includes(t),
+    streak: 0,
+  })
+  return { 4: one(4), 8: one(8), 12: one(12), 16: one(16), 20: one(20) }
+}
+
+describe('folded (ROI-04)', () => {
+  it('ngón gập là folded và bị loại; ngón giơ hợp lệ; raisedOnly false thì mọi ngón hợp lệ; không có pose thì như giơ', () => {
+    const left = { ...LEFT, pose: poseOf([4, 8, 12]) }
+    const right = { ...RIGHT, pose: poseOf([8, 12]) }
+    const out = evaluateFingertips(frame([left, right]), ALL, L, true, 1000)
+    expect(out).toHaveLength(10)
+    expect(validPoints(out).map((s) => `${s.hand}:${s.tip}`)).toEqual([
+      'left:4',
+      'left:8',
+      'left:12',
+      'right:8',
+      'right:12',
+    ])
+    expect(out.filter((s) => s.reason === 'folded').map((s) => `${s.hand}:${s.tip}`)).toEqual([
+      'left:16',
+      'left:20',
+      'right:4',
+      'right:16',
+      'right:20',
+    ])
+    expect(fingertipsCloseReason(out)).toBeNull()
+    expect(describeFingertips(out)).toBe('trái 3/5 (2 folded) · phải 2/5 (3 folded)')
+    const all = evaluateFingertips(frame([left, right]), ALL, L, true, 1000, { raisedOnly: false })
+    expect(validPoints(all)).toHaveLength(10)
+    expect(validPoints(evaluateFingertips(frame([LEFT, RIGHT]), ALL, L, true, 1000))).toHaveLength(
+      10,
+    )
+  })
+
+  it('cũ và ngoài bảng đứng trước gập; gập tính là thiếu (few-points) với hướng dẫn nêu số ngón gập; mọi ngón gập thì bảo xòe ngón', () => {
+    const left = { ...LEFT, pose: poseOf([8]) }
+    const right = { ...RIGHT, pose: poseOf([8]) }
+    const out = evaluateFingertips(frame([left, right]), ALL, L, true, 1000)
+    expect(validPoints(out)).toHaveLength(2)
+    expect(fingertipsCloseReason(out)).toBe('few-points')
+    expect(fingertipsGuidance(out)).toBe(
+      'Đang thấy 2 đầu ngón hợp lệ, cần ít nhất 3 của 2 tay: 8 đầu ngón đang gập.',
+    )
+    expect(fingertipsGuidance(out, {}, 'en')).toBe(
+      'Seeing 2 valid fingertips, need at least 3 from 2 hands: 8 folded fingertips.',
+    )
+    // Điểm cũ đứng trước gập: track cũ 300 ms → mọi điểm stale-point, không còn folded.
+    const stale = evaluateFingertips(
+      frame([{ ...left, lastSeenTs: 700 }, right]),
+      ALL,
+      L,
+      true,
+      1000,
+    )
+    expect(stale.filter((s) => s.hand === 'left').every((s) => s.reason === 'stale-point')).toBe(
+      true,
+    )
+    expect(fingertipsCloseReason(stale)).toBe('stale-point')
+    // Mọi ngón gập: câu riêng.
+    const fists = evaluateFingertips(
+      frame([
+        { ...LEFT, pose: poseOf([]) },
+        { ...RIGHT, pose: poseOf([]) },
+      ]),
+      ALL,
+      L,
+      true,
+      1000,
+    )
+    expect(validPoints(fists)).toHaveLength(0)
+    expect(fingertipsCloseReason(fists)).toBe('few-points')
+    expect(fingertipsGuidance(fists)).toBe(
+      'Mọi đầu ngón đang gập: xòe các ngón muốn dùng ra (cần ít nhất 3 đầu ngón của 2 tay).',
+    )
+    expect(toPoints(fists).every((p) => p.reason === 'folded' && !p.valid)).toBe(true)
   })
 })

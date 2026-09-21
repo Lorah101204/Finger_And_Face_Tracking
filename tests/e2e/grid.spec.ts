@@ -58,6 +58,7 @@ test('lưới mặc định 64 × 36: canvas theo DPR, c và bảng đúng công
     windowSource: 'mouse',
     handednessSwap: false,
     fingers: [4, 8, 12, 16, 20],
+    raisedOnly: true,
     sensitivity: { minCutoff: 1, beta: 0.02, hysteresisCells: 0.25, nMin: 3, pointMaxAgeMs },
   })
   expect(st.stageSize).toEqual({ w: size.w, h: size.h })

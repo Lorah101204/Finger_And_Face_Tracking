@@ -15,7 +15,8 @@ import { useStrings } from './useLang'
 // Thu dữ liệu (CLS-01), Nhật ký cục bộ (LOG-02). Camera ở thanh trên vì luôn cần. Thu gọn bằng thuộc tính hidden:
 // các ô nhập vẫn trong DOM (không mất giá trị), canvas nhận lại chỗ theo chiều rộng (epoch++, D-041); ở chế độ lớp
 // phủ (toàn màn hình, trình diễn) cột thành tấm nổi và không đổi cỡ canvas.
-// UX-04, I18N-01: mục Giao diện (ngôn ngữ, chế độ lớp hướng dẫn) ở đầu cột; `ui` và `setUi` từ StagePage.
+// UX-04, I18N-01: mục Giao diện (ngôn ngữ, chế độ lớp hướng dẫn) ở đầu cột; `ui` và `setUi` từ StagePage. BRAND-01: công
+// tắc "Logo trên màn che" (ui.logo) cùng mục.
 export function SettingsPanel({
   store,
   handDelegate,
@@ -33,7 +34,7 @@ export function SettingsPanel({
   open: boolean
   id: string
   /** UX-04: trạng thái giao diện (chế độ lớp hướng dẫn). */
-  ui?: Pick<UiState, 'guide'>
+  ui?: Pick<UiState, 'guide' | 'logo'>
   setUi?: (patch: Partial<UiState>) => void
   /** CLS-01: dataset mode (thu crop vùng mở); thiếu thì không có mục thu dữ liệu. */
   recorder?: Recorder
@@ -81,6 +82,20 @@ export function SettingsPanel({
               ))}
             </select>
             <span className="hint">{s.settings.ui.guideHint}</span>
+          </div>
+        )}
+        {ui && setUi && (
+          <div className="lbl">
+            <label className="check" title={s.settings.ui.logoHint}>
+              <input
+                type="checkbox"
+                aria-label={s.settings.ui.logoAria}
+                checked={ui.logo}
+                onChange={(e) => setUi({ logo: e.target.checked })}
+              />
+              {s.settings.ui.logo}
+            </label>
+            <span className="hint">{s.settings.ui.logoHint}</span>
           </div>
         )}
       </section>
