@@ -572,6 +572,60 @@ a {
   accent-color: var(--accent);
 }
 
+/* UX-05 (D-060): nút "?" chú thích cạnh từng mục của cột cài đặt (button.help-btn, 16 px, ghim thì tô accent) và bong
+ * bóng role=tooltip (.help-tip) render qua portal vào phần tử toàn màn hình hay body với position: fixed, nên không nằm
+ * dưới .stage và không bị cột cài đặt (overflow, backdrop-filter) cắt. span.with-help xếp công tắc và nút "?" sát nhau. */
+.stage .with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stage button.help-btn {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  vertical-align: middle;
+  cursor: help;
+}
+
+.stage .with-help button.help-btn {
+  margin-left: 0;
+}
+
+.stage button.help-btn:hover,
+.stage button.help-btn[aria-expanded='true'] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.help-tip {
+  position: fixed;
+  z-index: 20;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--ink-soft);
+  font: 12px/1.45 var(--font);
+  text-align: left;
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+
 /* Ngăn kéo debug (UX-03, thay thanh một dòng): lưới ba cột dưới canvas, chữ mono 12 px, mọi dòng data-testid giữ nguyên
  * nội dung; thumbnail buffer vừa gửi (FACE-01 bước 5) 88 px ở cột phải. */
 .stage .panel.debug {

@@ -29,7 +29,11 @@ export const DEFAULTS = {
     /** ROI-03 (D-047): số đầu ngón hợp lệ tối thiểu để có đa giác (bao lồi cần ba điểm không thẳng hàng). */
     minPoints: 3,
     hysteresisCells: 0.25,
-    oneEuro: { minCutoff: 1.0, beta: 0.02, dCutoff: 1.0 },
+    /**
+     * D-059 (UX-05): minCutoff 3 Hz thay 1 Hz theo yêu cầu vận hành: cửa sổ bám tay nhanh hơn (trễ pha nhỏ hơn) và
+     * chấp nhận rung nhẹ hơn khi tay đứng yên; beta và dCutoff giữ D-035.
+     */
+    oneEuro: { minCutoff: 3.0, beta: 0.02, dCutoff: 1.0 },
     /** ROI-00: cạnh cửa sổ (ô) khi mở bằng chuột hoặc phím Space. */
     mouseInitialN: 8,
   },
@@ -49,11 +53,14 @@ export const DEFAULTS = {
     minHands: 2,
     matchCostMax: 0.15,
     ambiguityDelta: 0.03,
-    trackDropMs: 150,
+    /**
+     * HAND-01: track không thấy quá chừng này thì xóa. Bằng freshness.pointMaxAgeMs (unit test config giữ đẳng thức):
+     * điểm còn trong tuổi thì track phải còn, nếu không tuổi điểm vô nghĩa. D-059: 600 cùng tuổi điểm.
+     */
+    trackDropMs: 600,
     /**
      * HAND-01: track chỉ bị xóa khi không thấy quá trackDropMs VÀ vắng trong ít nhất chừng này lần cập nhật liên
-     * tiếp: với pipeline 20 Hz bằng đúng quy tắc 150 ms, với pipeline chậm hơn 150 ms mỗi frame một lần bỏ lỡ không
-     * xóa track.
+     * tiếp: với pipeline chậm hơn trackDropMs mỗi frame một lần bỏ lỡ không xóa track.
      */
     trackDropFrames: 2,
     /** HAND-01: phạt khi nhãn tay khác (< matchCostMax để một frame nhãn nhấp nháy không tách track). */
@@ -91,11 +98,13 @@ export const DEFAULTS = {
   },
   freshness: {
     /**
-     * D-045: tuổi điểm tay tối đa với GPU delegate (đo: khoảng cách kết quả p95 58 ms + inferMs p95 ổn định dưới 50 ms
-     * trên máy mục tiêu); với CPU delegate (10 đến 11 Hz: 98 + 90 ms) dùng pointMaxAgeMsCpu, đặt vào độ nhạy lúc mở app.
+     * D-059 (UX-05): tuổi điểm tay tối đa 600 ms cho cả hai delegate theo yêu cầu vận hành: mất dấu tay ngắn (ngón
+     * che, tay ra rìa khung, kết quả về muộn) không đóng cửa sổ; đổi lại cửa sổ giữ thêm tới 600 ms sau khi tay rời.
+     * Thay D-045 (150 với GPU đo từ khoảng cách kết quả p95 58 ms + inferMs p95 < 50 ms, 250 với CPU 10 đến 11 Hz);
+     * giữ hai trường vì reveal/sensitivity.ts đặt tuổi theo delegate lúc mở app và bench đo cả hai. Bằng hands.trackDropMs.
      */
-    pointMaxAgeMs: 150,
-    pointMaxAgeMsCpu: 250,
+    pointMaxAgeMs: 600,
+    pointMaxAgeMsCpu: 600,
     /** D-045: tuổi kết quả mặt lúc gate nhận p95 68 ms trên GPU thật, 145 ms trên headless: giữ 250. */
     faceResultMaxAgeMs: 250,
   },

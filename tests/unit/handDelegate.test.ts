@@ -39,8 +39,10 @@ describe('resolveHandDelegate', () => {
     expect(resolveHandDelegate('GPU', SWIFTSHADER)).toBe('GPU')
   })
 
-  it('cấu hình mặc định là auto (D-045) và tuổi điểm cho CPU lớn hơn cho GPU', () => {
+  it('cấu hình mặc định là auto (D-045) và tuổi điểm cho CPU không nhỏ hơn cho GPU (D-059: cùng 600)', () => {
     expect(DEFAULTS.hands.delegate).toBe('auto')
-    expect(DEFAULTS.freshness.pointMaxAgeMsCpu).toBeGreaterThan(DEFAULTS.freshness.pointMaxAgeMs)
+    expect(DEFAULTS.freshness.pointMaxAgeMsCpu).toBeGreaterThanOrEqual(
+      DEFAULTS.freshness.pointMaxAgeMs,
+    )
   })
 })

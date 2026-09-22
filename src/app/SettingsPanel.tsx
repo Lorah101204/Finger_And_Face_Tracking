@@ -4,6 +4,7 @@ import type { StageStore } from '../loop/store'
 import { DatasetControls, type DatasetControlsProps } from './DatasetControls'
 import { LogControls, type LogControlsProps } from './LogControls'
 import { GridControls } from './GridControls'
+import { HelpTip } from './HelpTip'
 import { LanguageSwitch } from './LanguageSwitch'
 import { SensitivityControls } from './SensitivityControls'
 import { FingerControls } from './FingerControls'
@@ -16,7 +17,7 @@ import { useStrings } from './useLang'
 // các ô nhập vẫn trong DOM (không mất giá trị), canvas nhận lại chỗ theo chiều rộng (epoch++, D-041); ở chế độ lớp
 // phủ (toàn màn hình, trình diễn) cột thành tấm nổi và không đổi cỡ canvas.
 // UX-04, I18N-01: mục Giao diện (ngôn ngữ, chế độ lớp hướng dẫn) ở đầu cột; `ui` và `setUi` từ StagePage. BRAND-01: công
-// tắc "Logo trên màn che" (ui.logo) cùng mục.
+// tắc "Logo trên màn che" (ui.logo) cùng mục. UX-05: mỗi mục có nút "?" (HelpTip) mang chú thích thay cho dòng hint tĩnh.
 export function SettingsPanel({
   store,
   handDelegate,
@@ -44,6 +45,7 @@ export function SettingsPanel({
 }) {
   const { settings } = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const s = useStrings()
+  const h = s.settings.help
   const hands = settings.windowSource === 'hands'
   const guideText = {
     auto: s.settings.ui.guideAuto,
@@ -62,12 +64,18 @@ export function SettingsPanel({
       <section className="sec" data-testid="ui-section">
         <h3>{s.settings.ui.title}</h3>
         <div className="lbl">
-          <span>{s.settings.ui.language}</span>
+          <span>
+            {s.settings.ui.language}
+            <HelpTip id="language" text={h.ui.language} />
+          </span>
           <LanguageSwitch />
         </div>
         {ui && setUi && (
           <div className="lbl">
-            <span>{s.settings.ui.guide}</span>
+            <span>
+              {s.settings.ui.guide}
+              <HelpTip id="guide" text={h.ui.guide} />
+            </span>
             <select
               aria-label={s.settings.ui.guideAria}
               value={ui.guide}
@@ -81,21 +89,22 @@ export function SettingsPanel({
                 </option>
               ))}
             </select>
-            <span className="hint">{s.settings.ui.guideHint}</span>
           </div>
         )}
         {ui && setUi && (
-          <div className="lbl">
-            <label className="check" title={s.settings.ui.logoHint}>
-              <input
-                type="checkbox"
-                aria-label={s.settings.ui.logoAria}
-                checked={ui.logo}
-                onChange={(e) => setUi({ logo: e.target.checked })}
-              />
-              {s.settings.ui.logo}
-            </label>
-            <span className="hint">{s.settings.ui.logoHint}</span>
+          <div className="acts">
+            <span className="with-help">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  aria-label={s.settings.ui.logoAria}
+                  checked={ui.logo}
+                  onChange={(e) => setUi({ logo: e.target.checked })}
+                />
+                {s.settings.ui.logo}
+              </label>
+              <HelpTip id="logo" text={h.ui.logo} />
+            </span>
           </div>
         )}
       </section>

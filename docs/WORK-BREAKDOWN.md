@@ -103,12 +103,13 @@ The defaults below allow starting right away; every later change is recorded in 
 | Grid presets | 32 × 18, 64 × 36 (default), 128 × 72, custom | Custom limited to 4..256 columns, 4..144 rows |
 | Fingertips used | All five fingers (thumb 4, index 8, middle 12, ring 16, little 20) of every tracked hand; the reveal region is the convex hull of the valid fingertips; at least 3 points from 2 hands are required | ROI-03 (D-047) replaces the four fixed slots of HAND-02; fingers can be deselected in the UI (`hands.fingers`), `hands.minHands` 1 for one-hand mode, `reveal.minPoints` 3 |
 | Raised fingers only | A fingertip takes part only while its finger is raised, decided from the landmarks (`hands/fingerPose.ts`): four fingers by the wrist→tip / wrist→PIP ratio on the world landmarks (raised ≥ 1.05, folded < 0.9), the PIP angle (≥ 135°, < 120°) and the tip outside the palm polygon; thumb by the abduction ratio (≥ 1.0, < 0.85) and the palm polygon; between the thresholds the state is kept; a flip needs 3 consecutive hand frames | ROI-04 (D-055); `hands.raisedOnly` true, the "Chỉ ngón đang giơ" switch turns it off; `hands.pose` thresholds provisional until the webcam calibration |
+| Setting notes | Every item of the settings column has a 16 px "?" button; hover, keyboard focus or a click (pinned) shows the item's note as a `role=tooltip` bubble under the button, in both languages (`settings.help`) | UX-05 (D-060): the bubble is portaled to the fullscreen element or body so the column cannot clip it |
 | Cover logo | The campaign logo (original artwork from the bundled SVG) is drawn on the closed cover at the top-left corner on the board grid: 21 k × 8 k cells with the module k chosen so the width is nearest 30 % of the stage, so the borders of its three frames lie on the cell lines (fallback to a fixed 30 % rectangle without alignment when 21 cells would exceed half the stage); the compositor draws it over the grid lines and the video clip of the open cells covers it, so the reveal region cuts it cell by cell and closing restores it | BRAND-01 (D-056 to D-058); `brand.logo` in `config.ts`; `ui.logo` switch "Logo trên màn che", `?logo=0|1`; the campaign line renders in a fallback font until the SVG is re-exported with outlined text |
 | N min | `nMin = 3` | A bounding box of the points with its short side below `nMin` cells, or a convex hull area below `nMin² / 2` cells², is invalid (D-038, D-047) |
 | ROI threshold for issuing face tasks | ROI side ≥ 64 camera px | Below the threshold: `too-small` state, no task issued |
-| Maximum hand point age | 150 ms with GPU delegate, 250 ms with CPU delegate | Locked in QA-02 (D-045) from result interval + inferMs p95 |
+| Maximum hand point age | 600 ms with either delegate; `trackDropMs` equal | UX-05 (D-059) at the operator's request; the QA-02 floor (D-045: 150 ms GPU, 250 ms CPU from result interval + inferMs p95) stays far below |
 | Maximum face result age | 250 ms | Locked in QA-02 (D-045): age on receipt p95 68 ms on a real GPU, 145 ms headless |
-| Smoothing | One Euro for each coordinate of the four points (`minCutoff 1.0`, `beta 0.02`) | EMA is the fallback if something simpler is needed |
+| Smoothing | One Euro for each coordinate of every fingertip (`minCutoff 3.0`, `beta 0.02`) | UX-05 (D-059): 3 Hz instead of 1 Hz, slow-movement lag 43 → 30 ms at 30 Hz, still jitter 0.7 → 1.5 px; EMA is the fallback if something simpler is needed |
 | Hysteresis | 0.25 cells | An open cell only turns off when the polygon moves more than 0.25 cells away from it; a closed cell only turns on when the polygon overlaps it by more than 0.25 cells (D-038, D-047) |
 | "Full face" margin | `m = 4%` of the ROI side | The landmarks bbox must be inset inside the ROI by at least m |
 | Maximum number of faces | 2 | Status per face |
@@ -163,7 +164,7 @@ tests/
   e2e/            playwright + fake camera and synthetic source: mask gate, late results, window close, stats, ux; soak/ (15 minutes); bench/ (device matrix QA-02, multiple browsers via playwright.bench.config.ts)
 tools/            python: generate y4m test clips; dataset/ (common.py, label.py, split.py, stats.py, test_dataset.py: labeling, split, statistics, raw frame check); train/ (dataset.py, train.py, export_onnx.py, check_onnx.py, eval.py, metrics.py + tests: training and ONNX export, CLS-02); make-stub-classifier.mjs (stub model)
 public/models/    tasks-vision wasm, hand_landmarker.task, face_landmarker.task, classifier.onnx, models.json
-src/app/          pages/ (LandingPage, StagePage), session.ts (consent), gate.ts (camera gate), SettingsPanel.tsx (settings column UX-03: GridControls.tsx, FingerControls.tsx, SensitivityControls.tsx, DatasetControls.tsx + datasetText.ts, LogControls.tsx), DebugPanel.tsx (debug drawer), Guide.tsx + guidance.ts (guidance UX-01), BrandMark.tsx, useFullscreen.ts + useIdle.ts (fullscreen and presentation overlay), uiState.ts + useUiState.ts (panel state and presentation mode), tick.ts, useStageCanvas.ts (DPR-scaled canvas), LandingPreview.tsx + landingScene.ts + landing.css (landing screen UX-02, UX-03), app.css (shared tokens)
+src/app/          pages/ (LandingPage, StagePage), session.ts (consent), gate.ts (camera gate), SettingsPanel.tsx (settings column UX-03: GridControls.tsx, FingerControls.tsx, SensitivityControls.tsx, DatasetControls.tsx + datasetText.ts, LogControls.tsx; HelpTip.tsx the "?" notes UX-05), DebugPanel.tsx (debug drawer), Guide.tsx + guidance.ts (guidance UX-01), BrandMark.tsx, useFullscreen.ts + useIdle.ts (fullscreen and presentation overlay), uiState.ts + useUiState.ts (panel state and presentation mode), tick.ts, useStageCanvas.ts (DPR-scaled canvas), LandingPreview.tsx + landingScene.ts + landing.css (landing screen UX-02, UX-03), app.css (shared tokens)
 archive/backend/  backend, admin, telemetry dropped under D-019; only on the orphan branch `archive/backend` (D-024), ignored on main
 docs/             plan, decisions.md, spikes.md, test and benchmark reports
 ```
@@ -309,7 +310,7 @@ Added after the A11 review, trimmed under D-019 (the version with backend, datab
 | Path | Content | Condition |
 |---|---|---|
 | `/` (hash `#/`) | The web landing screen (D-023, UX-02, UX-03): eyebrow, name, one introductory sentence, three commitment lines (processed locally, nothing uploaded, camera on only when clicked), versioned consent box, Bắt đầu (Start) button, three-step stepper and an animated canvas illustration (no camera), all on one screen at 1280 × 720 and above; kiosk mode shows the consent scope line; `?mode=present` is the kiosk version (grid covering the whole screen, floating consent card) leading to `#/app?mode=present` | No `getUserMedia` call (I10); no network calls, no external fonts or images (I9) |
-| `#/app` | White canvas stage (I4): three-zone top bar (brand, camera picker, Bật camera / Dừng camera (Start camera / Stop camera), camera status pill, the buttons Cài đặt, Debug, Trình diễn, Toàn màn hình, Thu hồi đồng ý (Settings, Debug, Presentation, Fullscreen, Revoke consent)), collapsible settings column on the right, debug drawer below the canvas, three-step guidance layer on the canvas (UX-01, UX-03); `?mode=present` opens presentation mode (every panel is a self-hiding floating layer, the canvas fills the screen) | Without consent (or with consent to an old version) redirect to `#/`; `getUserMedia` only in the button click handler after `assertCameraAllowed()` |
+| `#/app` | White canvas stage (I4): three-zone top bar (brand, camera picker, Bật camera / Dừng camera (Start camera / Stop camera), camera status pill, the buttons Cài đặt, Debug, Trình diễn, Toàn màn hình, Thu hồi đồng ý (Settings, Debug, Presentation, Fullscreen, Revoke consent)), collapsible settings column on the right (every item with a "?" note, UX-05), debug drawer below the canvas, three-step guidance layer on the canvas (UX-01, UX-03); `?mode=present` opens presentation mode (every panel is a self-hiding floating layer, the canvas fills the screen) | Without consent (or with consent to an old version) redirect to `#/`; `getUserMedia` only in the button click handler after `assertCameraAllowed()` |
 
 #### Consent
 
@@ -801,7 +802,7 @@ sequenceDiagram
 
 Execution order for one person:
 
-`SETUP-00 → SPIKE-00 → WEB-00 → CAM-01 → GRID-01 → ROI-00 → MASK-01 → TEST-00 → MASK-02 → FACE-01 → FACE-02 → HAND-01 → HAND-02 → ROI-01 → INT-01 → ROI-02 → QA-01 → PERF-01 → UX-01 → UX-02 → CLS-01 → CLS-02 → QA-02 → LOG-02 (optional) → ROI-03 → UX-03 → REL-01 → PERF-02 → UX-04 → I18N-01 → ROI-04 → BRAND-01`
+`SETUP-00 → SPIKE-00 → WEB-00 → CAM-01 → GRID-01 → ROI-00 → MASK-01 → TEST-00 → MASK-02 → FACE-01 → FACE-02 → HAND-01 → HAND-02 → ROI-01 → INT-01 → ROI-02 → QA-01 → PERF-01 → UX-01 → UX-02 → CLS-01 → CLS-02 → QA-02 → LOG-02 (optional) → ROI-03 → UX-03 → REL-01 → PERF-02 → UX-04 → I18N-01 → ROI-04 → BRAND-01 → UX-05`
 
 API-00, LOG-01, ADM-01, SEC-01, DEP-01 are dropped per D-019 (code in `archive/backend/`); static deployment to GitHub Pages with a custom domain is part of REL-01 (D-024, D-048). UX-02 (landing screen, D-023) depends only on WEB-00, so it can be pulled forward to any point after CAM-01; LOG-02 (local log, D-022) is optional and not a precondition of REL-01.
 
@@ -1419,6 +1420,48 @@ Tests: section 7.33.
 
 Implementation note (D-056, D-057, 2026-09-21): first implementation (commit 5ee31788) drew the silhouette of the three frames as navy cell blocks with the wordmark knocked out and hid the layer while a region was open; the user corrected the reading of the mock-up, and the revision draws the original artwork and lets the video clip cut it (the block silhouette, the coverage rule, the reappear delay and the `logoWordmark` scenario were removed). Unit 304/304, e2e 77/77 (the three new cases measured: logo 288 × 109 px at all three presets on the headless stage; at 64 cols 2,033 green and 614 navy px in the "VERIFY:" frame and 1,580 navy px in the "Human" frame; a 6-cell window over the "Human" frame shows 6,724 magenta px and 0 ink px inside, 123 navy px in the column beside it, and the frame's ink count returns to 1,580 after the close; gate audit 7 of 7 buffers clean; paints +0 over 25 static frames). D-058 (same day): the user asked for the frame borders to sit on the cell borders; the module grid above was derived from the SVG (every edge within 0.09 cell) and `logoGeometry` places the logo on the board grid with the fallback for coarse grids; the compositor now draws the logo after the grid lines. Measured (e2e, headless 960 × 540 stage): 64 columns (cell 15 px) → 315 × 120 px snapped with module 15; 128 columns (cell 7 px) → 294 × 112 px snapped with module 14; 32 columns (cell 30 px, 21 cells = 630 px > 50 %) → fixed 288 × 109 px; the outer edge midpoints of the frames are navy and 3 px outside white or grid gray; ink and cut cases as before; unit 308/308, e2e 77/77. Open item: the campaign line is live text in Heavitas, which no target machine has, so it renders in 'Arial Black' squeezed to the original width; a re-export of the SVG with the text converted to outlines (Type → Create Outlines) restores the exact glyphs with no code change (`logoSvg` only rewrites `<text>` elements).
 
+#### UX-05 Setting notes and retuned reveal defaults
+
+Depends on: UX-03 (settings column), I18N-01 (both dictionaries), ROI-01 (sensitivity), HAND-01 (tracker drop time). Requested on 2026-09-22 by the operator after the first sessions: raise the default point age to 600 ms and the One Euro filter to 3 Hz, and put a small "?" button beside every setting that shows the item's note on hover or click.
+
+Motivation: with the point age at 150 ms (D-045) the window closed on every short loss of a fingertip (a finger hidden for a moment, a hand at the frame edge, a late result), and the 1 Hz filter made the window trail a slowly moving hand. The settings column names its items tersely ("Beta", "Hysteresis (ô)", "Tuổi điểm (ms)") with a few static hint lines under some of them; the operator had nowhere to read what each one does without the documentation.
+
+Measurements (2026-09-22; the filter numbers from `stepOneEuro` on synthetic series, the rest from the e2e notes of 7.34):
+
+| Item | Value | Use |
+|---|---|---|
+| One Euro at 30 Hz, ±3 px alternating jitter (6 px raw) | steady amplitude 0.66 px at `minCutoff` 1, 1.51 px at 3; at 20 Hz 0.94 → 2.01 px; at 10 Hz 1.62 → 3.02 px | The price of 3 Hz: still jitter roughly doubles, at the CPU rate it is only halved from the raw signal |
+| One Euro lag on a slow ramp (60 px/s) | 2.6 px (43 ms) at 1 Hz → 1.8 px (30 ms) at 3 Hz at 30 Hz; 3.3 px (56 ms) → 2.1 px (34 ms) at 10 Hz | The gain of 3 Hz on slow hand movement |
+| One Euro lag on a fast ramp (300 px/s) and a 200 px step | 4.8 → 4.2 px (16 → 14 ms); the step reaches 90 % on the next frame with both values (`beta` × speed dominates) | Fast movement was never the problem; `beta` 0.02 stays (D-035) |
+| Jitter next to a cell boundary | The `solver.spec` jitter case (±3 px camera noise on a 12.3 × 8.2 cell rectangle whose edges sit 0.1 cell = 2 px camera inside the 0.25-cell hysteresis band) flipped column 25 in two of three runs under load with the 3 Hz filter, never with 1 Hz; at a 10 Hz loop the filtered noise keeps about half of the raw amplitude | The real limit of 3 Hz: a fingertip resting within about 2 px of the band while the pipeline is slow can flicker a column; the case now jitters on cell-aligned edges (8.0 cells, 5 px margin) where the hysteresis alone must hold |
+| Point age and tracker drop time | 600 ms for both delegates, `trackDropMs` 600 (the unit test keeps the equality: a point inside its age needs its track alive, otherwise the age is void) | D-059; before: 150 ms GPU / 250 ms CPU, `trackDropMs` 150 |
+| Effect on the region | A fingertip lost for up to 600 ms keeps its last position in the hull; the window follows the hand back without reopening (no epoch change); the debounce of the raised-finger state (3 frames × 50 ms) stays well below the age | The window also lingers up to 600 ms after the hands leave the frame: the operator accepted this |
+| "?" buttons | 11 with the mouse source (Interface 3, Grid 5, Window 1, Data capture 1, Log 1), 19 with the hands source (+ swap, raised only, fingertips, five sensitivity fields); note bubble 260 px wide, 6 px below the button, clamped 8 px inside the viewport | Every item of the settings column has one; the static hint lines and `title` attributes of Interface, Window, Fingertips and Data capture moved into the notes |
+| Notes | 19 notes per language (`settings.help`), each a full explanatory sentence of at least 40 characters (unit test), Vietnamese and English | The accessible name of every button is the same short string ("Chú thích" / "What is this?") on purpose (see design) |
+
+Design (D-059, D-060):
+
+- Defaults: `reveal.oneEuro.minCutoff` 3.0 (was 1.0), `freshness.pointMaxAgeMs` and `pointMaxAgeMsCpu` 600 (were 150 and 250), `hands.trackDropMs` 600 (was 150). `pointMaxAgeMsCpu` stays a separate field (`defaultSensitivity(handDelegate)` and the benchmark read both) but equals the GPU value now; the D-045 measurements remain the floor (both ages are far above two pipeline intervals). The sensitivity panel, "Đặt lại độ nhạy" and the debug overlay fade (`compositor.ts` uses the same constant) follow automatically.
+- `HelpTip` (`src/app/HelpTip.tsx`): a 16 px round `button.help-btn` with `data-help=<key>`, `aria-label` = the shared string, `aria-expanded` = pinned, `aria-describedby` = the bubble while it is shown. Mouse hover (`pointerType === 'mouse'` only, so a tap does not leave a stuck hover) and keyboard focus (`:focus-visible`) show the bubble; click pins it (touch on the kiosk), a second click, Escape or a pointerdown outside the button and the bubble closes it; clicking inside the bubble keeps it (text selection). The bubble (`span.help-tip`, `role="tooltip"`, `data-help-tip=<key>`) is rendered through a portal into `document.fullscreenElement ?? document.body` with `position: fixed`, placed 6 px below the button and clamped 8 px inside the viewport, so it is neither clipped by the column's `overflow: auto` nor trapped by the `backdrop-filter` containing block of the overlay mode, and it stays visible in fullscreen (elements outside the fullscreen element are not painted). The position is computed in the event handler that opens it (no `setState` inside an effect body, per the react-hooks rules) and re-computed on scroll and resize while open.
+- Accessible name: deliberately the same for every button. Playwright's `getByLabel` and `getByRole(name)` match substrings of `aria-label`, so a per-item name such as "Chú thích: Tuổi điểm" would make `getByLabel('Tuổi điểm')` resolve to two elements and break every existing e2e; the item is identified by `aria-describedby` (the note itself) and `data-help`.
+- Placement: inside the label `span` of `.lbl` and `.slider .lab` items; for switches (`label.check`) beside the label inside a `span.with-help` (a button inside the label would join the checkbox's accessible name and toggle it on click); for the Fingertips section on the heading (one note for the whole section). Strings live under `settings.help` in both dictionaries, grouped like the panel (`ui`, `grid`, `window`, `fingers(minPoints, minHands)`, `sensitivity`, `dataset`, `log`); the removed keys are `window.hintHands/hintMouse/swapTitle/swapHint/raisedOnlyTitle/raisedOnlyHint`, `fingers.hint`, `ui.guideHint/logoHint`, `dataset.offHint/consentTitle`. Live hints stay: the grid size in the Grid heading, "cả hai tay", the dataset status line and the log count.
+- Nothing leaves the browser (I9), no camera path (I4): the component only renders text from the bundle.
+
+Steps:
+
+1. `core/config.ts`: the three defaults with their D-059 comments; unit `config` (600/600/3, `trackDropMs` = point age), `sensitivity`, `store`, `oneEuro` (amplitude bound 2 px at 3 Hz and 1.5 px at 1 Hz), `handDelegate` (CPU age ≥ GPU age), `fingertips`, `handTracker`, `handWindowSource`, `compositor` retimed to 600 ms.
+2. `core/i18n/vi.ts`, `en.ts`: `settings.help`; the folded keys removed; unit `i18n` (every sensitivity field has a note, every note ≥ 40 characters, the shared name contains no item label).
+3. `app/HelpTip.tsx`; `app.css` (`.with-help`, `button.help-btn`, `.help-tip`).
+4. `SettingsPanel`, `GridControls`, `FingerControls`, `SensitivityControls`, `DatasetControls`, `LogControls`: a `HelpTip` per item, the static hints and `title`s removed.
+5. E2E `help.spec.ts` (7.34); `solver.spec` (stale fixture 700 ms, raise to 1000) and `grid.spec` (defaults from `DEFAULTS`) retimed; `tools/test-report.mjs`; documentation: section 3 table, 9.1, D-059, D-060, README.
+6. Out of scope: notes for the top bar buttons and the debug drawer; a "?" on the landing page.
+
+Done criteria: the sensitivity panel opens with 600 / 3 and "Đặt lại độ nhạy" returns to them; fake hands 500 ms old open the region, 700 ms old close it with `stale-point`; every visible setting has a "?" whose hover shows the item's note inside the viewport below the button and whose click pins it until a second click, Escape or a click elsewhere; `getByLabel` of every existing item still resolves to one element; the whole existing suite passes.
+
+Tests: section 7.34.
+
+Implementation note (D-059, D-060, 2026-09-22): as designed. Retiming the fixtures was the only ripple: the unit fixtures that encoded 150 ms (fingertips 849/850 → 399/400, tracker 250 → 700, window source 200/300 → 700/800, compositor 151 → 601) and the e2e stale case (300 → 700, raise to 1000). The unpin click also clears the hover state so the bubble disappears at once although the pointer is still on the button. Main chunk 434.69 → 444.38 kB (gzip 143.69 → 147.02) for the component, its styles and 38 notes. The only behavioral regression found by the suite is the jitter row of the measurements table: the ±3 px jitter case now runs on cell-aligned edges.
+
 ## 7. Mandatory test suite
 
 ### 7.1 Mapping the plan's test table to how it is carried out
@@ -1833,6 +1876,22 @@ After ROI-03 the quadrilateral is a special case of the convex hull (`polygon`):
 | Raster cross-check | `tools/measure-logo.mjs <export.png> [mockup.png]` on a raster export reproduces the frame strokes, the two ink colors and the wordmark bounds of the BRAND-01 table; on the mock-up the cell pitch and the black region's bounding box | tool | BRAND-01 |
 | By eye | Webcam session: the logo readable at the three presets at 1280 px and on the kiosk display; the region cuts it along the cells; the campaign line after the outlined re-export | manual | BRAND-01 |
 
+### 7.34 Setting notes and retuned defaults tests (UX-05)
+
+| Case | Expected | How | Package |
+|---|---|---|---|
+| Defaults | Unit `config`: `pointMaxAgeMs` 600, `pointMaxAgeMsCpu` 600, `minCutoff` 3, `trackDropMs` = point age, the ROI-04 debounce (3 × 50 ms) ≤ the age; `sensitivity`, `store` defaults; `handDelegate`: CPU age ≥ GPU age | unit | UX-05 |
+| Filter at 3 Hz | Unit `oneEuro`: ±3 px jitter at 30 Hz settles under 2 px with the defaults and under 1.5 px with `minCutoff` 1; a fast ramp still lags less with `beta` than without | unit | UX-05 |
+| Ages at 600 ms | Unit `fingertips` (600 valid, 601 `stale-point`), `handTracker` (a track missing for 500 ms stays, 700 ms is dropped; two uncertain frames over 600 ms drop the old tracks), `handWindowSource` (700 ms closes with the default, 800 ms setting reopens), `compositor` (fade after 601 ms) | unit | UX-05 |
+| Notes | Unit `i18n`: `settings.help.sensitivity` has exactly the sensitivity fields; every note in both languages is at least 40 characters; the shared button name contains no label or aria-label of any item | unit | UX-05 |
+| Buttons per source | E2E `help.spec`: with the mouse source exactly the keys language, guide, logo, preset, cols, rows, lines, mirror, source, dataset, log; with the hands source also swap, raisedOnly, fingers and the five sensitivity keys; every button named "Chú thích", `aria-expanded` false, no tooltip in the DOM | e2e | UX-05 |
+| Hover | E2E `help.spec`: hovering the "Tuổi điểm" button shows one `role=tooltip` with the dictionary text, referenced by `aria-describedby`, fully inside the viewport and below the button; `getByLabel('Tuổi điểm')`, `'N min'` and `'Lưới'` still resolve to one element; moving the mouse away removes it | e2e | UX-05 |
+| Pin, Escape, outside | E2E `help.spec`: click pins (`aria-expanded` true, survives moving away), a second click closes; click then Escape closes; click then a click on the column title closes; pinning a second item and clicking outside closes both | e2e | UX-05 |
+| Keyboard | E2E `help.spec`: Shift+Tab from the "Lọc minCutoff" field focuses its "?" and shows the note, Tab away hides it | e2e | UX-05 |
+| Other notes and English | E2E `help.spec`: the Fingertips and Preset notes equal the dictionary (the fingertips note built with `minPoints`, `minHands`); after switching to English the name is "What is this?" and the note is the English text, still inside the viewport | e2e | UX-05 |
+| New defaults in the app | E2E `help.spec`: the number fields show 600 and 3; fake hands 500 ms old open the region with every point valid; 900 / 1 then "Đặt lại độ nhạy" returns 600 / 3; `solver.spec`: 700 ms closes `stale-point`, 1000 reopens, reset closes again | e2e | UX-05 |
+| By eye | Webcam session: the window survives a finger hidden for half a second and follows a slow hand without trailing; the notes readable on the kiosk display by touch (tap to pin, tap elsewhere to close) and in fullscreen | manual | UX-05 |
+
 ## 8. Handover
 
 - Web source, static build, run and configuration guide.
@@ -1853,10 +1912,10 @@ export const DEFAULTS = {
   camera: { width: 1280, height: 720 },
   grid: { cols: 64, rows: 36, showLines: true, mirror: true,
           custom: { minCols: 4, maxCols: 256, minRows: 4, maxRows: 144 } },
-  reveal: { nMin: 3, minPoints: 3, hysteresisCells: 0.25, oneEuro: { minCutoff: 1.0, beta: 0.02, dCutoff: 1.0 } },
-  hands: { numHands: 2, fingers: [4, 8, 12, 16, 20], minHands: 2, matchCostMax: 0.15, ambiguityDelta: 0.03, trackDropMs: 150, trackDropFrames: 2,
+  reveal: { nMin: 3, minPoints: 3, hysteresisCells: 0.25, oneEuro: { minCutoff: 3.0, beta: 0.02, dCutoff: 1.0 } },  // minCutoff 3.0 since UX-05 (D-059)
+  hands: { numHands: 2, fingers: [4, 8, 12, 16, 20], minHands: 2, matchCostMax: 0.15, ambiguityDelta: 0.03, trackDropMs: 600, trackDropFrames: 2,
            handednessPenalty: 0.1, relabelFrames: 3, minTrackScore: 0.5, delegate: 'auto', handednessSwap: false },
-  freshness: { pointMaxAgeMs: 150, pointMaxAgeMsCpu: 250, faceResultMaxAgeMs: 250 },
+  freshness: { pointMaxAgeMs: 600, pointMaxAgeMsCpu: 600, faceResultMaxAgeMs: 250 },  // 600 since UX-05 (D-059); D-045 had 150 / 250
   face: { minRoiPx: 64, inputSize: 256, padGray: 128, numFaces: 2, targetHz: 12, fullFaceMarginRatio: 0.04 },
   classifier: { targetHz: 4, unknownThreshold: 0.7, minRoiPx: 96, executionProviders: ['webgpu', 'wasm'],
                 resultMaxAgeMs: 600, labelMaxAgeMs: 1500, partialMinVisible: 0.6 },

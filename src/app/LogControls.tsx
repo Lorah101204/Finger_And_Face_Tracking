@@ -6,12 +6,13 @@ import {
   type LogEvent,
   type LogEventType,
 } from '../log/localLog'
+import { HelpTip } from './HelpTip'
 import { useStrings } from './useLang'
 
 // LOG-02 (D-022, D-046): mục nhật ký cục bộ trong cột cài đặt: công tắc (mặc định tắt, lưu localStorage), số bản
 // ghi, bảng xem tại chỗ (lọc theo loại và ngày, mới nhất trước, tối đa 200 dòng), Xuất CSV (Blob + <a download>
 // qua props.download, không có đường mạng, I9) và Xóa nhật ký (nút danger, UX-03). Trạng thái bật/tắt cũng hiện ở
-// thanh trên (StagePage).
+// thanh trên (StagePage). UX-05: nút "?" cạnh công tắc mang chú thích (settings.help.log.toggle).
 export type LogControlsProps = {
   log: LocalLog
   download: (bytes: Uint8Array, name: string, type?: string) => void
@@ -32,7 +33,8 @@ export function LogControls({ log, download }: LogControlsProps) {
   const [type, setType] = useState<LogEventType | 'all'>('all')
   const [day, setDay] = useState('')
   const [rows, setRows] = useState<LogEvent[]>([])
-  const l = useStrings().settings.log
+  const strings = useStrings().settings
+  const l = strings.log
 
   // Bảng chỉ đọc kho khi đang mở; đọc lại khi bộ lọc hay số bản ghi đổi (kết quả về bất đồng bộ).
   useEffect(() => {
@@ -61,15 +63,18 @@ export function LogControls({ log, download }: LogControlsProps) {
         </span>
       </h3>
       <div className="acts">
-        <label className="check">
-          <input
-            type="checkbox"
-            aria-label={l.toggle}
-            checked={snap.enabled}
-            onChange={(e) => log.setEnabled(e.target.checked)}
-          />
-          {l.toggle}
-        </label>
+        <span className="with-help">
+          <label className="check">
+            <input
+              type="checkbox"
+              aria-label={l.toggle}
+              checked={snap.enabled}
+              onChange={(e) => log.setEnabled(e.target.checked)}
+            />
+            {l.toggle}
+          </label>
+          <HelpTip id="log" text={strings.help.log.toggle} />
+        </span>
       </div>
       <div className="acts">
         <button

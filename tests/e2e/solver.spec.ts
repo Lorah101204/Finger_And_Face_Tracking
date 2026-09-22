@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { convexHull, listCells, rasterizePolygon } from '../../src/core/cells'
+import { DEFAULTS } from '../../src/core/config'
 import type { Layout } from '../../src/core/coords'
 import { fakeHandFrame } from '../../src/debug/fakeHands'
 import { evaluateFingertips } from '../../src/hands/fingertips'
@@ -113,8 +114,11 @@ test('tay giả lập mở đúng tập ô; đứng yên và rung ±3 px không 
   expect(l2.epoch).toBe(l1.epoch)
   expect((await readHandWindow(page)).solves).toBeGreaterThan(solves0 + 5)
 
-  // Rung ±3 px camera quanh vị trí cũ (One Euro và hysteresis ô): không đổi ô, không đổi epoch.
-  await setFakeHands(page, handsAtCell(L, 32, 18, 8.2, { jitter: 3 }))
+  // Rung ±3 px camera quanh vị trí cũ (One Euro và hysteresis ô): không đổi ô, không đổi epoch. Cạnh 8,0 ô để mép
+  // nằm đúng vạch ô (26, 38, 14, 22): cùng 96 ô, cách ngưỡng hysteresis 0,25 ô = 5 px camera nên rung thô ±3 px không
+  // thể lật ô. Với mép 12,3 × 8,2 (cách ngưỡng 0,1 ô = 2 px camera) bộ lọc 3 Hz mặc định (D-059) ở nhịp vòng lặp thấp
+  // để lọt đủ rung cho cột 25 bật: giới hạn thật của lọc 3 Hz, ghi ở D-059.
+  await setFakeHands(page, handsAtCell(L, 32, 18, 8.0, { jitter: 3 }))
   await page.waitForTimeout(800)
   const l3 = await readLoop(page)
   expect(l3.mask!.box).toEqual(BOX)
@@ -231,18 +235,20 @@ test('too-small khi các đầu ngón quá gần; tuổi điểm và độ nhạ
   const e1 = (await readLoop(page)).epoch
   expect(e1).toBe(t.epoch + 1)
 
-  // Điểm cũ 300 ms: đóng stale-point với tuổi tối đa mặc định (D-045: 150 với GPU delegate, 250 với CPU; headless là
-  // CPU vì WebGL là SwiftShader); nâng "Tuổi điểm" lên 500 thì mở lại; đặt lại về mặc định thì đóng.
+  // Điểm cũ 700 ms: đóng stale-point với tuổi tối đa mặc định (D-059: 600 với cả hai delegate; headless là CPU vì WebGL
+  // là SwiftShader); nâng "Tuổi điểm" lên 1000 thì mở lại; đặt lại về mặc định thì đóng.
   const defaultAge = (await readStage(page)).settings.sensitivity.pointMaxAgeMs
-  expect([150, 250]).toContain(defaultAge)
-  await setFakeHands(page, handsAtCell(L, 32, 18, 8.2, { ageMs: 300 }))
+  expect([DEFAULTS.freshness.pointMaxAgeMs, DEFAULTS.freshness.pointMaxAgeMsCpu]).toContain(
+    defaultAge,
+  )
+  await setFakeHands(page, handsAtCell(L, 32, 18, 8.2, { ageMs: 700 }))
   await expect
     .poll(async () => (await readLoop(page)).reveal, { timeout: 10_000 })
     .toEqual({ kind: 'closed', reason: 'stale-point' })
-  await page.getByLabel('Tuổi điểm').fill('500')
+  await page.getByLabel('Tuổi điểm').fill('1000')
   await expect
     .poll(async () => (await readStage(page)).settings.sensitivity.pointMaxAgeMs)
-    .toBe(500)
+    .toBe(1000)
   await expect
     .poll(async () => (await readLoop(page)).reveal.kind, { timeout: 10_000 })
     .toBe('open')

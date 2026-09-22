@@ -243,23 +243,13 @@ export const vi = {
       sourceAria: 'Nguồn cửa sổ',
       mouse: 'Chuột',
       hands: 'Tay',
-      hintHands:
-        'Cửa sổ là vùng bao các đầu ngón của hai tay; đổi nguồn thì cửa sổ đang mở đóng lại.',
-      hintMouse: 'Bấm hoặc kéo trên bảng để mở; lăn chuột đổi cỡ; Esc đóng; Space mở lại.',
       swap: 'Đảo trái/phải',
-      swapTitle: 'D-010: bật nếu webcam thật gán nhãn tay ngược',
-      swapHint: 'khi webcam gán nhãn tay ngược',
       raisedOnly: 'Chỉ ngón đang giơ',
-      raisedOnlyTitle:
-        'ROI-04 (D-055): ngón duỗi hay gập quyết định từ hình học landmark; tắt thì mọi đầu ngón đã chọn đều tham gia',
-      raisedOnlyHint: 'ngón gập hay bị che không tham gia vùng mở',
     },
     fingers: {
       title: 'Đầu ngón dùng',
       both: 'cả hai tay',
       aria: (name: string) => `Ngón ${name}`,
-      hint: (minPoints: number, minHands: number) =>
-        `Cửa sổ là vùng bao các đầu ngón; cần ít nhất ${minPoints} đầu ngón của ${minHands} tay.`,
     },
     sensitivity: {
       title: 'Độ nhạy',
@@ -275,8 +265,6 @@ export const vi = {
     dataset: {
       title: 'Thu dữ liệu',
       toggle: 'Thu dữ liệu',
-      offHint: 'chỉ crop vùng mở, lưu tại máy',
-      consentTitle: 'Bước 1 của CLS-01: không có văn bản đồng ý thì không thu',
       consentAria: 'Người tham gia đã ký đồng ý',
       consent: 'Người tham gia đã ký đồng ý bằng văn bản',
       subjectId: 'Mã người tham gia',
@@ -350,9 +338,62 @@ export const vi = {
       guideHidden: 'Ẩn',
       logo: 'Logo trên màn che',
       logoAria: 'Logo trên màn che',
-      logoHint: 'Logo chiến dịch ở góc màn che; ô đang mở hiện camera thay cho logo.',
-      guideHint:
-        'Tự thu gọn: thông điệp hiện đầy đủ khi đổi rồi còn một dòng; lỗi camera luôn hiện đầy đủ.',
+    },
+    /** UX-05: chú thích của từng mục trong cột cài đặt (nút "?"; di chuột, focus hay bấm để xem). */
+    help: {
+      aria: 'Chú thích',
+      ui: {
+        language:
+          'Ngôn ngữ của toàn bộ giao diện (thanh trên, hướng dẫn trên màn, cột cài đặt). Lưu trên máy này; ?lang=vi|en trên URL ghi đè cho lần mở đó.',
+        guide:
+          'Lớp hướng dẫn trên màn. Tự thu gọn: thông điệp hiện đầy đủ khi đổi rồi còn một dòng. Luôn đầy đủ: luôn hiện tiêu đề và chi tiết. Ẩn: không hiện; lỗi camera vẫn luôn hiện đầy đủ.',
+        logo: 'Logo chiến dịch ở góc màn che, viền khớp vạch ô; ô đang mở hiện camera thay cho phần logo ở ô đó. Tắt thì màn che chỉ còn lưới trắng.',
+      },
+      grid: {
+        preset:
+          'Số ô của màn che (cột × hàng). Ô nhỏ thì vùng mở bám tay sát hơn nhưng để lộ chi tiết hơn; đổi lưới thì cửa sổ đang mở đóng lại.',
+        cols: 'Số cột của lưới (4 đến 256). Cỡ ô = phần nguyên của min(rộng / cột, cao / hàng); bảng căn giữa màn.',
+        rows: 'Số hàng của lưới (4 đến 144). Cùng quy tắc cỡ ô với số cột.',
+        lines: 'Vẽ vạch xám 1 px tại mọi ranh giới ô trên màn che. Tắt thì màn che trắng liền.',
+        mirror:
+          'Lật ngang hình camera như gương: tay phải của bạn hiện bên phải màn. Tắt thì hình như camera thấy; đổi mirror thì cửa sổ đang mở đóng lại.',
+      },
+      window: {
+        source:
+          'Chuột: bấm hoặc kéo trên bảng để mở, lăn chuột đổi cỡ, Esc đóng, Space mở lại. Tay: cửa sổ là vùng bao các đầu ngón đang giơ của hai tay. Đổi nguồn thì cửa sổ đang mở đóng lại.',
+        swap: 'Đổi nhãn tay trái/phải khi webcam gán nhãn ngược (thường vì hình đã bị lật sẵn).',
+        raisedOnly:
+          'Chỉ đầu ngón đang giơ (duỗi) tham gia vùng mở, quyết định từ hình học landmark của từng ngón; ngón gập hay bị che bị loại. Tắt thì mọi đầu ngón đã chọn đều tham gia.',
+      },
+      fingers: (minPoints: number, minHands: number) =>
+        `Đầu ngón nào của mỗi bàn tay tham gia vùng mở (áp dụng cho cả hai tay). Cửa sổ là bao lồi các đầu ngón hợp lệ; cần ít nhất ${minPoints} đầu ngón của ${minHands} tay. Không bỏ được ngón cuối; đổi ngón thì cửa sổ đang mở đóng lại.`,
+      sensitivity: {
+        minCutoff:
+          'Tần số cắt tối thiểu của bộ lọc One Euro (Hz). Thấp: cửa sổ mượt hơn khi tay đứng yên nhưng trễ hơn; cao: bám tay nhanh hơn nhưng rung hơn.',
+        beta: 'Hệ số tốc độ của One Euro: tay di chuyển nhanh thì tần số cắt tăng theo tốc độ (cắt = Lọc + beta × tốc độ), nên bám nhanh mà đứng yên vẫn mượt. 0 là lọc cố định.',
+        hysteresisCells:
+          'Độ trễ khi đổi ô ở mép vùng mở (0 đến 0,49 ô): ô đang mở chỉ tắt khi đa giác rời khỏi ô nới rộng chừng này, ô đang tắt chỉ bật khi đa giác lấn vào ô thu hẹp chừng này, để mép không nhấp nháy quanh vạch ô. 0 là đúng hình học.',
+        nMin: 'Cạnh nhỏ nhất của vùng mở tính bằng ô; hộp bao các đầu ngón ngắn hơn thì đóng với lý do quá nhỏ (too-small).',
+        pointMaxAgeMs:
+          'Tuổi tối đa của một đầu ngón kể từ lần thấy cuối (ms). Mất dấu lâu hơn thì điểm bị loại và không đủ điểm thì cửa sổ đóng (stale-point). Lớn: cửa sổ giữ lâu hơn khi mất dấu; nhỏ: đóng nhanh hơn. Track tay cũng bị xóa sau chừng này.',
+      },
+      dataset: {
+        toggle:
+          'Chế độ thu dữ liệu (CLS-01): lưu crop vùng mở thành mẫu trên máy này (thư mục hoặc zip tải về); không gửi đi đâu.',
+        consent:
+          'Chỉ thu khi người tham gia đã ký đồng ý bằng văn bản (bước 1 của CLS-01); chưa tích thì không bắt đầu được.',
+        subjectId: 'Mã ẩn danh của người tham gia, ghi vào metadata của mẫu; không ghi tên thật.',
+        label:
+          'Nhãn tạm cho các mẫu sắp thu: người, hình nộm, chưa rõ, hay chỉ nền hoặc chỉ tay; gán nhãn chính thức sau.',
+        lighting: 'Điều kiện ánh sáng lúc thu, ghi vào metadata để cân bằng tập dữ liệu.',
+        mannequin: 'Loại hình nộm nếu đang thu hình nộm; ghi vào metadata.',
+        note: 'Ghi chú tự do đi kèm mỗi mẫu (khoảng cách, phụ kiện, tình huống).',
+        rate: 'Số mẫu thu mỗi giây khi vùng đang mở (0,2 đến 30 Hz).',
+      },
+      log: {
+        toggle:
+          'Ghi các sự kiện (đồng ý, camera bật/dừng/lỗi, vùng mở/đóng, đổi cấu hình) vào IndexedDB của trình duyệt này; xem, xuất CSV hay xóa tại đây. Không có frame hay ảnh, không có đường mạng.',
+      },
     },
   },
   debug: {

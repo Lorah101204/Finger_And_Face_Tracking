@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { GRID_LIMITS, GRID_PRESETS, gridLabel, presetIndex } from '../core/grid'
 import type { StageStore } from '../loop/store'
 import type { WindowSourceKind } from '../reveal/windowSource'
+import { HelpTip } from './HelpTip'
 import { useStrings } from './useLang'
 
 // GRID-01 bước 4: preset lưới, custom cột × hàng có giới hạn, bật/tắt vạch lưới, bật/tắt mirror.
@@ -9,6 +10,7 @@ import { useStrings } from './useLang'
 // HAND-01: nguồn cửa sổ "Tay" chạy hand pipeline (cửa sổ theo tay từ ROI-01, INT-01); cờ đảo trái/phải theo D-010 cho
 // bước kiểm 10 giây với tay phải thật, chỉ hiện khi nguồn là tay. UX-03 (D-049): hai mục dọc của cột cài đặt (Lưới,
 // Cửa sổ): nhãn trên control, checkbox vẽ thành công tắc; nguồn cửa sổ vẫn là <select> có aria-label "Nguồn cửa sổ".
+// UX-05: mỗi mục có nút "?" (HelpTip) mang chú thích; các dòng hint và title tĩnh cũ chuyển vào đó.
 export function GridControls({ store }: { store: StageStore }) {
   const { settings, layout } = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const preset = presetIndex(settings)
@@ -16,6 +18,7 @@ export function GridControls({ store }: { store: StageStore }) {
   const s = useStrings()
   const g = s.settings.grid
   const w = s.settings.window
+  const h = s.settings.help
 
   return (
     <>
@@ -25,7 +28,10 @@ export function GridControls({ store }: { store: StageStore }) {
           <span className="hint">{g.hint(settings.cols, settings.rows, layout.c)}</span>
         </h3>
         <div className="lbl">
-          <span>{g.preset}</span>
+          <span>
+            {g.preset}
+            <HelpTip id="preset" text={h.grid.preset} />
+          </span>
           <select
             aria-label={g.presetAria}
             value={preset < 0 ? 'custom' : String(preset)}
@@ -44,7 +50,10 @@ export function GridControls({ store }: { store: StageStore }) {
         </div>
         <div className="cols2">
           <div className="lbl">
-            <span>{g.cols}</span>
+            <span>
+              {g.cols}
+              <HelpTip id="cols" text={h.grid.cols} />
+            </span>
             <input
               type="number"
               aria-label={g.colsAria}
@@ -55,7 +64,10 @@ export function GridControls({ store }: { store: StageStore }) {
             />
           </div>
           <div className="lbl">
-            <span>{g.rows}</span>
+            <span>
+              {g.rows}
+              <HelpTip id="rows" text={h.grid.rows} />
+            </span>
             <input
               type="number"
               aria-label={g.rowsAria}
@@ -67,28 +79,37 @@ export function GridControls({ store }: { store: StageStore }) {
           </div>
         </div>
         <div className="acts">
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={settings.showLines}
-              onChange={(e) => store.setSettings({ showLines: e.target.checked })}
-            />
-            {g.lines}
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={settings.mirror}
-              onChange={(e) => store.setSettings({ mirror: e.target.checked })}
-            />
-            {g.mirror}
-          </label>
+          <span className="with-help">
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.showLines}
+                onChange={(e) => store.setSettings({ showLines: e.target.checked })}
+              />
+              {g.lines}
+            </label>
+            <HelpTip id="lines" text={h.grid.lines} />
+          </span>
+          <span className="with-help">
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={settings.mirror}
+                onChange={(e) => store.setSettings({ mirror: e.target.checked })}
+              />
+              {g.mirror}
+            </label>
+            <HelpTip id="mirror" text={h.grid.mirror} />
+          </span>
         </div>
       </section>
       <section className="sec" data-testid="window-section">
         <h3>{w.title}</h3>
         <div className="lbl">
-          <span>{w.source}</span>
+          <span>
+            {w.source}
+            <HelpTip id="source" text={h.window.source} />
+          </span>
           <select
             aria-label={w.sourceAria}
             value={settings.windowSource}
@@ -100,31 +121,34 @@ export function GridControls({ store }: { store: StageStore }) {
             <option value="hands">{w.hands}</option>
           </select>
         </div>
-        <span className="hint">{hands ? w.hintHands : w.hintMouse}</span>
         {hands && (
           <div className="acts">
-            <label className="check" title={w.swapTitle}>
-              <input
-                type="checkbox"
-                checked={settings.handednessSwap}
-                onChange={(e) => store.setSettings({ handednessSwap: e.target.checked })}
-              />
-              {w.swap}
-            </label>
-            <span className="hint">{w.swapHint}</span>
+            <span className="with-help">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={settings.handednessSwap}
+                  onChange={(e) => store.setSettings({ handednessSwap: e.target.checked })}
+                />
+                {w.swap}
+              </label>
+              <HelpTip id="swap" text={h.window.swap} />
+            </span>
           </div>
         )}
         {hands && (
           <div className="acts">
-            <label className="check" title={w.raisedOnlyTitle}>
-              <input
-                type="checkbox"
-                checked={settings.raisedOnly}
-                onChange={(e) => store.setSettings({ raisedOnly: e.target.checked })}
-              />
-              {w.raisedOnly}
-            </label>
-            <span className="hint">{w.raisedOnlyHint}</span>
+            <span className="with-help">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={settings.raisedOnly}
+                  onChange={(e) => store.setSettings({ raisedOnly: e.target.checked })}
+                />
+                {w.raisedOnly}
+              </label>
+              <HelpTip id="raisedOnly" text={h.window.raisedOnly} />
+            </span>
           </div>
         )}
       </section>

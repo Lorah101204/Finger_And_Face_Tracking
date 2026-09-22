@@ -13,7 +13,7 @@ import {
   validPoints,
 } from '../../src/hands/fingertips'
 
-// ROI-03 (mục 7.26, D-047): mọi đầu ngón đã chọn của mọi tay là điểm ứng viên; hợp lệ khi tươi (≤ 150 ms), trong
+// ROI-03 (mục 7.26, D-047): mọi đầu ngón đã chọn của mọi tay là điểm ứng viên; hợp lệ khi tươi (≤ 600 ms, D-059), trong
 // bảng, không uncertain, score đủ; điểm không hợp lệ chỉ bị loại; đóng khi thiếu minPoints điểm của minHands tay với
 // lý do trội theo ưu tiên mục 5.8.
 const L = computeLayout({ w: 1280, h: 720 }, { cols: 32, rows: 32 }, { w: 1280, h: 720 })
@@ -88,8 +88,8 @@ describe('evaluateFingertips', () => {
     expect(m[0].pStage).toEqual(cameraToStage({ x: 504, y: 308 }, L, true))
   })
 
-  it('điểm cũ chỉ bị loại: 150 ms vẫn hợp lệ, 151 ms stale-point; còn đủ điểm thì vẫn mở, thiếu thì đóng stale-point', () => {
-    const old = track(2, 'right', 800, 300, { lastSeenTs: 849 })
+  it('điểm cũ chỉ bị loại: 600 ms vẫn hợp lệ, 601 ms stale-point; còn đủ điểm thì vẫn mở, thiếu thì đóng stale-point', () => {
+    const old = track(2, 'right', 800, 300, { lastSeenTs: 399 })
     const st = evaluateFingertips(frame([LEFT, old]), ALL, L, false, 1000)
     expect(st.slice(0, 5).every((s) => s.valid)).toBe(true)
     expect(st.slice(5).every((s) => s.reason === 'stale-point')).toBe(true)
@@ -102,7 +102,7 @@ describe('evaluateFingertips', () => {
     // Một tay cũ một phần vẫn mở khi mỗi tay còn điểm hợp lệ (minHands 1 thì một tay đủ).
     expect(fingertipsCloseReason(st, { minHands: 1 })).toBeNull()
     const edge = evaluateFingertips(
-      frame([LEFT, track(2, 'right', 800, 300, { lastSeenTs: 850 })]),
+      frame([LEFT, track(2, 'right', 800, 300, { lastSeenTs: 400 })]),
       ALL,
       L,
       false,
@@ -174,7 +174,7 @@ describe('evaluateFingertips', () => {
 
   it('toPoints giữ hand, tip, trackId, valid, reason và bản sao pStage; describeFingertips theo tay', () => {
     const st = evaluateFingertips(
-      frame([LEFT, track(2, 'right', 800, 300, { lastSeenTs: 800 })]),
+      frame([LEFT, track(2, 'right', 800, 300, { lastSeenTs: 300 })]),
       [4, 8],
       L,
       false,
@@ -247,9 +247,9 @@ describe('folded (ROI-04)', () => {
     expect(fingertipsGuidance(out, {}, 'en')).toBe(
       'Seeing 2 valid fingertips, need at least 3 from 2 hands: 8 folded fingertips.',
     )
-    // Điểm cũ đứng trước gập: track cũ 300 ms → mọi điểm stale-point, không còn folded.
+    // Điểm cũ đứng trước gập: track cũ 700 ms → mọi điểm stale-point, không còn folded.
     const stale = evaluateFingertips(
-      frame([{ ...left, lastSeenTs: 700 }, right]),
+      frame([{ ...left, lastSeenTs: 300 }, right]),
       ALL,
       L,
       true,

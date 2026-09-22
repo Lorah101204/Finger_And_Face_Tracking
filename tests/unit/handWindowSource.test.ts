@@ -116,13 +116,13 @@ describe('HandWindowSource', () => {
     }
   })
 
-  it('điểm cũ theo sensitivity.pointMaxAgeMs: 200 ms đóng stale-point với mặc định 150, mở khi nâng lên 300', () => {
+  it('điểm cũ theo sensitivity.pointMaxAgeMs: 700 ms đóng stale-point với mặc định 600 (D-059), mở khi nâng lên 800', () => {
     const { source, frame, ctx } = setup()
-    frame({ ...HANDS, ageMs: 200 }, 1000)
+    frame({ ...HANDS, ageMs: 700 }, 1000)
     const s = source.current(1000)
     expect(s.reason).toBe('stale-point')
     expect(s.fingers?.every((x) => x.reason === 'stale-point')).toBe(true)
-    ctx.sensitivity = { ...ctx.sensitivity, pointMaxAgeMs: 300 }
+    ctx.sensitivity = { ...ctx.sensitivity, pointMaxAgeMs: 800 }
     expect(source.current(1001).shape).toEqual(POLY)
   })
 

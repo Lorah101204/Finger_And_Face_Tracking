@@ -1,13 +1,15 @@
 import { useSyncExternalStore } from 'react'
 import type { StageStore } from '../loop/store'
 import { SENSITIVITY_LIMITS, defaultSensitivity, type Sensitivity } from '../reveal/sensitivity'
+import { HelpTip } from './HelpTip'
 import { useStrings } from './useLang'
 
 // ROI-01 bước 4 (UC-09): độ nhạy của cửa sổ theo tay: One Euro (minCutoff, beta), hysteresis, nMin, tuổi điểm.
 // Mọi thay đổi đi qua store.setSettings({ sensitivity }): kẹp trong giới hạn, áp dụng ở frame kế, không đổi epoch.
 // Chỉ hiện khi nguồn cửa sổ là tay (StagePage). Giá trị trống hay không phải số thì bỏ qua (giữ giá trị cũ).
 // UX-03 (D-049): mỗi tham số là thanh trượt kèm ô số cùng giá trị; ô số mang aria-label (e2e fill, bàn phím), thanh
-// trượt là tiện ích chuột (aria-hidden, không nhận Tab) vì cùng nhãn sẽ làm getByLabel trùng hai phần tử.
+// trượt là tiện ích chuột (aria-hidden, không nhận Tab) vì cùng nhãn sẽ làm getByLabel trùng hai phần tử. UX-05: nút
+// "?" cạnh nhãn mỗi tham số mang chú thích (settings.help.sensitivity).
 const FIELDS: readonly (keyof Sensitivity)[] = [
   'minCutoff',
   'beta',
@@ -26,7 +28,9 @@ export function SensitivityControls({
 }) {
   const { settings } = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const s = settings.sensitivity
-  const txt = useStrings().settings.sensitivity
+  const strings = useStrings().settings
+  const txt = strings.sensitivity
+  const help = strings.help.sensitivity
 
   function update(key: keyof Sensitivity, value: number): void {
     if (!Number.isFinite(value)) return
@@ -51,7 +55,10 @@ export function SensitivityControls({
         return (
           <div className="slider" key={key}>
             <div className="lab">
-              <span>{label}</span>
+              <span>
+                {label}
+                <HelpTip id={key} text={help[key]} />
+              </span>
               <input
                 type="number"
                 aria-label={aria}

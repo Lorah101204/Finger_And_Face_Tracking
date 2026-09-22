@@ -44,7 +44,8 @@ test('lưới mặc định 64 × 36: canvas theo DPR, c và bảng đúng công
   const size = await canvasSize(page)
   expect(size.w).toBe(Math.round(size.cssW * size.dpr))
   expect(size.h).toBe(Math.round(size.cssH * size.dpr))
-  // D-045 (QA-02): tuổi điểm mặc định theo delegate tay app tự chọn từ renderer WebGL (headless SwiftShader → CPU → 250).
+  // D-045 (QA-02): tuổi điểm mặc định theo delegate tay app tự chọn từ renderer WebGL (headless SwiftShader → CPU);
+  // D-059: cả hai là 600 và lọc 3 Hz.
   const webgl = await page.evaluate(() => window.__wct!.env!.snapshot().webgl)
   const pointMaxAgeMs =
     resolveHandDelegate(DEFAULTS.hands.delegate, webgl) === 'CPU'
@@ -59,7 +60,13 @@ test('lưới mặc định 64 × 36: canvas theo DPR, c và bảng đúng công
     handednessSwap: false,
     fingers: [4, 8, 12, 16, 20],
     raisedOnly: true,
-    sensitivity: { minCutoff: 1, beta: 0.02, hysteresisCells: 0.25, nMin: 3, pointMaxAgeMs },
+    sensitivity: {
+      minCutoff: DEFAULTS.reveal.oneEuro.minCutoff,
+      beta: 0.02,
+      hysteresisCells: 0.25,
+      nMin: 3,
+      pointMaxAgeMs,
+    },
   })
   expect(st.stageSize).toEqual({ w: size.w, h: size.h })
   const { c, board } = st.layout

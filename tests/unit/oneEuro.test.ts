@@ -41,13 +41,16 @@ describe('stepOneEuro', () => {
     expect(Math.abs(a - b)).toBeLessThan(0.1)
   })
 
+  // D-059: mặc định minCutoff 3 Hz giảm rung ±3 px (biên 6 px) còn dưới 2 px ở 30 Hz; với 1 Hz (D-035) còn dưới 1,5 px.
   it('rung ±3 px quanh một giá trị bị giảm biên độ nhiều lần', () => {
     const vals = Array.from({ length: 120 }, (_, i) => 100 + (i % 2 === 0 ? 3 : -3))
     const out = run(vals, 1000 / 30)
     const tail = out.slice(60)
     const amp = Math.max(...tail) - Math.min(...tail)
-    expect(amp).toBeLessThan(1.5)
+    expect(amp).toBeLessThan(2)
     expect(Math.abs(tail[tail.length - 1] - 100)).toBeLessThan(1)
+    const soft = run(vals, 1000 / 30, { ...ONE_EURO_DEFAULTS, minCutoff: 1 }).slice(60)
+    expect(Math.max(...soft) - Math.min(...soft)).toBeLessThan(1.5)
   })
 
   it('mẫu có ts không tăng bị bỏ qua (trả trạng thái cũ); minCutoff 0 vẫn lọc được (nâng lên 0,01 Hz)', () => {

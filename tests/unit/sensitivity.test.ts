@@ -11,11 +11,11 @@ describe('sensitivity', () => {
   it('mặc định theo core/config; clamp giữ giá trị hợp lệ, kẹp giá trị ngoài giới hạn, NaN lấy mặc định', () => {
     const d = defaultSensitivity()
     expect(d).toEqual({
-      minCutoff: 1,
+      minCutoff: 3,
       beta: 0.02,
       hysteresisCells: 0.25,
       nMin: 3,
-      pointMaxAgeMs: 150,
+      pointMaxAgeMs: 600,
     })
     expect(clampSensitivity(d)).toEqual(d)
     expect(clampSensitivity({})).toEqual(d)

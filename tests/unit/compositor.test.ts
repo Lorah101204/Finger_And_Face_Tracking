@@ -292,7 +292,7 @@ describe('render với tay (HAND-01)', () => {
     expect(s.calls.at(-1)).toBe('restore')
   })
 
-  it('tay cũ hơn 150 ms vẽ mờ; frame uncertain vẽ nét đứt và nhãn có dấu hỏi; mirror đảo trục x; hands rỗng không vẽ', () => {
+  it('tay cũ hơn 600 ms (D-059) vẽ mờ; frame uncertain vẽ nét đứt và nhãn có dấu hỏi; mirror đảo trục x; hands rỗng không vẽ', () => {
     const s = new StubCtx()
     render(ctxOf(s), L, {
       showLines: false,
@@ -300,7 +300,7 @@ describe('render với tay (HAND-01)', () => {
       drawable: DRAWABLE,
       mask: null,
       hands: handFrame({ uncertain: true }),
-      now: 1000 + 151,
+      now: 1000 + 601,
     })
     expect(s.calls).toContain('alpha 0.45')
     expect(s.calls).toContain('setLineDash 4,3')

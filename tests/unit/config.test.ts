@@ -11,8 +11,11 @@ describe('DEFAULTS', () => {
     expect(DEFAULTS.reveal.minPoints).toBe(3)
   })
 
+  // D-059 (UX-05): tuổi điểm 600 ms cho cả hai delegate và lọc One Euro 3 Hz theo yêu cầu vận hành (thay 150/250 và 1 Hz).
   it('ngưỡng tuổi điểm, tuổi kết quả và ROI tối thiểu', () => {
-    expect(DEFAULTS.freshness.pointMaxAgeMs).toBe(150)
+    expect(DEFAULTS.freshness.pointMaxAgeMs).toBe(600)
+    expect(DEFAULTS.freshness.pointMaxAgeMsCpu).toBe(600)
+    expect(DEFAULTS.reveal.oneEuro.minCutoff).toBe(3)
     expect(DEFAULTS.freshness.faceResultMaxAgeMs).toBe(250)
     expect(DEFAULTS.face.minRoiPx).toBe(64)
     expect(DEFAULTS.reveal.nMin).toBe(3)
@@ -48,7 +51,7 @@ describe('DEFAULTS', () => {
 })
 
 // ROI-04 (D-055): công tắc bật mặc định; ngưỡng gập thấp hơn ngưỡng duỗi (dải Schmitt); debounce ≥ 1 và ngắn hơn
-// tuổi điểm ở nhịp tay mục tiêu (3 frame ở 20 Hz = 150 ms).
+// tuổi điểm ở nhịp tay mục tiêu (3 frame ở 20 Hz = 150 ms ≤ 600 ms, D-059).
 describe('hands.pose (ROI-04)', () => {
   it('raisedOnly true; ngưỡng theo cặp thấp < cao; debounceFrames × 50 ms ≤ tuổi điểm', () => {
     const p = DEFAULTS.hands.pose

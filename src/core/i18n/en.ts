@@ -249,23 +249,13 @@ export const en: Strings = {
       sourceAria: 'Window source',
       mouse: 'Mouse',
       hands: 'Hands',
-      hintHands:
-        'The window is the region enclosing the fingertips of both hands; changing the source closes an open window.',
-      hintMouse: 'Click or drag on the board to open; scroll to resize; Esc closes; Space reopens.',
       swap: 'Swap left/right',
-      swapTitle: 'D-010: turn on if the real webcam labels the hands the wrong way round',
-      swapHint: 'when the webcam labels the hands the wrong way round',
       raisedOnly: 'Raised fingers only',
-      raisedOnlyTitle:
-        'ROI-04 (D-055): raised or folded is decided from landmark geometry; off means every selected fingertip takes part',
-      raisedOnlyHint: 'folded or hidden fingers do not take part in the region',
     },
     fingers: {
       title: 'Fingertips used',
       both: 'both hands',
       aria: (name: string) => `${name.charAt(0).toUpperCase()}${name.slice(1)} finger`,
-      hint: (minPoints: number, minHands: number) =>
-        `The window is the region enclosing the fingertips; at least ${minPoints} fingertips from ${minHands} hands are needed.`,
     },
     sensitivity: {
       title: 'Sensitivity',
@@ -281,8 +271,6 @@ export const en: Strings = {
     dataset: {
       title: 'Data capture',
       toggle: 'Capture data',
-      offHint: 'only the reveal-region crop, saved on this machine',
-      consentTitle: 'Step 1 of CLS-01: no capture without a signed consent form',
       consentAria: 'Participant signed consent',
       consent: 'The participant signed a written consent form',
       subjectId: 'Participant ID',
@@ -356,9 +344,64 @@ export const en: Strings = {
       guideHidden: 'Hidden',
       logo: 'Logo on the cover',
       logoAria: 'Logo on the cover',
-      logoHint: 'The campaign logo in the corner of the cover; open cells show the camera instead.',
-      guideHint:
-        'Auto-collapse: the message shows in full when it changes, then shrinks to one line; camera errors always show in full.',
+    },
+    help: {
+      aria: 'What is this?',
+      ui: {
+        language:
+          'Language of the whole interface (top bar, on-screen guidance, settings column). Stored on this machine; ?lang=vi|en on the URL overrides it for that load.',
+        guide:
+          'The guidance layer on the screen. Auto-collapse: the message shows in full when it changes, then shrinks to one line. Always full: title and detail are always shown. Hidden: not shown; camera errors always show in full.',
+        logo: 'The campaign logo in the corner of the cover, its borders on the cell lines; an open cell shows the camera instead of its piece of the logo. Off leaves a plain white grid.',
+      },
+      grid: {
+        preset:
+          'Cell count of the cover (columns × rows). Small cells follow the hands more closely but reveal more detail; changing the grid closes an open window.',
+        cols: 'Column count (4 to 256). Cell size = floor(min(width / columns, height / rows)); the board is centered.',
+        rows: 'Row count (4 to 144). Same cell-size rule as the columns.',
+        lines:
+          'Draw a 1 px gray line at every cell boundary of the cover. Off gives a solid white cover.',
+        mirror:
+          'Flip the camera image horizontally like a mirror: your right hand appears on the right. Off shows the image as the camera sees it; changing it closes an open window.',
+      },
+      window: {
+        source:
+          'Mouse: click or drag on the board to open, scroll to resize, Esc closes, Space reopens. Hands: the window is the region enclosing the raised fingertips of both hands. Changing the source closes an open window.',
+        swap: 'Swap the left/right hand labels when the webcam labels them the wrong way round (usually because the image is already flipped).',
+        raisedOnly:
+          'Only raised (extended) fingertips take part in the region, decided from the landmark geometry of each finger; folded or hidden fingers are excluded. Off lets every selected fingertip take part.',
+      },
+      fingers: (minPoints: number, minHands: number) =>
+        `Which fingertips of each hand take part in the region (applies to both hands). The window is the convex hull of the valid fingertips; at least ${minPoints} fingertips from ${minHands} hands are needed. The last finger cannot be removed; changing fingers closes an open window.`,
+      sensitivity: {
+        minCutoff:
+          'Minimum cutoff frequency of the One Euro filter (Hz). Low: the window is smoother while the hands are still but lags more; high: it follows the hands faster but jitters more.',
+        beta: 'Speed coefficient of One Euro: when a hand moves fast the cutoff rises with speed (cutoff = Filter + beta × speed), so it follows quickly yet stays smooth at rest. 0 is a fixed filter.',
+        hysteresisCells:
+          'Lag when a cell at the edge of the region changes (0 to 0.49 cells): an open cell turns off only when the polygon leaves the cell grown by this much, a closed cell turns on only when the polygon enters the cell shrunk by this much, so the edge does not flicker around a cell line. 0 is exact geometry.',
+        nMin: 'Smallest side of the region in cells; a shorter fingertip bounding box closes the window as too small (too-small).',
+        pointMaxAgeMs:
+          'Maximum age of a fingertip since it was last seen (ms). Lost for longer, the point is excluded and, without enough points, the window closes (stale-point). High: the window stays longer when tracking is lost; low: it closes sooner. Hand tracks are also dropped after this long.',
+      },
+      dataset: {
+        toggle:
+          'Data capture mode (CLS-01): saves reveal-region crops as samples on this machine (a folder or a downloaded zip); nothing is sent anywhere.',
+        consent:
+          'Capture only when the participant signed a written consent form (step 1 of CLS-01); recording cannot start until this is ticked.',
+        subjectId:
+          'Anonymous participant code written into the sample metadata; never a real name.',
+        label:
+          'Provisional label for the samples about to be captured: person, mannequin, unknown, or background/hands only; the final label comes later.',
+        lighting:
+          'Lighting conditions during capture, written into the metadata to balance the dataset.',
+        mannequin: 'Type of mannequin when capturing one; written into the metadata.',
+        note: 'Free note attached to every sample (distance, accessories, situation).',
+        rate: 'Samples per second while the region is open (0.2 to 30 Hz).',
+      },
+      log: {
+        toggle:
+          "Records events (consent, camera start/stop/error, region open/close, config change) in this browser's IndexedDB; view, export CSV or clear them here. No frames or images, no network path.",
+      },
     },
   },
   debug: {

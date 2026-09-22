@@ -10,12 +10,14 @@ import {
   type DatasetSink,
 } from '../dataset/recorder'
 import { describeRecorder } from './datasetText'
+import { HelpTip } from './HelpTip'
 import { useLang, useStrings } from './useLang'
 
 // CLS-01 bước 2 (UC-13, mục 5.12): mục dataset mode trong cột cài đặt. Công tắc "Thu dữ liệu" mở các trường; chỉ khi
 // tích "người tham gia đã ký đồng ý" mới Bắt đầu thu được; đang thu thì StagePage hiện chỉ báo đỏ trên canvas.
 // Nơi lưu: thư mục (File System Access API) hoặc zip tải về; không upload (I9). Mọi trạng thái đọc từ recorder.
 // UX-03: trường xếp dọc với nhãn trên, hai cột cho các select ngắn; Bắt đầu thu là nút chính, Xóa mẫu là nút danger.
+// UX-05: nút "?" cạnh từng trường mang chú thích (settings.help.dataset).
 export type DatasetControlsProps = {
   recorder: Recorder
   /** Thư mục qua File System Access API (Chromium); null khi trình duyệt không hỗ trợ. */
@@ -27,7 +29,9 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
   const s = useSyncExternalStore(recorder.subscribe, recorder.snapshot)
   const f = s.fields
   const lang = useLang()
-  const d = useStrings().settings.dataset
+  const strings = useStrings().settings
+  const d = strings.dataset
+  const h = strings.help.dataset
 
   async function onPick() {
     if (!pickDirectory) return
@@ -49,31 +53,39 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
         {d.title} <span className="hint">CLS-01</span>
       </h3>
       <div className="acts">
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={s.enabled}
-            onChange={(e) => recorder.setEnabled(e.target.checked)}
-          />
-          {d.toggle}
-        </label>
-        {!s.enabled && <span className="hint">{d.offHint}</span>}
+        <span className="with-help">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={s.enabled}
+              onChange={(e) => recorder.setEnabled(e.target.checked)}
+            />
+            {d.toggle}
+          </label>
+          <HelpTip id="dataset" text={h.toggle} />
+        </span>
       </div>
       {s.enabled && (
         <>
-          <label className="check" title={d.consentTitle}>
-            <input
-              type="checkbox"
-              aria-label={d.consentAria}
-              checked={f.participantConsent}
-              disabled={s.recording}
-              onChange={(e) => recorder.setFields({ participantConsent: e.target.checked })}
-            />
-            {d.consent}
-          </label>
+          <span className="with-help">
+            <label className="check">
+              <input
+                type="checkbox"
+                aria-label={d.consentAria}
+                checked={f.participantConsent}
+                disabled={s.recording}
+                onChange={(e) => recorder.setFields({ participantConsent: e.target.checked })}
+              />
+              {d.consent}
+            </label>
+            <HelpTip id="consent" text={h.consent} />
+          </span>
           <div className="cols2">
             <div className="lbl">
-              <span>{d.subjectId}</span>
+              <span>
+                {d.subjectId}
+                <HelpTip id="subjectId" text={h.subjectId} />
+              </span>
               <input
                 type="text"
                 aria-label={d.subjectId}
@@ -83,7 +95,10 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
               />
             </div>
             <div className="lbl">
-              <span>{d.label}</span>
+              <span>
+                {d.label}
+                <HelpTip id="label" text={h.label} />
+              </span>
               <select
                 aria-label={d.label}
                 value={f.label}
@@ -97,7 +112,10 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
               </select>
             </div>
             <div className="lbl">
-              <span>{d.lighting}</span>
+              <span>
+                {d.lighting}
+                <HelpTip id="lighting" text={h.lighting} />
+              </span>
               <select
                 aria-label={d.lighting}
                 value={f.lighting}
@@ -111,7 +129,10 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
               </select>
             </div>
             <div className="lbl">
-              <span>{d.mannequin}</span>
+              <span>
+                {d.mannequin}
+                <HelpTip id="mannequin" text={h.mannequin} />
+              </span>
               <select
                 aria-label={d.mannequinAria}
                 value={f.mannequinType}
@@ -128,7 +149,10 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
             </div>
           </div>
           <div className="lbl">
-            <span>{d.note}</span>
+            <span>
+              {d.note}
+              <HelpTip id="note" text={h.note} />
+            </span>
             <input
               type="text"
               aria-label={d.note}
@@ -138,7 +162,10 @@ export function DatasetControls({ recorder, pickDirectory, download }: DatasetCo
           </div>
           <div className="acts">
             <div className="lbl">
-              <span>{d.rate}</span>
+              <span>
+                {d.rate}
+                <HelpTip id="rate" text={h.rate} />
+              </span>
               <input
                 type="number"
                 aria-label={d.rateAria}

@@ -77,23 +77,25 @@ describe('HandTracker', () => {
     ])
   })
 
-  it('tay biến mất rồi hiện lại chỗ khác: trong 150 ms thì thêm track mới, quá 150 ms thì track cũ bị xóa', () => {
+  // D-059: trackDropMs mặc định 600 ms (bằng tuổi điểm).
+  it('tay biến mất rồi hiện lại chỗ khác: trong 600 ms thì thêm track mới, quá 600 ms thì track cũ bị xóa', () => {
     const tr = new HandTracker()
     tr.update([det('left', 300, 300)], 0, 0, W, H)
     const gone = tr.update([], 1, 100, W, H)
     expect(gone.hands.map((h) => h.id)).toEqual([1])
-    // Xa hơn matchCostMax (600 px / 1280 = 0,47): không ghép, track mới id 2; track 1 chưa quá 150 ms nên còn.
+    // Xa hơn matchCostMax (600 px / 1280 = 0,47): không ghép, track mới id 2; track 1 chưa quá 600 ms nên còn.
     const far = tr.update([det('left', 900, 300)], 2, 120, W, H)
     expect(far.hands.map((h) => [h.id, h.palmCenterCam.x])).toEqual([
       [1, 300],
       [2, 900],
     ])
-    // 250 ms sau lần thấy cuối của track 1 (> 150 ms): xóa; track 2 mới thấy 130 ms trước nên còn.
-    const later = tr.update([det('left', 905, 300)], 3, 250, W, H)
+    // Vắng lần ba lúc 500 ms (≤ 600): còn; 700 ms sau lần thấy cuối của track 1 (> 600 ms): xóa; track 2 vẫn được ghép.
+    expect(tr.update([det('left', 902, 300)], 3, 500, W, H).hands.map((h) => h.id)).toEqual([1, 2])
+    const later = tr.update([det('left', 905, 300)], 4, 700, W, H)
     expect(later.hands.map((h) => h.id)).toEqual([2])
     expect(tr.stats.dropped).toBe(1)
     // Xuất hiện lại đúng chỗ cũ sau khi đã bị xóa: id mới, không dùng lại id 1.
-    const back = tr.update([det('left', 905, 300), det('left', 300, 300)], 4, 283, W, H)
+    const back = tr.update([det('left', 905, 300), det('left', 300, 300)], 5, 733, W, H)
     expect(back.hands.map((h) => h.id)).toEqual([2, 3])
   })
 
@@ -132,7 +134,7 @@ describe('HandTracker', () => {
     expect(again.hands.map((h) => h.id)).toEqual([3])
   })
 
-  it('pipeline chậm: vắng một lần cập nhật dù quá 150 ms vẫn giữ track (dropFrames 2); frame uncertain tính là vắng', () => {
+  it('pipeline chậm: vắng một lần cập nhật dù quá 600 ms vẫn giữ track (dropFrames 2); frame uncertain tính là vắng', () => {
     const tr = new HandTracker()
     tr.update([det('left', 300, 300)], 0, 0, W, H)
     // Kết quả mỗi giây: thấy lại sau 1000 ms vẫn là id 1.
@@ -140,17 +142,17 @@ describe('HandTracker', () => {
     // Vắng một lần (2000 ms): giữ; vắng lần hai (3000 ms): xóa.
     expect(tr.update([], 2, 2000, W, H).hands.map((h) => h.id)).toEqual([1])
     expect(tr.update([], 3, 3000, W, H).hands).toEqual([])
-    // Uncertain kéo dài: hai frame uncertain quá 150 ms thì track cũ bị xóa (không ghép theo vị trí cũ nữa).
+    // Uncertain kéo dài: hai frame uncertain quá 600 ms thì track cũ bị xóa (không ghép theo vị trí cũ nữa).
     tr.update([det('right', 600, 300), det('right', 700, 300)], 4, 4000, W, H)
     expect(
-      tr.update([det('right', 650, 300), det('right', 650, 300)], 5, 4100, W, H).uncertain,
+      tr.update([det('right', 650, 300), det('right', 650, 300)], 5, 4400, W, H).uncertain,
     ).toBe(true)
-    const f6 = tr.update([det('right', 650, 300), det('right', 650, 300)], 6, 4200, W, H)
+    const f6 = tr.update([det('right', 650, 300), det('right', 650, 300)], 6, 4800, W, H)
     expect(f6.uncertain).toBe(true)
     expect(f6.hands).toEqual([])
     expect(
       tr
-        .update([det('right', 560, 300), det('right', 740, 300)], 7, 4300, W, H)
+        .update([det('right', 560, 300), det('right', 740, 300)], 7, 4900, W, H)
         .hands.map((h) => h.id),
     ).toEqual([4, 5])
   })

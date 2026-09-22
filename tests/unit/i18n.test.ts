@@ -89,6 +89,32 @@ describe('từ điển', () => {
       for (const l of out) expect(l.text.trim().length, l.path).toBeGreaterThan(0)
     }
   })
+
+  // UX-05 (D-060): chú thích cho mọi tham số độ nhạy; mỗi chú thích là một câu giải thích (≥ 40 ký tự) chứ không phải
+  // nhãn lặp lại; tên trợ năng chung của nút "?" không chứa nhãn hay aria-label của mục nào (getByLabel của e2e không
+  // được trúng hai phần tử).
+  it('settings.help: đủ khóa cho mọi tham số độ nhạy, câu đủ dài, tên nút không trùng nhãn mục', () => {
+    for (const dict of [vi, en]) {
+      const help = dict.settings.help
+      const fields = Object.keys(dict.settings.sensitivity.fields).sort()
+      expect(Object.keys(help.sensitivity).sort()).toEqual(fields)
+      const out: { path: string; text: string }[] = []
+      leaves(help, 'help', out)
+      for (const l of out) {
+        if (l.path === 'help.aria') continue
+        expect(l.text.length, l.path).toBeGreaterThanOrEqual(40)
+      }
+      const all: { path: string; text: string }[] = []
+      leaves(dict.settings, 's', all)
+      for (const l of all) {
+        if (l.path.startsWith('s.help') || l.path === 's.title') continue
+        if (l.text.length < 3 || l.path.endsWith('()')) continue
+        expect(help.aria.toLowerCase().includes(l.text.toLowerCase()), `${l.path}: ${l.text}`).toBe(
+          false,
+        )
+      }
+    }
+  })
 })
 
 describe('readLang, writeLang, kho', () => {
