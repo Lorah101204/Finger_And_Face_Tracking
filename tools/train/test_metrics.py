@@ -63,6 +63,21 @@ class MetricsTest(unittest.TestCase):
         self.assertIn("#### By mannequin type", md)
         self.assertIn("| silicone |", md)
 
+    def test_class_without_samples_is_not_measurable(self) -> None:
+        # CLS-03: tập test chỉ có hình nộm (một subject người nằm trọn trong train): recall người không đo được.
+        records = [rec("mannequin", "mannequin", sizeClass="large", position="center", mannequinType="plastic")] * 9
+        pr = precision_recall(records)
+        self.assertIsNone(pr["person"]["recall"])
+        self.assertIsNone(pr["person"]["precision"])
+        self.assertEqual(pr["person"]["support"], 0)
+        self.assertEqual(pr["mannequin"]["recall"], 1.0)
+        self.assertFalse(meets_target(pr))
+        md = render_markdown(records, "Split test")
+        self.assertIn("| person | n/a | n/a | 0 | 0 | 0 | 0 |", md)
+        self.assertIn("not measurable (no person samples in this split)", md)
+        self.assertNotIn("fail", md)
+        self.assertIsNone(rates([rec("person", "person")])["mannequinAsPersonRate"])
+
 
 if __name__ == "__main__":
     unittest.main()

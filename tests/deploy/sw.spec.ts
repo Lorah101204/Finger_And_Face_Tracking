@@ -121,13 +121,21 @@ test('lần mở 1 vào #/app: worker kích hoạt và điều khiển trang, x�
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, undefined, {
     timeout: 30_000,
   })
+  // CLS-03 (D-061): build chọn classifier.onnx khi máy build có model huấn luyện khớp models.json, không thì stub
+  // (CI); modelPath đã ghép base.
+  const clsModel = await page.evaluate(() => window.__wct!.classifier!.snapshot().modelPath)
+  expect([`${BASE}models/classifier-stub.onnx`, `${BASE}models/classifier.onnx`]).toContain(
+    clsModel,
+  )
   const wantModels = [
-    `models/wasm/vision_wasm_module_internal.js`,
-    `models/wasm/vision_wasm_module_internal.wasm`,
-    `models/hand_landmarker.task`,
-    `models/face_landmarker.task`,
-    `models/classifier-stub.onnx`,
-  ].map((p) => `${ORIGIN}${BASE}${p}`)
+    ...[
+      `models/wasm/vision_wasm_module_internal.js`,
+      `models/wasm/vision_wasm_module_internal.wasm`,
+      `models/hand_landmarker.task`,
+      `models/face_landmarker.task`,
+    ].map((p) => `${ORIGIN}${BASE}${p}`),
+    `${ORIGIN}${clsModel}`,
+  ]
   await expect
     .poll(async () => (await dumpCaches(page))[MODELS_CACHE]?.length ?? 0, { timeout: 60_000 })
     .toBeGreaterThanOrEqual(wantModels.length + 2)
@@ -146,7 +154,7 @@ test('lần mở 1 vào #/app: worker kích hoạt và điều khiển trang, x�
   expect(dump[APP_CACHE].some((u) => /assets\/face\.worker-[\w-]+\.js$/.test(u))).toBe(true)
   const total = sizes.reduce((a, [, n]) => a + n, 0)
   note(
-    `EP ${ep} → loader ${loader}; cache model ${dump[MODELS_CACHE].length} file, cache app ${dump[APP_CACHE].length} file; ` +
+    `EP ${ep} → loader ${loader}; phân loại ${clsModel.slice(BASE.length)}; cache model ${dump[MODELS_CACHE].length} file, cache app ${dump[APP_CACHE].length} file; ` +
       `lần 1 tải ${sizes.length} phản hồi models/ + assets/, ${(total / 1e6).toFixed(1)} MB theo Content-Length`,
   )
   await page.close()

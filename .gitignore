@@ -23,6 +23,8 @@ reports/
 # captured data and test clips (CLS-01, TEST-00): not committed
 data/
 *.y4m
+# CLS-03: Python venv for tools/train (python -m venv .venv; torch, onnxruntime): not committed
+.venv/
 
 # models: downloaded by `npm run models:fetch` per public/models/models.json
 public/models/*.task

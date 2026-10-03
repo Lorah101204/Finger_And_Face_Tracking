@@ -18,6 +18,8 @@ export default defineConfig([
     'reports',
     'data',
     'archive',
+    // CLS-03 (D-061): venv Python của tools/train (torch, onnxruntime), không commit.
+    '.venv',
   ]),
   {
     files: ['**/*.{ts,tsx}'],

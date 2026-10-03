@@ -9,3 +9,5 @@ tools/spikes
 docs
 data
 archive/
+# CLS-03: Python venv of tools/train
+.venv

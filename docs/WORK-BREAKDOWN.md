@@ -802,7 +802,7 @@ sequenceDiagram
 
 Execution order for one person:
 
-`SETUP-00 → SPIKE-00 → WEB-00 → CAM-01 → GRID-01 → ROI-00 → MASK-01 → TEST-00 → MASK-02 → FACE-01 → FACE-02 → HAND-01 → HAND-02 → ROI-01 → INT-01 → ROI-02 → QA-01 → PERF-01 → UX-01 → UX-02 → CLS-01 → CLS-02 → QA-02 → LOG-02 (optional) → ROI-03 → UX-03 → REL-01 → PERF-02 → UX-04 → I18N-01 → ROI-04 → BRAND-01 → UX-05`
+`SETUP-00 → SPIKE-00 → WEB-00 → CAM-01 → GRID-01 → ROI-00 → MASK-01 → TEST-00 → MASK-02 → FACE-01 → FACE-02 → HAND-01 → HAND-02 → ROI-01 → INT-01 → ROI-02 → QA-01 → PERF-01 → UX-01 → UX-02 → CLS-01 → CLS-02 → QA-02 → LOG-02 (optional) → ROI-03 → UX-03 → REL-01 → PERF-02 → UX-04 → I18N-01 → ROI-04 → BRAND-01 → UX-05 → CLS-03`
 
 API-00, LOG-01, ADM-01, SEC-01, DEP-01 are dropped per D-019 (code in `archive/backend/`); static deployment to GitHub Pages with a custom domain is part of REL-01 (D-024, D-048). UX-02 (landing screen, D-023) depends only on WEB-00, so it can be pulled forward to any point after CAM-01; LOG-02 (local log, D-022) is optional and not a precondition of REL-01.
 
@@ -1462,6 +1462,60 @@ Tests: section 7.34.
 
 Implementation note (D-059, D-060, 2026-09-22): as designed. Retiming the fixtures was the only ripple: the unit fixtures that encoded 150 ms (fingertips 849/850 → 399/400, tracker 250 → 700, window source 200/300 → 700/800, compositor 151 → 601) and the e2e stale case (300 → 700, raise to 1000). The unpin click also clears the hover state so the bubble disappears at once although the pointer is still on the button. Main chunk 434.69 → 444.38 kB (gzip 143.69 → 147.02) for the component, its styles and 38 notes. The only behavioral regression found by the suite is the jitter row of the measurements table: the ±3 px jitter case now runs on cell-aligned edges.
 
+#### CLS-03 First trained classifier: capture import, stratified split, model selection
+
+Depends on: CLS-01 (dataset mode and tools), CLS-02 (pipeline and training scripts), REL-01 (model manifest, service worker). Requested on 2026-09-23 with the first real capture (a zip downloaded with "Tải zip" (Download zip)): import it, train on it and put the trained model into the app.
+
+Motivation: the CLS-02 scripts had never run (no torch, no data), and running them on the first capture exposed gaps. Nothing imported a zip safely: a second zip, or a re-import after final labeling, had to be merged by hand. `split.py` assigned subjects without regard to class, so with a single person subject val and test could contain no person at all, silently. `train.py` kept the checkpoint with the best val accuracy, which rewards always answering the only class present in val. `eval.py` printed 0.000 and "fail" for a class with no sample. `export_onnx.py` would run the dynamo exporter by default on torch ≥ 2.9, which needs onnxscript and emits opset ≥ 18. The app could only use a model by changing `modelPath` in the source, while the model file is not committed and CI and the public site must keep the stub.
+
+Data (2026-09-23; tables in `docs/dataset.md` section 7):
+
+| Item | Value |
+|---|---|
+| Capture | 4 sessions, 33 samples, 520 × 520 px crops (all `large`, `center`), normal lighting, 2 Hz, 3 to 6 s per session, `participantConsent` recorded; `label.py check` 0 errors |
+| Mannequin | 3 subjects, 27 samples: two anime figurines and one printed anime poster, all recorded as `plastic` |
+| Person | 1 subject, 6 samples |
+| Split (stratified, seed 1) | train: the person and the largest mannequin subject (6 + 12); val: the poster (6); test: one figurine (9); warning: no person in val and test |
+
+Measurements (2026-09-23; CPU torch 2.14 on the development machine, Python 3.14; in the app from the e2e notes of 7.35):
+
+| Item | Value | Use |
+|---|---|---|
+| Training | MobileNetV3-small with ImageNet weights, `--freeze`, 60 epochs (one step each: 18 images, batch 64), AdamW 1e-3, inverse-frequency class weights; 33 s including the 10 MB weight download; train loss < 0.001 from epoch 13 | Head-only training: 18 training images from two subjects |
+| Checkpoint | `--select auto` → last epoch, because val has no person | Val accuracy would only measure the mannequin class |
+| Export | 6.09 MB ONNX opset 17, input `[1, 3, 128, 128]`, TorchScript exporter; `check_onnx.py` on the 6 val images: max logit difference 8.1e-6, argmax 6/6 | `models.json` `classifier.sha256` written by `--manifest` |
+| Val and test | Unseen poster 6/6 mannequin, unseen figurine 9/9 mannequin (precision and recall 1.000, unknown 0); person: n/a | The section 7.3 target is not measurable on this data |
+| Unseen real face (`face.png`, MediaPipe sample, Python) | Square crops of 300, 450 and 700 px around the face: person 1.000, 1.000, 0.982; the whole portrait letterboxed: 0.640 (unknown under 0.7) | The only evidence so far that the person class generalizes beyond the one participant |
+| Hands only (`hands.jpg`, `thumbs_up.jpg`, `pointing_up.jpg`, Python) | mannequin 0.999, 0.843, 0.977 | No background class: whatever is not a human face goes to mannequin; the app draws no label without a validated face |
+| In the app | Chrome 153, RTX 3050 (`npm run test:bench`, chrome project, `face.png` window, 20 s): webgpu init 1587 ms, warm-up 392 ms, infer p50 20.6 / p95 29.2 ms, 4.0 Hz, result interval p95 271 ms, age at the gate p95 57 ms, 79 of 80 results accepted, 0 stale; forced wasm: init 963 ms, warm-up 56 ms, p50 8.1 / p95 11.3 ms, 4.0 Hz. Chromium headless shell (e2e 7.35, wasm): init 2108 ms, warm-up 162 ms, p50 26.7 / p95 42.0 ms; `face.png` in a 16-cell window (ROI 320 px): full face → person 0.980, the guidance names "Người" without "demo" | 7.35 |
+
+Design (D-061):
+
+- Import: `tools/dataset/import_zip.py <zip> [...] --root data/dataset [--dry-run]`, standard library only. Members must be `<ses-…>/<file>.png|json` (no absolute path, no `..`, no nested folder, at most 16 MiB each) and every session needs a `session.json` whose `sessionId` matches the folder; every zip is checked before anything is written. A session already present is skipped when its PNG set (names and bytes) is identical, so re-importing after `label.py` wrote `labelFinal` changes nothing; a different PNG set is refused (never overwritten). New sessions are extracted into `<id>.partial` and renamed, then `check()` runs on them and the tool exits 1 on errors.
+- Split: stratified by class. A subject's class is its majority label (ties in the order person, mannequin, unknown, background). For the model classes the largest subject goes to train, the next to test, the next to val, the rest greedily to the split furthest below its share of that class. `unknown` and `background` subjects go to test, then val, by the val : test ratio, never to train (the training script ignores them). A model class missing from a split is printed as a warning and written to `splits.json` `warnings`; `classes` and per-split `byLabel` are written too. The leakage check is unchanged.
+- Training: `--freeze` sets `requires_grad` off on `model.features` and keeps that part in eval mode (BatchNorm statistics from ImageNet), so only `model.classifier` learns. The checkpoint is chosen by balanced accuracy (mean per-class recall over the classes present in val); `--select auto` (default) uses val when it has both classes, otherwise the last epoch, with a warning; `val` and `last` force one. The checkpoint records `freeze`, `select`, `valBalancedAcc` and the per-split class counts.
+- Metrics: a class without samples has recall `None` (n/a), a class never predicted has precision `None`; the target line reads "not measurable (no … samples in this split)".
+- Export: `dynamo=False` when `torch.onnx.export` accepts it; `--manifest public/models/models.json` writes `file`, `sha256`, `bytes`, `inputSize`, `labels`, `norm`, `opset` and `train` (backbone, epoch, freeze, select, val accuracy, class counts, torch version) into the `classifier` entry and keeps `stub`, `source` and `note`. A new sha256 also changes the service worker's model cache key (D-050), so returning browsers fetch the new model.
+- Model selection: `public/models/classifier.onnx` is a training artifact and stays uncommitted. `resolveClassifier()` in `vite.config.ts` returns `model` only when the file exists and its sha256 equals `models.json`, otherwise `stub` with the reason; the config prints `wct-classifier: model (classifier.onnx 6.1 MB, sha256 8acdac994a3b)` or `wct-classifier: stub (…)` and defines `import.meta.env.VITE_WCT_CLASSIFIER`. Vitest always gets the stub; `WCT_CLASSIFIER=stub|model` forces a side, and forcing `model` without a matching file fails the build instead of silently shipping the stub. `core/config.ts` reads the value with `import.meta.env?.` (Playwright loads the file in Node for `DEFAULTS`); `DEFAULTS.classifier` has `stubPath`, `trainedPath` and `modelPath` (the build's choice). `?classifier=stub|model` on `#/app` overrides it for that opening (`setClassifierChoice` from `StagePage`, `classifierModelPath()` used by `modelUrls`); `isDemoClassifier()` defaults to the model actually used, so the " · demo" suffix and the guidance sentence about the color model (D-051) disappear only with the trained model. A model trained on 33 samples therefore reaches only the machine it was trained on; CI and the public site keep the stub until a model is published through `classifier.source`.
+- `models:fetch`: when `classifier.file` is present and matches, "ok"; when `classifier.source` and `sha256` are set, it downloads and verifies the file (for CI and the public build, for example from a GitHub Release asset); a mismatching local file is reported and kept; it never deletes the model.
+- Tests: e2e `openApp` appends `classifier=stub` unless the query names a classifier, so every existing case keeps the deterministic color labels on a machine that has a trained model. `sw.spec` expects the model the page actually loaded in the model cache.
+- The venv `.venv/` (`python -m venv .venv`, `.venv/Scripts/pip install -r tools/train/requirements.txt`: torch 2.14 CPU, torchvision 0.29, onnx 1.23, onnxruntime 1.30, Pillow, numpy on Python 3.14) is ignored by git, ESLint and Prettier.
+
+Steps:
+
+1. `tools/dataset/import_zip.py`; `ImportZipTest` in `tools/dataset/test_dataset.py`.
+2. `tools/dataset/split.py` stratified with `warnings`, `classes`, `byLabel`; `StratifiedSplitTest`, the existing split case updated to the new placement.
+3. `tools/train/train.py` (`--freeze`, `--select`, balanced accuracy), `metrics.py` (n/a) with a new case in `test_metrics.py`, `export_onnx.py` (`dynamo=False`, `--manifest`).
+4. `vite.config.ts` `resolveClassifier()` and the define; `src/vite-env.d.ts`; `core/config.ts` (`stubPath`, `trainedPath`, `setClassifierChoice`, `classifierModelPath`); `StagePage` reads `?classifier=`; `tools/fetch-models.mjs`; `public/models/models.json` note and fields.
+5. Tests of 7.35; `tools/test-report.mjs`; `.gitignore`, `.prettierignore`, `eslint.config.js`; documentation: `docs/dataset.md`, `docs/classifier-report.md`, README, tools/README, D-061.
+6. Run on the first capture: `import_zip.py` → `label.py check` → `split.py` → `stats.py --doc` → `train.py --freeze --epochs 60` → `export_onnx.py --manifest` → `check_onnx.py` → `eval.py --doc`.
+
+Done criteria: a capture zip imports into `data/dataset/` with `check` clean, a re-import changes nothing and a conflicting session is refused; the split puts both model classes in every split when each has at least three subjects and warns otherwise; the trained model exports with opset 17 and a fixed input and matches torch; the app uses it without a source change when the file matches `models.json` and labels a real face as person without the demo suffix; a build without the file (CI) uses the stub with the suffix; the whole suite passes with and without the model.
+
+Remaining (data, not code): capture per `docs/dataset.md` section 4 with at least three people and three mannequins so that val and test contain both classes (better 8 to 10 people and 6 or more real mannequins: plastic, fabric, silicone), several window sizes, edge positions and lighting conditions, plus background, hands-only and unknown samples; with several hundred samples per class from several subjects train without `--freeze`; lock the unknown threshold on val; publish the model (a GitHub Release asset in `classifier.source`) only after the section 7.3 target passes on test.
+
+Tests: section 7.35.
+
 ## 7. Mandatory test suite
 
 ### 7.1 Mapping the plan's test table to how it is carried out
@@ -1744,7 +1798,7 @@ After ROI-03 the quadrilateral is a special case of the convex hull (`polygon`):
 | Pipeline | E2E `classify.spec` synthetic source: before the region opens the worker is not initialized and nothing is submitted (`submitted` 0, `classifierSubmitted` 0); open 10 cells on the green half → worker ready (wasm or webgpu), the gate accepts ≥ 3 results, `subject.probs[0]` > 0.99, correct epoch, correct `roiShortPx`, no epoch or no-mask rejections, `classifierSubmitted` equals `submitted` (I1), the `classifier-stat` line has probs; ≤ 5 Hz (+1) over 2 s; a scene drifting at 20 px/s is still person (motion is not used); move to magenta → mannequin in the same epoch; a 3-cell window (< 96 px) submits nothing more and the label expires after 1.5 s; close the region → label cleared, accepting off, nothing more submitted, the gate accepts nothing more; record measurements; gate audit clean | e2e | CLS-02 |
 | Label on the face (local) | E2E `classify.spec` with `face.png`: a 16-cell window around the face → the face has a valid `subjectType`, `subject.epoch` equals the epoch, confidence equals max(prob) when a label exists, closing the region clears the face and the label | local e2e | CLS-02 |
 | Metrics | `tools/train/test_metrics.py` (unittest): the same unknown rule as the app; precision, recall where unknown and wrong assignments count as missed recall and labeled background counts as FP; target 0.9; grouped by size, position, mannequin type; Markdown | unit (Python) | CLS-02 |
-| Real model | Training, export, `check_onnx.py`, `eval.py --doc` on the test split (section 7.3); measure EP and Hz on the target machine (QA-02) | manual, pending | CLS-02 |
+| Real model | Training, export, `check_onnx.py`, `eval.py --doc` on the test split (section 7.3); measure EP and Hz on the target machine (QA-02) | manual: first run in CLS-03 (7.35); the section 7.3 target awaits a dataset with people in val and test | CLS-02 |
 
 ### 7.24 Benchmark, device matrix and locked parameters (QA-02)
 
@@ -1892,6 +1946,21 @@ After ROI-03 the quadrilateral is a special case of the convex hull (`polygon`):
 | New defaults in the app | E2E `help.spec`: the number fields show 600 and 3; fake hands 500 ms old open the region with every point valid; 900 / 1 then "Đặt lại độ nhạy" returns 600 / 3; `solver.spec`: 700 ms closes `stale-point`, 1000 reopens, reset closes again | e2e | UX-05 |
 | By eye | Webcam session: the window survives a finger hidden for half a second and follows a slow hand without trailing; the notes readable on the kiosk display by touch (tap to pin, tap elsewhere to close) and in fullscreen | manual | UX-05 |
 
+### 7.35 Trained classifier tests (CLS-03)
+
+| Case | Expected | How | Package |
+|---|---|---|---|
+| Zip import | `ImportZipTest`: a zip of two sessions imports with `check` clean and no `.partial` folder left; a re-import after `labelFinal` was written skips both sessions and keeps the label; a zip whose session has different PNGs is refused and neither that session nor the new one beside it is written (exit 1); members `../evil.png`, `ses-a1/sub/x.png`, `/abs.json`, `notes.txt` and a session without `session.json` are refused with nothing written; a `sessionId` that does not match its folder and the same session in two zips are errors; `--dry-run` writes nothing | unit (Python) | CLS-03 |
+| Stratified split | `StratifiedSplitTest`: 4 person, 3 mannequin and 2 background subjects → every split has both model classes, the largest subjects go to train, test, val in that order, background only in test and val, no warning, the same seed gives the same split; the majority label decides a subject's class (ties by label order); the CLS-01 case: a single person and a single mannequin stay in train, background and unknown go to test, two warnings | unit (Python) | CLS-03 |
+| Metrics without samples | `test_metrics`: a test split with only mannequins → person precision and recall n/a, support 0, the target "not measurable", never "fail"; `mannequinAsPersonRate` n/a without mannequins | unit (Python) | CLS-03 |
+| Model selection | Unit `classifierModel`: `resolveClassifier` gives `model` when the file matches the sha256 (the reason names it), `stub` when the file is missing, the sha256 is empty or different, or the manifest has no file; Vitest gets `stub`; `WCT_CLASSIFIER=stub` and `model` force a side, forcing `model` without the file throws, an unknown value throws; `models.json` `classifier` has `stub`, `file`, a 64-hex or empty sha256, `source`, and input size, labels, normalization and opset equal to `DEFAULTS` | unit | CLS-03 |
+| Page override and demo suffix | Unit `classifierModel`: by default (Vitest) the stub; `setClassifierChoice('model')` → `/models/classifier.onnx` in `modelUrls` and the warm list, no demo suffix ("Người 97 %"); `'stub'` → the suffix; `null` → the build default | unit | CLS-03 |
+| Build default and override | E2E `classifierModel.spec` (only when `classifier.onnx` matches `models.json`): the default `#/app` has `modelPath` `/models/classifier.onnx` before the region opens; `openApp` (pins `classifier=stub`) gives `/models/classifier-stub.onnx` | local e2e | CLS-03 |
+| Real face in the app | E2E `classifierModel.spec` with `face.png` and `classifier=model`: 16-cell window on the face → worker ready (wasm or webgpu), no error, the validated face gets `person` with max(prob) ≥ 0.7 equal to its confidence after ≥ 3 accepted results, the guidance names "Người" without "demo"; record EP, init, warm-up, inferMs; gate audit clean | local e2e | CLS-03 |
+| Pipeline stays on the stub | E2E `classify.spec` unchanged: `openApp` pins the stub, green → person, magenta → mannequin whatever model the machine has | e2e | CLS-03 |
+| Deployment | `sw.spec`: the model cache holds the classifier file the page actually loaded (`classifier.onnx` when built with the trained model, the stub otherwise); passes with the trained model built in and with `WCT_CLASSIFIER=stub` (the CI case) | deploy | CLS-03 |
+| Training run | Import → `check` → split → `stats.py --doc` → `train.py --freeze` → `export_onnx.py --manifest` → `check_onnx.py` → `eval.py --doc`; numbers in the CLS-03 package | manual | CLS-03 |
+
 ## 8. Handover
 
 - Web source, static build, run and configuration guide.
@@ -1918,7 +1987,8 @@ export const DEFAULTS = {
   freshness: { pointMaxAgeMs: 600, pointMaxAgeMsCpu: 600, faceResultMaxAgeMs: 250 },  // 600 since UX-05 (D-059); D-045 had 150 / 250
   face: { minRoiPx: 64, inputSize: 256, padGray: 128, numFaces: 2, targetHz: 12, fullFaceMarginRatio: 0.04 },
   classifier: { targetHz: 4, unknownThreshold: 0.7, minRoiPx: 96, executionProviders: ['webgpu', 'wasm'],
-                resultMaxAgeMs: 600, labelMaxAgeMs: 1500, partialMinVisible: 0.6 },
+                resultMaxAgeMs: 600, labelMaxAgeMs: 1500, partialMinVisible: 0.6,
+                stubPath: '/models/classifier-stub.onnx', trainedPath: '/models/classifier.onnx' },  // modelPath = trainedPath when the build has a matching model (CLS-03, D-061)
   brand: { logo: { enabled: true, widthRatio: 0.3, maxHeightRatio: 0.6, marginRatio: 0.025, anchor: 'top-left', snapMaxWidthRatio: 0.5, textLength: 268 } },  // BRAND-01 (D-056 to D-058)
 } as const;
 ```
@@ -1934,4 +2004,4 @@ export const DEFAULTS = {
 
 ### 9.3 Environment variables
 
-There are no runtime environment variables (static app, D-019). In development there is only `VITE_HTTPS=1` to enable Vite's self-signed HTTPS when testing on the LAN (D-005). At build time there is `VITE_BASE`: the base path of the site, default `/`, must have the form `/` or `/name/` (starts and ends with `/`, checked by `resolveBase()` in `vite.config.ts`, the build stops if it is wrong); `vite preview` and `test:deploy` read the same variable; CI sets it from the repository variable `PAGES_BASE`, default `/<repo>/` for GitHub Pages without a domain and `/` once the domain is attached (REL-01, D-048, D-050). In Git Bash on Windows set `MSYS_NO_PATHCONV=1` so that `/repo/` is not converted to a Windows path. The old backend's variables live in `archive/backend/.env.example`.
+There are no runtime environment variables (static app, D-019). In development there is only `VITE_HTTPS=1` to enable Vite's self-signed HTTPS when testing on the LAN (D-005). At build time there is `VITE_BASE`: the base path of the site, default `/`, must have the form `/` or `/name/` (starts and ends with `/`, checked by `resolveBase()` in `vite.config.ts`, the build stops if it is wrong); `vite preview` and `test:deploy` read the same variable; CI sets it from the repository variable `PAGES_BASE`, default `/<repo>/` for GitHub Pages without a domain and `/` once the domain is attached (REL-01, D-048, D-050). In Git Bash on Windows set `MSYS_NO_PATHCONV=1` so that `/repo/` is not converted to a Windows path. Also at build and dev-server start: `WCT_CLASSIFIER=stub|model` forces the classifier model instead of the automatic choice (the trained `classifier.onnx` when it matches the sha256 in `models.json`, otherwise the stub; CLS-03, D-061). The old backend's variables live in `archive/backend/.env.example`.

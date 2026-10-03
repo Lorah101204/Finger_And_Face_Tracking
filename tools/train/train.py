@@ -3,11 +3,18 @@
 
   python tools/train/train.py data/dataset --out data/train/run1 [--epochs 20] [--input-size 128] [--batch 64]
       [--lr 1e-3] [--backbone mobilenet_v3_small|efficientnet_b0] [--weights default|none] [--seed 1] [--device cpu]
+      [--freeze] [--select auto|val|last]
 
 Backbone nhỏ của torchvision, đầu ra 2 lớp; tập chia theo subjectId (tools/dataset/split.py); augment mô phỏng đường
-chạy (dataset.py). Lưu checkpoint tốt nhất theo val (data/train/run1/classifier.pt), nhật ký JSON và cấu hình để
-export_onnx.py và eval.py dùng lại. Cần torch, torchvision, Pillow, numpy (tools/train/requirements.txt); các script
-này chưa chạy được trên máy phát triển hiện tại (không có torch) và cần dataset thật.
+chạy (dataset.py). Lưu checkpoint (data/train/run1/classifier.pt), nhật ký JSON và cấu hình để export_onnx.py và
+eval.py dùng lại. Cần torch, torchvision, Pillow, numpy (tools/train/requirements.txt, venv .venv/).
+
+CLS-03 (D-061):
+- `--freeze`: giữ nguyên phần trích đặc trưng đã học trên ImageNet (tham số và thống kê BatchNorm), chỉ học phần đầu
+  phân loại. Dùng khi dataset còn nhỏ (ít subject mỗi lớp): học cả mạng trên vài chục ảnh chỉ thuộc lòng các ảnh đó.
+- Chọn checkpoint theo balanced accuracy trên val (trung bình recall từng lớp), vì val lệch lớp thì accuracy thường
+  thiên về lớp đông. `--select auto` (mặc định): theo val khi val có đủ hai lớp, không thì lấy epoch cuối (val một lớp
+  chỉ thưởng cho model đoán mãi lớp đó); `val`, `last` ép một cách.
 """
 
 from __future__ import annotations
@@ -43,6 +50,12 @@ def build_model(backbone: str, weights: str):
     return m
 
 
+def freeze_features(model) -> None:
+    """--freeze: chỉ phần đầu phân loại (model.classifier) còn học; cả hai backbone đều có model.features."""
+    for p in model.features.parameters():
+        p.requires_grad = False
+
+
 def evaluate(model, loader, device) -> dict:
     import torch
 
@@ -50,15 +63,29 @@ def evaluate(model, loader, device) -> dict:
     correct = 0
     total = 0
     loss_sum = 0.0
+    hit = [0] * len(CLASSES)
+    seen = [0] * len(CLASSES)
     crit = torch.nn.CrossEntropyLoss()
     with torch.no_grad():
         for x, y in loader:
             x, y = x.to(device), y.to(device)
             out = model(x)
             loss_sum += crit(out, y).item() * len(y)
-            correct += (out.argmax(1) == y).sum().item()
+            pred = out.argmax(1)
+            correct += (pred == y).sum().item()
             total += len(y)
-    return {"loss": loss_sum / max(total, 1), "acc": correct / max(total, 1), "n": total}
+            for c in range(len(CLASSES)):
+                mask = y == c
+                seen[c] += int(mask.sum().item())
+                hit[c] += int((pred[mask] == c).sum().item())
+    recall = {CLASSES[c]: hit[c] / seen[c] for c in range(len(CLASSES)) if seen[c]}
+    return {
+        "loss": loss_sum / max(total, 1),
+        "acc": correct / max(total, 1),
+        "balancedAcc": sum(recall.values()) / max(len(recall), 1),
+        "recall": recall,
+        "n": total,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -75,6 +102,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--device", default="auto")
     p.add_argument("--workers", type=int, default=2)
+    p.add_argument("--freeze", action="store_true", help="chỉ học phần đầu phân loại (dataset nhỏ)")
+    p.add_argument("--select", default="auto", choices=("auto", "val", "last"))
     args = p.parse_args(argv)
 
     import torch
@@ -86,25 +115,36 @@ def main(argv: list[str] | None = None) -> int:
     val_s = load_split(args.root, "val")
     if not train_s or not val_s:
         raise SystemExit("tập train hay val rỗng: cần dataset thật đã chia (tools/dataset/split.py)")
-    print(f"train {len(train_s)} {class_counts(train_s)}; val {len(val_s)} {class_counts(val_s)}; device {device}")
+    val_counts = class_counts(val_s)
+    select = args.select
+    if select == "auto":
+        select = "val" if all(val_counts[c] > 0 for c in CLASSES) else "last"
+    print(f"train {len(train_s)} {class_counts(train_s)}; val {len(val_s)} {val_counts}; device {device}; chọn {select}")
+    if select == "last" and args.select == "auto":
+        missing = [c for c in CLASSES if not val_counts[c]]
+        print(f"CẢNH BÁO val không có {', '.join(missing)}: lấy checkpoint epoch cuối thay vì theo val", file=sys.stderr)
     train_ds = CropDataset(train_s, args.input_size, train=True, seed=args.seed)
     val_ds = CropDataset(val_s, args.input_size, train=False)
     train_dl = DataLoader(train_ds, batch_size=args.batch, shuffle=True, num_workers=args.workers, drop_last=False)
     val_dl = DataLoader(val_ds, batch_size=args.batch, shuffle=False, num_workers=args.workers)
 
     model = build_model(args.backbone, args.weights).to(device)
+    if args.freeze:
+        freeze_features(model)
     # Cân bằng lớp bằng trọng số nghịch đảo tần suất (hình nộm thường ít mẫu hơn người).
     counts = class_counts(train_s)
     weight = torch.tensor([sum(counts.values()) / max(counts[c], 1) for c in CLASSES], dtype=torch.float32)
     crit = torch.nn.CrossEntropyLoss(weight=(weight / weight.sum() * len(CLASSES)).to(device))
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=args.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
 
     args.out.mkdir(parents=True, exist_ok=True)
     log: list[dict] = []
-    best = {"acc": -1.0, "epoch": -1}
+    best = {"balancedAcc": -1.0, "epoch": -1}
     for epoch in range(1, args.epochs + 1):
         model.train()
+        if args.freeze:
+            model.features.eval()  # BatchNorm giữ thống kê ImageNet
         t0 = time.time()
         loss_sum = 0.0
         n = 0
@@ -121,8 +161,8 @@ def main(argv: list[str] | None = None) -> int:
         entry = {"epoch": epoch, "trainLoss": loss_sum / max(n, 1), "val": val, "seconds": time.time() - t0}
         log.append(entry)
         print(json.dumps(entry))
-        if val["acc"] > best["acc"]:
-            best = {"acc": val["acc"], "epoch": epoch}
+        if (select == "val" and val["balancedAcc"] > best["balancedAcc"]) or (select == "last" and epoch == args.epochs):
+            best = {"balancedAcc": val["balancedAcc"], "epoch": epoch}
             torch.save(
                 {
                     "state_dict": model.state_dict(),
@@ -132,6 +172,10 @@ def main(argv: list[str] | None = None) -> int:
                     "norm": {"mean": 0.45, "std": 0.225},
                     "epoch": epoch,
                     "valAcc": val["acc"],
+                    "valBalancedAcc": val["balancedAcc"],
+                    "freeze": args.freeze,
+                    "select": select,
+                    "samples": {"train": class_counts(train_s), "val": val_counts},
                 },
                 args.out / "classifier.pt",
             )
@@ -139,7 +183,10 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps({"args": {k: str(v) for k, v in vars(args).items()}, "best": best, "log": log}, indent=2),
         encoding="utf-8",
     )
-    print(f"tốt nhất: epoch {best['epoch']} val acc {best['acc']:.4f}; checkpoint {args.out / 'classifier.pt'}")
+    print(
+        f"đã lưu epoch {best['epoch']} (chọn {select}), val balanced acc {best['balancedAcc']:.4f}; "
+        f"checkpoint {args.out / 'classifier.pt'}"
+    )
     return 0
 
 

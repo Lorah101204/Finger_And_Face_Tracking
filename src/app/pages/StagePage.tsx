@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { CameraSource } from '../../camera/cameraSource'
 import { type CameraErrorKind, type CameraSnapshot } from '../../camera/cameraState'
 import { SyntheticCameraSource } from '../../camera/syntheticCameraSource'
-import { DEFAULTS, modelWarmList } from '../../core/config'
+import { DEFAULTS, modelWarmList, setClassifierChoice } from '../../core/config'
 import { langStore, t, type Lang, type Strings } from '../../core/i18n'
 import type { FrameOutput } from '../../core/types'
 import { createEpochCounter } from '../../core/epoch'
@@ -120,7 +120,12 @@ export function StagePage() {
   const presentParam = searchParams.get('mode') === 'present'
   // BRAND-01: `logo=0|1` đè công tắc "Logo trên màn che" cho lần mở này (link kiosk, e2e); không có thì giá trị đã lưu.
   const logoParam = searchParams.get('logo')
+  // CLS-03 (D-061): `classifier=stub|model` đè model phân loại mặc định của build cho lần mở này (e2e ghim stub).
+  const classifierParam = searchParams.get('classifier')
   const [runtime] = useState(() => {
+    setClassifierChoice(
+      classifierParam === 'stub' || classifierParam === 'model' ? classifierParam : null,
+    )
     const epoch = createEpochCounter()
     // D-045: delegate tay theo renderer WebGL; tuổi điểm mặc định theo delegate (CPU chậm hơn nên tuổi lớn hơn).
     const handDelegate = resolveHandDelegate(handPref, readWebgl())

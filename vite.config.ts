@@ -26,6 +26,48 @@ export function resolveBase(raw: string | undefined): string {
 
 const sha12 = (s: string | Buffer) => createHash('sha256').update(s).digest('hex').slice(0, 12)
 
+export type ClassifierChoice = 'stub' | 'model'
+export type ClassifierResolution = { choice: ClassifierChoice; reason: string }
+
+/**
+ * CLS-03 (D-061): model phân loại mà dev server hay build dùng, đưa vào app qua import.meta.env.VITE_WCT_CLASSIFIER.
+ * `model` (public/models/<classifier.file>, classifier.onnx) chỉ khi file có mặt và sha256 khớp mục classifier của
+ * models.json (tools/train/export_onnx.py --manifest ghi); không thì `stub` (D-044) kèm lý do. File model là sản phẩm
+ * huấn luyện, không commit: CI và trang public chưa có nó (trừ khi models:fetch tải từ `source`) nên vẫn chạy stub.
+ * Vitest (mode test) luôn stub để unit test tất định. WCT_CLASSIFIER=stub|model ép một bên; ép model mà thiếu file hay
+ * sha256 lệch thì lỗi (không lặng lẽ quay về stub).
+ */
+export function resolveClassifier(opts: {
+  mode: string
+  force?: string
+  manifest: { classifier?: { file?: string; sha256?: string } }
+  readModel: (file: string) => Buffer | null
+}): ClassifierResolution {
+  const force = opts.force?.trim() || undefined
+  if (force && force !== 'stub' && force !== 'model')
+    throw new Error(`WCT_CLASSIFIER phải là 'stub' hoặc 'model', nhận '${opts.force}'`)
+  if (force === 'stub') return { choice: 'stub', reason: 'WCT_CLASSIFIER=stub' }
+  if (opts.mode === 'test' && !force) return { choice: 'stub', reason: 'vitest' }
+  const c = opts.manifest.classifier ?? {}
+  const miss = (reason: string): ClassifierResolution => {
+    if (force === 'model') throw new Error(`WCT_CLASSIFIER=model nhưng ${reason}`)
+    return { choice: 'stub', reason }
+  }
+  if (!c.file) return miss('models.json không có classifier.file')
+  const buf = opts.readModel(c.file)
+  if (!buf) return miss(`chưa có public/models/${c.file} (tools/train/export_onnx.py)`)
+  if (!c.sha256) return miss(`models.json chưa có sha256 của ${c.file} (export_onnx.py --manifest)`)
+  const have = createHash('sha256').update(buf).digest('hex')
+  if (have !== c.sha256)
+    return miss(
+      `sha256 của ${c.file} ${have.slice(0, 12)} khác models.json ${c.sha256.slice(0, 12)}`,
+    )
+  return {
+    choice: 'model',
+    reason: `${c.file} ${(buf.length / 1e6).toFixed(1)} MB, sha256 ${have.slice(0, 12)}`,
+  }
+}
+
 function dirSize(dir: string): { bytes: number; largest: { file: string; bytes: number } } {
   let bytes = 0
   let largest = { file: '', bytes: 0 }
@@ -87,8 +129,19 @@ function wctBuild(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
+  const modelsDir = join(process.cwd(), 'public', 'models')
+  const classifier = resolveClassifier({
+    mode,
+    force: process.env.WCT_CLASSIFIER,
+    manifest: JSON.parse(readFileSync(join(modelsDir, 'models.json'), 'utf8')),
+    readModel: (file) =>
+      existsSync(join(modelsDir, file)) ? readFileSync(join(modelsDir, file)) : null,
+  })
+  if (mode !== 'test') console.log(`wct-classifier: ${classifier.choice} (${classifier.reason})`)
   return {
     base: resolveBase(env.VITE_BASE),
+    // CLS-03 (D-061): core/config.ts chọn đường dẫn model theo giá trị này.
+    define: { 'import.meta.env.VITE_WCT_CLASSIFIER': JSON.stringify(classifier.choice) },
     plugins: [react(), wctBuild(), ...(useHttps ? [basicSsl()] : [])],
     // D-019: ứng dụng tĩnh thuần client, không có proxy /api.
     server: { port: 5173 },

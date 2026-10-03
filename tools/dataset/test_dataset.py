@@ -2,7 +2,8 @@
 """Kiểm thử công cụ dataset (CLS-01, mục 7.22): python -m unittest discover -s tools/dataset -p "test_*.py".
 
 Tạo dataset tạm đúng cấu trúc app ghi (PNG tối thiểu bằng zlib), rồi kiểm check (kể cả phát hiện frame gốc và thiếu
-đồng ý), gán nhãn (set, from-dirs, csv), chia tập không rò rỉ và thống kê.
+đồng ý), gán nhãn (set, from-dirs, csv), chia tập không rò rỉ và thống kê. CLS-03: nhập zip của app (import_zip.py) và
+chia phân tầng theo lớp.
 """
 
 from __future__ import annotations
@@ -13,12 +14,14 @@ import struct
 import sys
 import tempfile
 import unittest
+import zipfile
 import zlib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import import_zip as import_tool  # noqa: E402
 import label as label_tool  # noqa: E402
 import split as split_tool  # noqa: E402
 import stats as stats_tool  # noqa: E402
@@ -150,11 +153,17 @@ class DatasetToolsTest(unittest.TestCase):
         self.assertEqual(len(assigned), 20)
         # Hai phiên của S-1 ở cùng tập; mỗi tập có ít nhất một subject.
         self.assertEqual(assigned["ses-a1-0001"], assigned["ses-a2-0001"])
-        for sp in ("train", "val", "test"):
-            self.assertGreaterEqual(len(result[sp]["subjects"]), 1)
         self.assertEqual(sum(result[sp]["samples"] for sp in ("train", "val", "test")), 20)
-        # Subject nhiều mẫu nhất (S-1, 10 mẫu) vào train.
+        # CLS-03: mỗi lớp chia riêng; lớp chỉ có một subject nằm trọn trong train, lớp chỉ dùng khi đánh giá
+        # (background, unknown) không vào train.
+        self.assertEqual(result["classes"], {"S-1": "person", "S-2": "mannequin", "S-3": "background", "S-4": "unknown"})
         self.assertIn("S-1", result["train"]["subjects"])
+        self.assertIn("S-2", result["train"]["subjects"])
+        self.assertIn("S-3", result["test"]["subjects"])
+        self.assertIn("S-4", result["test"]["subjects"])
+        self.assertEqual(result["train"]["byLabel"], {"person": 10, "mannequin": 5, "unknown": 0, "background": 0})
+        self.assertEqual(len(result["warnings"]), 2)
+        self.assertIn("person: 1 subject, không có ở val, test", result["warnings"][0])
         # Rò rỉ giả: cùng subject ở hai tập phải bị phát hiện.
         leak = {"S-1": "train", "S-2": "val", "S-3": "test", "S-4": "train"}
         self.assertEqual(split_tool.verify_no_leak(sessions, leak), [])
@@ -169,7 +178,7 @@ class DatasetToolsTest(unittest.TestCase):
     def test_stats_markdown_and_doc(self) -> None:
         split_tool.main([str(self.root)])
         sessions = load_root(self.root)
-        body = stats_tool.render(all_samples(sessions), len(sessions), json.loads((self.root / "splits.json").read_text()))
+        body = stats_tool.render(all_samples(sessions), len(sessions), json.loads((self.root / "splits.json").read_text(encoding="utf-8")))
         self.assertIn("| person | 10 | 1 | 2 |", body)
         self.assertIn("| mannequin | 5 | 1 | 1 |", body)
         self.assertIn("### By window size", body)
@@ -182,6 +191,134 @@ class DatasetToolsTest(unittest.TestCase):
         self.assertNotIn("cũ", text)
         self.assertIn("| person | 10 | 1 | 2 |", text)
         self.assertTrue(text.endswith("<!-- dataset:end -->\n\nsau\n"))
+
+
+
+def zip_sessions(root: Path, out: Path, sids: list[str], extra: dict[str, bytes] | None = None) -> Path:
+    """Zip đúng dạng nút "Tải zip" của app: <sessionId>/<file>, không mục thư mục."""
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as zf:
+        for sid in sids:
+            for f in sorted((root / sid).iterdir()):
+                zf.writestr(f"{sid}/{f.name}", f.read_bytes())
+        for name, data in (extra or {}).items():
+            zf.writestr(zipfile.ZipInfo(name), data)
+    return out
+
+
+class StratifiedSplitTest(unittest.TestCase):
+    """CLS-03 (D-061): val và test có cả người lẫn hình nộm khi mỗi lớp có ít nhất ba subject."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="wct-split-"))
+        self.root = self.tmp / "dataset"
+        self.root.mkdir()
+        for subj, n in (("P1", 8), ("P2", 6), ("P3", 5), ("P4", 4)):
+            make_session(self.root, f"ses-{subj.lower()}", subj, "person", n)
+        for subj, n in (("M1", 5), ("M2", 4), ("M3", 3)):
+            make_session(self.root, f"ses-{subj.lower()}", subj, "mannequin", n, mannequinType="plastic")
+        for subj, n in (("B1", 3), ("B2", 2)):
+            make_session(self.root, f"ses-{subj.lower()}", subj, "background", n)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_each_split_has_both_classes(self) -> None:
+        ratios = {"train": 0.7, "val": 0.15, "test": 0.15}
+        result = split_tool.make_splits(load_root(self.root), ratios, seed=1)
+        self.assertEqual(result["warnings"], [])
+        for sp in ("train", "val", "test"):
+            self.assertGreater(result[sp]["byLabel"]["person"], 0, sp)
+            self.assertGreater(result[sp]["byLabel"]["mannequin"], 0, sp)
+        # Nhiều mẫu nhất vào train, rồi test, rồi val; P4 theo tỉ lệ vào train.
+        self.assertEqual(result["train"]["subjects"], ["M1", "P1", "P4"])
+        self.assertEqual(result["test"]["subjects"], ["B1", "M2", "P2"])
+        self.assertEqual(result["val"]["subjects"], ["B2", "M3", "P3"])
+        self.assertEqual(result["train"]["byLabel"]["background"], 0)
+        # Tất định theo seed.
+        again = split_tool.make_splits(load_root(self.root), ratios, seed=1)
+        self.assertEqual(again["bySample"], result["bySample"])
+
+    def test_majority_label_decides_subject_class(self) -> None:
+        make_session(self.root, "ses-p1b", "P1", "unknown", 2)
+        classes = split_tool.subject_classes(load_root(self.root))
+        self.assertEqual(classes["P1"], "person")
+        make_session(self.root, "ses-x1", "X", "unknown", 2)
+        make_session(self.root, "ses-x2", "X", "mannequin", 2)
+        # Hòa thì theo thứ tự LABELS: mannequin trước unknown.
+        self.assertEqual(split_tool.subject_classes(load_root(self.root))["X"], "mannequin")
+
+
+class ImportZipTest(unittest.TestCase):
+    """CLS-03 (D-061): nhập zip của dataset mode; zip sai dạng không ghi gì, nhập lại không đụng nhãn cuối."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="wct-import-"))
+        self.src = self.tmp / "src"
+        self.src.mkdir()
+        make_session(self.src, "ses-a1", "S-1", "person", 3)
+        make_session(self.src, "ses-b1", "S-2", "mannequin", 2, mannequinType="plastic")
+        self.zip = zip_sessions(self.src, self.tmp / "capture.zip", ["ses-a1", "ses-b1"])
+        self.root = self.tmp / "dataset"
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_import_then_reimport_keeps_final_labels(self) -> None:
+        self.assertEqual(import_tool.main([str(self.zip), "--root", str(self.root)]), 0)
+        sessions = load_root(self.root)
+        self.assertEqual([s.id for s in sessions], ["ses-a1", "ses-b1"])
+        self.assertEqual(len(all_samples(sessions)), 5)
+        self.assertEqual(check(sessions), [])
+        self.assertFalse(any(p.name.endswith(".partial") for p in self.root.iterdir()))
+        label_tool.main(["set", str(self.root), "--label", "unknown", "ses-a1-0001"])
+        imported, skipped, errors = import_tool.import_zips([self.zip], self.root)
+        self.assertEqual((imported, skipped, errors), ([], ["ses-a1", "ses-b1"], []))
+        meta = json.loads((self.root / "ses-a1" / "ses-a1-0001.json").read_text(encoding="utf-8"))
+        self.assertEqual(meta["labelFinal"], "unknown")
+
+    def test_conflicting_session_is_not_overwritten(self) -> None:
+        import_tool.import_zips([self.zip], self.root)
+        before = (self.root / "ses-a1" / "ses-a1-0001.png").read_bytes()
+        other = self.tmp / "other"
+        other.mkdir()
+        make_session(other, "ses-a1", "S-1", "person", 3, size=120)
+        make_session(other, "ses-c1", "S-3", "person", 1)
+        z2 = zip_sessions(other, self.tmp / "other.zip", ["ses-a1", "ses-c1"])
+        imported, _, errors = import_tool.import_zips([z2], self.root)
+        self.assertEqual(imported, [])
+        self.assertTrue(any("PNG khác" in e for e in errors))
+        self.assertEqual((self.root / "ses-a1" / "ses-a1-0001.png").read_bytes(), before)
+        self.assertFalse((self.root / "ses-c1").exists())
+        self.assertEqual(import_tool.main([str(z2), "--root", str(self.root)]), 1)
+
+    def test_rejects_unexpected_members_without_writing(self) -> None:
+        cases = {
+            "../evil.png": b"x",
+            "ses-a1/sub/x.png": b"x",
+            "/abs.json": b"{}",
+            "notes.txt": b"x",
+            "ses-z9/ses-z9-0001.png": png_bytes(8, 8),  # phiên thiếu session.json
+        }
+        for name, data in cases.items():
+            with self.subTest(name=name):
+                z = zip_sessions(self.src, self.tmp / "bad.zip", ["ses-a1"], {name: data})
+                imported, _, errors = import_tool.import_zips([z], self.root)
+                self.assertEqual(imported, [])
+                self.assertTrue(errors, name)
+                self.assertFalse(self.root.exists())
+        mismatch = self.tmp / "mismatch.zip"
+        with zipfile.ZipFile(mismatch, "w") as zf:
+            zf.writestr("ses-q1/session.json", json.dumps({"sessionId": "ses-other"}))
+        self.assertTrue(any("sessionId" in e for e in import_tool.import_zips([mismatch], self.root)[2]))
+        # Cùng phiên trong hai zip.
+        self.assertTrue(any("cả" in e for e in import_tool.import_zips([self.zip, self.zip], self.root)[2]))
+
+    def test_dry_run_writes_nothing(self) -> None:
+        imported, skipped, errors = import_tool.import_zips([self.zip], self.root, dry_run=True)
+        self.assertEqual((imported, skipped, errors), (["ses-a1", "ses-b1"], [], []))
+        self.assertFalse(self.root.exists())
+        self.assertEqual(import_tool.main([str(self.zip), "--root", str(self.root), "--dry-run"]), 0)
+        self.assertFalse(self.root.exists())
 
 
 if __name__ == "__main__":

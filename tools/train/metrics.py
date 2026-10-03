@@ -4,7 +4,8 @@
 Đầu vào: danh sách bản ghi {label, pred, prob, sizeClass, position, mannequinType} với label là nhãn thật
 (person, mannequin, unknown, background), pred là nhãn sau quy tắc unknown (person, mannequin, unknown) và prob là
 max(prob). Precision và recall từng lớp: unknown và miss tính vào thiếu recall của lớp thật; precision tính trên các dự
-đoán đã gán nhãn.
+đoán đã gán nhãn. CLS-03: lớp không có mẫu nào trong tập (support 0) có recall None, lớp không được dự đoán lần nào có
+precision None; bảng in "n/a" và chỉ tiêu ghi "not measurable" thay vì 0.000 và "fail".
 """
 
 from __future__ import annotations
@@ -50,20 +51,20 @@ def precision_recall(records: list[dict]) -> dict[str, dict[str, float | int]]:
             "tp": tp[c],
             "fp": fp[c],
             "fn": fn[c],
-            "precision": tp[c] / prec_den if prec_den else 0.0,
-            "recall": tp[c] / rec_den if rec_den else 0.0,
+            "precision": tp[c] / prec_den if prec_den else None,
+            "recall": tp[c] / rec_den if rec_den else None,
             "support": rec_den,
         }
     return out
 
 
-def rates(records: list[dict]) -> dict[str, float | int]:
+def rates(records: list[dict]) -> dict[str, float | int | None]:
     mann = [r for r in records if r["label"] == "mannequin"]
     mann_as_person = sum(1 for r in mann if r["pred"] == "person")
     unknown = sum(1 for r in records if r["pred"] == "unknown")
     return {
         "n": len(records),
-        "mannequinAsPersonRate": mann_as_person / len(mann) if mann else 0.0,
+        "mannequinAsPersonRate": mann_as_person / len(mann) if mann else None,
         "unknownRate": unknown / len(records) if records else 0.0,
     }
 
@@ -75,8 +76,24 @@ def by_group(records: list[dict], key: str) -> dict[str, dict]:
     return {g: {"pr": precision_recall(rs), **rates(rs)} for g, rs in sorted(groups.items())}
 
 
-def meets_target(pr: dict[str, dict[str, float | int]], target: float = 0.9) -> bool:
-    return all(pr[c]["precision"] >= target and pr[c]["recall"] >= target for c in CLASSES)
+def measurable(pr: dict[str, dict]) -> list[str]:
+    """Lớp không có mẫu thật trong tập: recall không đo được nên chỉ tiêu không kết luận được."""
+    return [c for c in CLASSES if not pr[c]["support"]]
+
+
+def meets_target(pr: dict[str, dict], target: float = 0.9) -> bool:
+    """Đạt khi cả hai lớp có mẫu và precision, recall đều ≥ target (precision None: chưa dự đoán lần nào, không đạt)."""
+    return all(
+        pr[c]["precision"] is not None
+        and pr[c]["recall"] is not None
+        and pr[c]["precision"] >= target
+        and pr[c]["recall"] >= target
+        for c in CLASSES
+    )
+
+
+def fmt(v: float | None) -> str:
+    return "n/a" if v is None else f"{v:.3f}"
 
 
 def render_markdown(records: list[dict], title: str = "Test set") -> str:
@@ -85,10 +102,14 @@ def render_markdown(records: list[dict], title: str = "Test set") -> str:
     lines = [f"### {title}: {rt['n']} samples", "", "| Class | Precision | Recall | TP | FP | FN | Support |", "|---|---|---|---|---|---|---|"]
     for c in CLASSES:
         m = pr[c]
-        lines.append(f"| {c} | {m['precision']:.3f} | {m['recall']:.3f} | {m['tp']} | {m['fp']} | {m['fn']} | {m['support']} |")
+        lines.append(f"| {c} | {fmt(m['precision'])} | {fmt(m['recall'])} | {m['tp']} | {m['fp']} | {m['fn']} | {m['support']} |")
     lines.append("")
-    lines.append(f"Target ≥ 0.90 for both precision and recall of both classes: {'pass' if meets_target(pr) else 'fail'}. "
-                 f"Mannequins labelled as person: {rt['mannequinAsPersonRate']:.3f}; unknown rate: {rt['unknownRate']:.3f}.")
+    missing = measurable(pr)
+    verdict = (
+        f"not measurable (no {', '.join(missing)} samples in this split)" if missing else "pass" if meets_target(pr) else "fail"
+    )
+    lines.append(f"Target ≥ 0.90 for both precision and recall of both classes: {verdict}. "
+                 f"Mannequins labelled as person: {fmt(rt['mannequinAsPersonRate'])}; unknown rate: {fmt(rt['unknownRate'])}.")
     for key, label in (("sizeClass", "By window size"), ("position", "By position (edge cropping)"), ("mannequinType", "By mannequin type (silicone reported separately)")):
         groups = by_group(records, key)
         if len(groups) <= 1 and "?" in groups:
@@ -97,7 +118,7 @@ def render_markdown(records: list[dict], title: str = "Test set") -> str:
         for g, m in groups.items():
             p = m["pr"]
             lines.append(
-                f"| {g} | {m['n']} | {p['person']['precision']:.3f} | {p['person']['recall']:.3f} | "
-                f"{p['mannequin']['precision']:.3f} | {p['mannequin']['recall']:.3f} | {m['mannequinAsPersonRate']:.3f} | {m['unknownRate']:.3f} |"
+                f"| {g} | {m['n']} | {fmt(p['person']['precision'])} | {fmt(p['person']['recall'])} | "
+                f"{fmt(p['mannequin']['precision'])} | {fmt(p['mannequin']['recall'])} | {fmt(m['mannequinAsPersonRate'])} | {fmt(m['unknownRate'])} |"
             )
     return "\n".join(lines)

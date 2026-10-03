@@ -187,7 +187,8 @@ const vi = (n: number, d = 1) => n.toFixed(d)
 async function openSynthetic(page: Page, query = ''): Promise<StageSnap> {
   await installGumCounter(page)
   await seedConsent(page)
-  await openApp(page, `?debug=1&source=synthetic${query}`)
+  // CLS-03 (D-061): đo model phân loại mặc định của build (model huấn luyện khi có), không ghim stub như e2e.
+  await openApp(page, `?debug=1&source=synthetic${query}`, { pinStub: false })
   await expect(page.locator('canvas#stage')).toBeVisible()
   return readStage(page)
 }
@@ -534,7 +535,7 @@ test('phân loại ép wasm (ep=wasm) để so với EP mặc định', async ({
     hz: m.clsHzMedian,
   }
   note(
-    `wasm: init ${Math.round(c1.stats.initMs)} ms, warm-up ${Math.round(c1.stats.warmupMs)} ms, infer p50 ${vi(c1.stats.p50InferMs)} / p95 ${vi(c1.stats.p95InferMs)} ms, ${vi(m.clsHzMedian)} Hz` +
+    `${c1.modelPath.split('/').pop()} wasm: init ${Math.round(c1.stats.initMs)} ms, warm-up ${Math.round(c1.stats.warmupMs)} ms, infer p50 ${vi(c1.stats.p50InferMs)} / p95 ${vi(c1.stats.p95InferMs)} ms, ${vi(m.clsHzMedian)} Hz` +
       (R.mouse
         ? `; EP mặc định ${R.mouse.cls.ep}: init ${Math.round(R.mouse.cls.initMs)} ms, p50 ${vi(R.mouse.cls.p50)} ms`
         : ''),

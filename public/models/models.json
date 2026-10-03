@@ -41,10 +41,10 @@
     ]
   },
   "classifier": {
-    "note": "CLS-02 (D-044): chưa có model huấn luyện; classifier-stub.onnx do tools/make-stub-classifier.mjs sinh (person = G - (R + B) / 2). Model thật: tools/train/export_onnx.py -> classifier.onnx, ghi sha256 vào đây.",
+    "note": "CLS-02 (D-044), CLS-03 (D-061): classifier-stub.onnx do tools/make-stub-classifier.mjs sinh (person = G - (R + B) / 2). classifier.onnx là model huấn luyện, không commit: tools/train/export_onnx.py --manifest ghi sha256, bytes, train vào đây; vite.config.ts (resolveClassifier) chỉ dùng nó khi file khớp sha256, không thì stub. source: URL tải (ví dụ asset của một GitHub Release) để models:fetch lấy model cho CI và trang public; trống thì chỉ máy đã train có model thật.",
     "stub": "classifier-stub.onnx",
     "file": "classifier.onnx",
-    "sha256": "",
+    "sha256": "8acdac994a3b7133fff2ace5abe20ed69533c9095a7089bfde38556d5f52d892",
     "inputSize": 128,
     "labels": [
       "person",
@@ -54,6 +54,27 @@
       "mean": 0.45,
       "std": 0.225
     },
-    "opset": 17
+    "opset": 17,
+    "bytes": 6089235,
+    "train": {
+      "backbone": "mobilenet_v3_small",
+      "epoch": 60,
+      "freeze": true,
+      "select": "last",
+      "valAcc": 1.0,
+      "valBalancedAcc": 1.0,
+      "samples": {
+        "train": {
+          "person": 6,
+          "mannequin": 12
+        },
+        "val": {
+          "person": 0,
+          "mannequin": 6
+        }
+      },
+      "torch": "2.14.0+cpu"
+    },
+    "source": ""
   }
 }

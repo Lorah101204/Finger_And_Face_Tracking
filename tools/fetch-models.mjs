@@ -112,4 +112,33 @@ if (manifest.classifier?.stub) {
     `stub  ${manifest.classifier.stub} (${n} byte, sinh bởi tools/make-stub-classifier.mjs)`,
   )
 }
+// CLS-03 (D-061): model huấn luyện (tools/train/export_onnx.py --manifest ghi sha256). Không commit; có `source` (ví
+// dụ asset của một GitHub Release) thì tải và đối chiếu sha256, để CI build trang public với model thật. Không bao giờ
+// xóa file này: nó là sản phẩm huấn luyện trên máy. vite.config.ts (resolveClassifier) chỉ dùng nó khi sha256 khớp.
+const cls = manifest.classifier
+if (cls?.file) {
+  const dest = join(modelsDir, cls.file)
+  const have = existsSync(dest) ? sha256(readFileSync(dest)) : null
+  if (have && cls.sha256 && have === cls.sha256) {
+    console.log(`ok    ${cls.file} (model phân loại huấn luyện)`)
+  } else if (cls.source && cls.sha256) {
+    console.log(`get   ${cls.file} <- ${cls.source}`)
+    const res = await fetch(cls.source)
+    if (!res.ok) throw new Error(`HTTP ${res.status} khi tải ${cls.source}`)
+    const buf = Buffer.from(await res.arrayBuffer())
+    const got = sha256(buf)
+    if (got !== cls.sha256)
+      throw new Error(`sha256 không khớp cho ${cls.file}: manifest ${cls.sha256}, tải về ${got}`)
+    writeFileSync(dest, buf)
+    console.log(`done  ${cls.file} (${(buf.length / 1e6).toFixed(2)} MB)`)
+  } else if (have) {
+    console.log(
+      `lệch  ${cls.file}: sha256 ${have.slice(0, 12)} khác models.json (${(cls.sha256 || 'trống').slice(0, 12)}); app dùng stub tới khi export_onnx.py --manifest ghi lại`,
+    )
+  } else {
+    console.log(
+      `none  ${cls.file}: chưa có model huấn luyện và chưa có source; app dùng stub (tools/train, docs/classifier-report.md)`,
+    )
+  }
+}
 if (dirty) writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')

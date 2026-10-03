@@ -3,6 +3,13 @@
 // Các hằng có ghi D-xxx đến từ docs/decisions.md sau SPIKE-00.
 import type { FingerTip } from './types'
 
+/**
+ * CLS-03 (D-061): model phân loại mà vite.config.ts (resolveClassifier) chọn lúc build hay khởi động dev server. Ngoài
+ * Vite (Playwright nạp file này trong Node để đọc DEFAULTS) không có import.meta.env nên phải dùng `?.`.
+ */
+const BUILD_CLASSIFIER: 'stub' | 'model' =
+  import.meta.env?.VITE_WCT_CLASSIFIER === 'model' ? 'model' : 'stub'
+
 export const DEFAULTS = {
   camera: {
     width: 1280,
@@ -139,10 +146,15 @@ export const DEFAULTS = {
     /** Thứ tự đầu ra của model (softmax trên logits). */
     labels: ['person', 'mannequin'] as ('person' | 'mannequin')[],
     /**
-     * CLS-02 (D-044): model stub sinh bởi tools/make-stub-classifier.mjs cho tới khi có model huấn luyện
-     * (tools/train, export ra /models/classifier.onnx rồi đổi đường dẫn ở đây).
+     * CLS-02 (D-044): stub theo màu sinh bởi tools/make-stub-classifier.mjs. CLS-03 (D-061): model huấn luyện export
+     * bởi tools/train/export_onnx.py. `modelPath` là model mặc định: model thật khi build hay dev server thấy
+     * public/models/classifier.onnx khớp sha256 của models.json, không thì stub; `?classifier=stub|model` đè cho một
+     * lần mở trang #/app (setClassifierChoice).
      */
-    modelPath: '/models/classifier-stub.onnx',
+    stubPath: '/models/classifier-stub.onnx',
+    trainedPath: '/models/classifier.onnx',
+    modelPath:
+      BUILD_CLASSIFIER === 'model' ? '/models/classifier.onnx' : '/models/classifier-stub.onnx',
     /** D-013: loader ORT theo môi trường như MediaPipe; build tĩnh copy bằng models:fetch. */
     ortPathsDev: '/node_modules/onnxruntime-web/dist/',
     ortPathsProd: '/models/ort/',
@@ -179,12 +191,32 @@ export const DEFAULTS = {
 
 export type Defaults = typeof DEFAULTS
 
+export type ClassifierChoice = 'stub' | 'model'
+
+let classifierChoice: ClassifierChoice | null = null
+
 /**
- * CLS-02 (D-044), rà soát 2026-09-20: model phân loại đang là stub theo màu (tools/make-stub-classifier.mjs) chứ chưa
- * phải model huấn luyện; nhãn trên trang public phải nói rõ điều đó. Suy từ đường dẫn model để không cần cờ riêng phải
- * nhớ đổi: trỏ modelPath tới classifier.onnx thật là hết chữ "demo".
+ * CLS-03 (D-061): `?classifier=stub|model` của trang #/app đè model mặc định cho lần mở này (e2e ghim stub để nhãn tất
+ * định theo màu; người vận hành so stub với model thật). null bỏ đè. StagePage gọi trước khi tạo ClassifierClient.
  */
-export function isDemoClassifier(modelPath: string = DEFAULTS.classifier.modelPath): boolean {
+export function setClassifierChoice(choice: ClassifierChoice | null): void {
+  classifierChoice = choice
+}
+
+/** Đường dẫn model phân loại đang dùng (chưa ghép base): phần đè của trang nếu có, không thì mặc định của build. */
+export function classifierModelPath(): string {
+  const c = DEFAULTS.classifier
+  if (classifierChoice === 'stub') return c.stubPath
+  if (classifierChoice === 'model') return c.trainedPath
+  return c.modelPath
+}
+
+/**
+ * CLS-02 (D-044), rà soát 2026-09-20: khi model phân loại là stub theo màu (tools/make-stub-classifier.mjs) chứ chưa
+ * phải model huấn luyện, nhãn trên trang public phải nói rõ điều đó. Suy từ đường dẫn model đang dùng để không cần cờ
+ * riêng phải nhớ đổi: model thật (CLS-03) là hết chữ "demo".
+ */
+export function isDemoClassifier(modelPath: string = classifierModelPath()): boolean {
   return /classifier-stub\.onnx$/.test(modelPath)
 }
 
@@ -209,7 +241,7 @@ export function modelUrls(
     wasmBase: withBase(dev ? mp.wasmBaseDev : mp.wasmBaseProd, base),
     handModel: withBase(mp.handModel, base),
     faceModel: withBase(mp.faceModel, base),
-    classifierModel: withBase(c.modelPath, base),
+    classifierModel: withBase(classifierModelPath(), base),
     ortPaths: withBase(dev ? c.ortPathsDev : c.ortPathsProd, base),
   }
 }

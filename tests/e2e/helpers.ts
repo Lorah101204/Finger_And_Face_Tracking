@@ -597,12 +597,22 @@ export async function seedConsent(page: Page, value: string = CONSENT_VERSION): 
 /**
  * Mở #/app (kèm query, ví dụ '?debug=1&source=synthetic') trong một document mới: với hash routing, goto cùng document
  * không nạp lại trang và cache đồng ý. BRAND-01: thêm `logo=0` khi query chưa nói gì về logo, để mọi ca pixel hiện có
- * chạy trên màn che trơn; logo.spec bật rõ bằng `logo=1`.
+ * chạy trên màn che trơn; logo.spec bật rõ bằng `logo=1`. CLS-03 (D-061): thêm `classifier=stub` khi query chưa nói gì
+ * về classifier, để nhãn tất định theo màu (classify.spec) dù máy chạy test đã có model huấn luyện;
+ * classifierModel.spec mở rõ bằng `classifier=model`; bench (`pinStub: false`) đo model mặc định của build.
  */
-export async function openApp(page: Page, query = ''): Promise<void> {
-  const q = /[?&]logo=/.test(query) ? query : query ? `${query}&logo=0` : '?logo=0'
+export async function openApp(
+  page: Page,
+  query = '',
+  { pinStub = true }: { pinStub?: boolean } = {},
+): Promise<void> {
+  const params = [
+    ...(query ? [query.replace(/^\?/, '')] : []),
+    ...(/[?&]logo=/.test(query) ? [] : ['logo=0']),
+    ...(!pinStub || /[?&]classifier=/.test(query) ? [] : ['classifier=stub']),
+  ]
   await page.goto('about:blank')
-  await page.goto(`/#/app${q}`)
+  await page.goto(`/#/app?${params.join('&')}`)
 }
 
 /**
