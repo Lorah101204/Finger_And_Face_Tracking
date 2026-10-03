@@ -5,28 +5,36 @@
 # https://<user>.github.io/<repo>/), verifies the production build with `test:deploy` (service worker, base path, I9) and
 # uploads dist/ as the Pages artifact; the deploy job publishes it to GitHub Pages only on push to main (Settings → Pages →
 # Source: GitHub Actions). Rollback: re-run the deploy job of an older commit.
+# QA-03 (D-067): the soak also runs every Monday on a schedule (a kiosk runs all day, so a heap or listener leak must
+# show up without anyone remembering to trigger it); the check job is skipped on that schedule.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # QA-03: weekly soak, Monday 03:17 UTC (off the top of the hour, when GitHub's scheduler is busiest).
+    - cron: '17 3 * * 1'
   workflow_dispatch:
     inputs:
       soak_minutes:
-        description: 'PERF-01 soak (minutes); the soak job only runs when triggered manually'
+        description: 'PERF-01 soak (minutes); the soak job runs when triggered manually and on the weekly schedule (15 minutes)'
         default: '15'
       bench_seconds:
         description: 'QA-02 benchmark (seconds per measurement); the bench job only runs when triggered manually'
         default: '20'
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # QA-03: the weekly schedule has its own group, so a 15-minute soak neither delays the deploy of a push to main nor
+  # replaces a pending push run (GitHub keeps one running and one pending run per group).
+  group: ci-${{ github.event_name == 'schedule' && 'schedule' || github.ref }}
   # Pull request: a new push cancels the previous run. main: never cancel, so the deploy job is not cut off.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -150,9 +158,10 @@ jobs:
           echo "Deployed: ${{ steps.deploy.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Open the app directly: ${{ steps.deploy.outputs.page_url }}#/app" >> "$GITHUB_STEP_SUMMARY"
 
-  # PERF-01: the long soak runs separately when triggered manually (workflow_dispatch), not inside the check job.
+  # PERF-01: the long soak runs separately when triggered manually (workflow_dispatch), not inside the check job; QA-03
+  # adds the weekly schedule.
   soak:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:

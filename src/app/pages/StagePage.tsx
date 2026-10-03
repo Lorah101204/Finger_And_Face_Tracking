@@ -111,11 +111,10 @@ export function StagePage() {
   const debug = searchParams.get('debug') === '1'
   const syntheticWanted = debug && searchParams.get('source') === 'synthetic'
   // QA-02 (D-045): `hands=GPU|CPU` ghi đè delegate của worker tay (mặc định `auto`: GPU trên phần cứng, CPU khi WebGL
-  // là phần mềm), `ep=wasm` ép ORT dùng wasm (mặc định webgpu rồi wasm) để benchmark so sánh trên máy mục tiêu.
+  // là phần mềm). PERF-03 (D-062): bỏ `ep=wasm` vì ORT chỉ còn EP wasm.
   const handsParam = searchParams.get('hands')
   const handPref =
     handsParam === 'GPU' || handsParam === 'CPU' ? handsParam : DEFAULTS.hands.delegate
-  const forceWasm = searchParams.get('ep') === 'wasm'
   // UX-03: `mode=present` mở sẵn chế độ trình diễn (kiosk); giá trị đã lưu trong tab được ưu tiên như debugOpen.
   const presentParam = searchParams.get('mode') === 'present'
   // BRAND-01: `logo=0|1` đè công tắc "Logo trên màn che" cho lần mở này (link kiosk, e2e); không có thì giá trị đã lưu.
@@ -158,9 +157,7 @@ export function StagePage() {
     const restricted = createRestrictedFrameBuilder({ probes, crops: recorder.tap })
     const face = new FaceClient({ resultDelayMs: () => probes.workerDelayMs })
     // CLS-02: worker phân loại (ONNX Runtime Web) nhận bitmap thứ hai của cùng crop, 3 đến 5 Hz.
-    const classifier = new ClassifierClient(
-      forceWasm ? { init: { executionProviders: ['wasm'] } } : {},
-    )
+    const classifier = new ClassifierClient()
     const hands = createHandPipeline({
       client: new HandClient({ init: { delegate: handDelegate } }),
       swap: () => store.getSnapshot().settings.handednessSwap,
@@ -304,13 +301,15 @@ export function StagePage() {
 
   useStageCanvas(canvasRef, store)
 
-  // Vẽ ngay khi layout hoặc cài đặt vạch đổi, không chờ rAF (frameLoop vẽ lại mỗi frame khi chạy); vòng lặp quyết
-  // định logo hiện hay ẩn ở frame kế (BRAND-01).
+  // Vẽ ngay khi layout hoặc cài đặt vạch đổi, không chờ rAF; vòng lặp quyết định logo hiện hay ẩn ở frame kế
+  // (BRAND-01). PERF-04 (D-064): vòng lặp chỉ vẽ khi khóa của hình đổi, nên báo nó canvas vừa bị vẽ đè để frame kế vẽ
+  // lại vùng mở và lớp phủ.
   useEffect(() => {
     const ctx = canvasRef.current?.getContext('2d')
     if (!ctx) return
     paintBackground(ctx, stage.layout, stage.settings.showLines, ui.logo ? logo : null)
-  }, [stage.layout, stage.settings.showLines, ui.logo, logo])
+    loop.invalidate()
+  }, [stage.layout, stage.settings.showLines, ui.logo, logo, loop])
 
   useEffect(() => {
     const uninstallCamera = installCameraProbe(camera, camera.getSnapshot)

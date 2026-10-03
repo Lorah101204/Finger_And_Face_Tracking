@@ -124,9 +124,12 @@ export class SyntheticCameraSource implements FrameSource {
       this.stop()
       this.start()
     }
-    const t = running ? (performance.now() - this.#t0) / 1000 : 0
+    const now = performance.now()
+    const t = running ? (now - this.#t0) / 1000 : 0
     if (patch.face !== undefined) this.#faceSince = t
     this.#draw(t)
+    // PERF-04 (D-064): nội dung canvas vừa đổi là một frame mới; vòng lặp chỉ vẽ lại video khi frameId đổi.
+    if (running) this.#stamp(now, t)
   }
 
   #loadFace(): void {
@@ -150,6 +153,10 @@ export class SyntheticCameraSource implements FrameSource {
     const now = performance.now()
     const t = (now - this.#t0) / 1000
     this.#draw(t)
+    this.#stamp(now, t)
+  }
+
+  #stamp(now: number, t: number): void {
     this.#frameId += 1
     const stamp: FrameStamp = { frameId: this.#frameId, ts: now, mediaTime: t }
     this.#lastStamp = stamp

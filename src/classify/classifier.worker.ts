@@ -1,20 +1,21 @@
 // CLS-02 bước 4: ONNX Runtime Web trong module worker; chỉ nhận RestrictedFrame qua message 'detect' (bất biến I1).
 // Không import camera/, mask/, loop/, debug/ (lint:boundaries); không giữ lại frame nào; input.close() trong finally.
-// D-013: executionProviders ['webgpu', 'wasm']: có adapter WebGPU thì nạp bundle webgpu, lỗi thì tạo lại với wasm;
-// loader wasm theo môi trường (wasmPaths) như MediaPipe. Ảnh letterbox (256) được vẽ về cạnh input của model (128) trên
+// PERF-03 (D-062, thay D-013): chỉ EP wasm qua entry `onnxruntime-web/wasm`, bản wasm thường
+// ort-wasm-simd-threaded.{mjs,wasm} (13,6 MiB) thay cho jsep 27 MiB hay asyncify 25,5 MiB; với model thật wasm nhanh hơn
+// webgpu (p50 11,4 so với 29 ms, warm-up 63 so với 445 ms) nên không còn nhánh WebGPU. Loader wasm theo môi trường
+// (wasmPaths) như MediaPipe. Ảnh letterbox (256) được vẽ về cạnh input của model (128) trên
 // OffscreenCanvas riêng của worker (drawImage với rect nguồn đầy đủ, nguồn chỉ là bitmap của RestrictedFrame), đọc
 // ImageData, chuẩn hóa CHW, chạy session, softmax → probs [person, mannequin].
 import { installSameOriginGuard } from '../core/networkGuard'
 import type { ClassifyResult, RestrictedFrame } from '../core/types'
 import {
   softmax,
-  type ClassifierEp,
   type ClassifierInitMessage,
   type ClassifierWorkerIn,
   type ClassifierWorkerOut,
 } from './classifierProtocol'
 
-type OrtLib = typeof import('onnxruntime-web')
+type OrtLib = typeof import('onnxruntime-web/wasm')
 type Session = Awaited<ReturnType<OrtLib['InferenceSession']['create']>>
 
 const scope = self as unknown as DedicatedWorkerGlobalScope
@@ -35,56 +36,19 @@ function post(msg: ClassifierWorkerOut): void {
   scope.postMessage(msg)
 }
 
-async function hasWebGpuAdapter(): Promise<boolean> {
-  const gpu = (navigator as unknown as { gpu?: { requestAdapter(): Promise<unknown> } }).gpu
-  if (!gpu) return false
-  try {
-    return (await gpu.requestAdapter()) !== null
-  } catch {
-    return false
-  }
-}
-
-async function loadOrt(wantGpu: boolean): Promise<OrtLib> {
-  // Bundle webgpu chứa cả wasm; chỉ nạp khi có navigator.gpu để không tốn loader jsep khi máy không có WebGPU.
-  return (wantGpu
-    ? await import('onnxruntime-web/webgpu')
-    : await import('onnxruntime-web')) as unknown as OrtLib
-}
-
-async function createSession(
-  lib: OrtLib,
-  modelPath: string,
-  eps: ClassifierEp[],
-): Promise<Session> {
-  return lib.InferenceSession.create(modelPath, { executionProviders: eps })
-}
-
 async function init(msg: ClassifierInitMessage): Promise<void> {
   const t0 = performance.now()
   try {
     size = msg.inputSize
     mean = msg.norm.mean
     std = msg.norm.std
-    // Headless shell có navigator.gpu nhưng không có adapter: ORT sẽ tự bỏ EP webgpu và âm thầm chạy wasm, nên hỏi
-    // adapter trước để báo đúng EP và không nạp bundle jsep vô ích.
-    const wantGpu = msg.executionProviders.includes('webgpu') && (await hasWebGpuAdapter())
-    const lib = await loadOrt(wantGpu)
+    // Nạp động lúc init (worker chỉ được tạo khi vùng mở lần đầu): initMs gồm cả nạp loader và wasm.
+    const lib: OrtLib = await import('onnxruntime-web/wasm')
     lib.env.wasm.wasmPaths = msg.wasmPaths
     // Không có COOP/COEP nên wasm đơn luồng (S6); đặt rõ để ORT không thử tạo thread.
     lib.env.wasm.numThreads = 1
     ort = lib
-    const eps = wantGpu
-      ? msg.executionProviders
-      : msg.executionProviders.filter((e) => e !== 'webgpu')
-    let ep: ClassifierEp = eps[0] ?? 'wasm'
-    try {
-      session = await createSession(lib, msg.modelPath, eps.length ? eps : ['wasm'])
-    } catch (err) {
-      if (ep !== 'webgpu') throw err
-      ep = 'wasm'
-      session = await createSession(lib, msg.modelPath, ['wasm'])
-    }
+    session = await lib.InferenceSession.create(msg.modelPath, { executionProviders: ['wasm'] })
     inputName = session.inputNames[0] ?? 'input'
     outputName = session.outputNames[0] ?? 'logits'
     canvas = new OffscreenCanvas(size, size)
@@ -103,7 +67,7 @@ async function init(msg: ClassifierInitMessage): Promise<void> {
       await session.run({ [inputName]: tensor })
       warmupMs = performance.now() - t1
     }
-    post({ type: 'ready', ep, initMs, warmupMs, inputName, outputName })
+    post({ type: 'ready', ep: 'wasm', initMs, warmupMs, inputName, outputName })
   } catch (err) {
     post({ type: 'error', taskId: null, message: String(err) })
   }

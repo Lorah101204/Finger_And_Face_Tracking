@@ -52,6 +52,18 @@ When a domain is available (REL-01 step 7):
 
 Same results with `VITE_BASE=/repo/` (page and models under `/repo/`).
 
+After PERF-03 (D-062, D-063) and CLS-04 (D-066), measured locally 2026-10-03 with the same suite plus `split.spec`:
+
+| Measurement | Before (2026-09-20) | After (2026-10-03) |
+|---|---|---|
+| `dist/` | 80 to 86 MB (two ORT loader pairs: `jsep` 28.3 MB, `asyncify` 26.8 MB) | 44.8 MB with the plain pair; 40.8 MB with the compressed trained model; about 38.8 MB on the stub build of CI and the public site |
+| ORT loader of the first load | `jsep` (wasm EP) or `asyncify` (webgpu EP), 26.8 to 28.3 MB | plain `ort-wasm-simd-threaded.wasm` 14.2 MB on every machine |
+| First load, responses the page sees | 12 responses, 40.1 MB (Chromium) / 38.5 MB (Chrome) | 12 responses, 26.0 MB on both (the stage chunk replaces the larger ORT chunk) |
+| Whole first stage session, raw / gzip (stub build) | 53.2 / 19.8 MB | 38.7 / 16.7 MB (the live site serves gzip: 6.85 MB for the old `jsep` wasm, about 3.7 MB for the plain one) |
+| Landing JavaScript | one chunk with the stage, 444.5 kB (gzip 147.1 kB) | entry chunk 314.5 kB (gzip 102.7 kB); stage chunk 135.0 kB (gzip 47.1 kB) prefetched 67 to 245 ms after `load`; Start → canvas 119 to 124 ms with no JavaScript fetched |
+| Cache after the first load | `wct-models-*` 7 files, `wct-app-*` 7 files | `wct-models-*` 7 files, `wct-app-*` 7 files including the stage chunk |
+| Tests | 12 of 12 | 20 of 20 (`sw.spec` and `split.spec` on Chromium and Chrome); 0 cross-origin requests over 68 and 72 requests |
+
 ### 5.2 Public site (pending the real deploy)
 
 Record after the first deploy per REL-01 step 8: date, commit, browser; DevTools Network: total transfer on the first and second load, all requests same-origin; Application → Cache Storage has `wct-models-*` and `wct-app-*`; Lighthouse accessibility; time until the face and hand workers are ready; real hands with a webcam (still owed from INT-01, ROI-03).

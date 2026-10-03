@@ -120,7 +120,21 @@ export function installScenarios(deps: ScenarioDeps): () => void {
       if (!hands) return null
       fakeSpec = spec ? { ...spec } : null
       const snap = fakeSpec
-      hands.setFake(snap ? (now, frameId) => fakeHandFrame(snap, now, frameId) : null)
+      // PERF-04: cameraRate giữ HandFrame cũ tới khi camera có frame mới (nhịp của worker thật).
+      let lastCam = Number.NaN
+      let last: ReturnType<typeof fakeHandFrame> | null = null
+      hands.setFake(
+        snap
+          ? (now, frameId, camFrame) => {
+              if (!snap.cameraRate) return fakeHandFrame(snap, now, frameId)
+              if (last === null || camFrame !== lastCam) {
+                last = fakeHandFrame(snap, now, frameId)
+                lastCam = camFrame
+              }
+              return last
+            }
+          : null,
+      )
       return fakeSpec
     },
     list: () => Object.keys(handlers),

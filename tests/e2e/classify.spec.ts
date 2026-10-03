@@ -55,7 +55,7 @@ const readClsAndCounters = (page: Page) =>
     counters: { ...window.__wct!.probes!.counters },
   }))
 
-test('worker phân loại: sẵn sàng (webgpu hoặc wasm), đóng thì không gửi; mở trên nửa xanh lá → person, dời sang magenta → mannequin, nhịp ≤ 5 Hz; cửa sổ nhỏ hơn 96 px không gửi; đóng xóa nhãn', async ({
+test('worker phân loại: sẵn sàng (wasm, D-062), đóng thì không gửi; mở trên nửa xanh lá → person, dời sang magenta → mannequin, nhịp ≤ 5 Hz; cửa sổ nhỏ hơn 96 px không gửi; đóng xóa nhãn', async ({
   page,
 }) => {
   test.setTimeout(180_000)
@@ -77,10 +77,8 @@ test('worker phân loại: sẵn sàng (webgpu hoặc wasm), đóng thì không 
   await expect.poll(async () => (await readLoop(page)).reveal.kind).toBe('open')
   await waitClassifierReady(page)
   const cReady = await readCls(page)
-  expect(['wasm', 'webgpu']).toContain(cReady.ep)
-  await expect(page.getByTestId('classifier-stat')).toHaveText(
-    /phân loại: sẵn sàng \((wasm|webgpu)/,
-  )
+  expect(cReady.ep).toBe('wasm')
+  await expect(page.getByTestId('classifier-stat')).toHaveText(/phân loại: sẵn sàng \(wasm/)
   const roi = (await readLoop(page)).mask!.cameraRect
   expect(Math.min(roi.w, roi.h)).toBeGreaterThanOrEqual(96)
   await expect

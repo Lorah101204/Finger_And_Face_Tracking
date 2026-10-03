@@ -83,35 +83,35 @@ describe('loader ORT và wasm MediaPipe trong manifest (models:fetch) khớp v�
   const pkg = JSON.parse(readFileSync(resolve(ortRoot, 'package.json'), 'utf8'))
   const CONDITION = 'onnxruntime-web-use-extern-wasm'
   /** Bundle mà Vite chọn cho một entry với condition extern-wasm (vite.config.ts resolve.conditions), đường dẫn tuyệt đối. */
-  const bundleFor = (entry: '.' | './webgpu') =>
+  const bundleFor = (entry: './wasm') =>
     resolve(ortRoot, pkg.exports[entry].import[CONDITION] as string)
 
-  it('classifier.worker chỉ nạp hai entry onnxruntime-web và onnxruntime-web/webgpu', () => {
+  it('PERF-03 (D-062): classifier.worker chỉ nạp entry onnxruntime-web/wasm (không còn bundle mặc định jsep hay webgpu)', () => {
     const src = readFileSync(resolve('src/classify/classifier.worker.ts'), 'utf8')
     const entries = [
       ...new Set([...src.matchAll(/import\('(onnxruntime-web[^']*)'\)/g)].map((m) => m[1])),
     ].sort()
-    expect(entries).toEqual(['onnxruntime-web', 'onnxruntime-web/webgpu'])
+    expect(entries).toEqual(['onnxruntime-web/wasm'])
+    // Mã (bỏ dòng chú thích) không còn nhánh WebGPU nào; session tạo với đúng một EP wasm.
+    const code = src.replace(/^\s*\/\/.*$/gm, '')
+    expect(code).not.toMatch(/webgpu|jsep|asyncify/i)
+    expect(code).toContain("executionProviders: ['wasm']")
   })
 
-  it('mỗi bundle xin loader nào thì manifest có loader đó (asyncify cho webgpu, jsep cho wasm) và file có trong node_modules', () => {
+  it('bundle wasm xin đúng cặp loader thường, manifest có đúng cặp đó (không thừa biến thể 25 MB nào) và file có trong node_modules', () => {
     const wanted = new Set<string>()
-    for (const entry of ['.', './webgpu'] as const) {
-      const file = bundleFor(entry)
-      expect(existsSync(file)).toBe(true)
-      const code = readFileSync(file, 'utf8')
-      for (const m of code.matchAll(/ort-wasm-simd-threaded[a-z.]*\.mjs/g)) {
-        wanted.add(m[0])
-        wanted.add(m[0].replace(/\.mjs$/, '.wasm'))
-      }
+    const file = bundleFor('./wasm')
+    expect(existsSync(file)).toBe(true)
+    const code = readFileSync(file, 'utf8')
+    for (const m of code.matchAll(/ort-wasm-simd-threaded[a-z.]*\.mjs/g)) {
+      wanted.add(m[0])
+      wanted.add(m[0].replace(/\.mjs$/, '.wasm'))
     }
     expect([...wanted].sort()).toEqual([
-      'ort-wasm-simd-threaded.asyncify.mjs',
-      'ort-wasm-simd-threaded.asyncify.wasm',
-      'ort-wasm-simd-threaded.jsep.mjs',
-      'ort-wasm-simd-threaded.jsep.wasm',
+      'ort-wasm-simd-threaded.mjs',
+      'ort-wasm-simd-threaded.wasm',
     ])
-    for (const f of wanted) expect(manifest.ort.files).toContain(f)
+    expect([...manifest.ort.files].sort()).toEqual([...wanted].sort())
     for (const f of manifest.ort.files) expect(existsSync(resolve(ortDist, f))).toBe(true)
   })
 

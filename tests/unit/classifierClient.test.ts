@@ -79,13 +79,13 @@ const READY = {
 }
 
 describe('ClassifierClient', () => {
-  it('start gửi init với loader theo môi trường, model stub, EP webgpu rồi wasm, chuẩn hóa; start lần hai không tạo thêm', () => {
+  it('start gửi init với loader theo môi trường, model stub, chuẩn hóa (không còn danh sách EP, D-062); start lần hai không tạo thêm', () => {
     const { w, client } = setup()
     expect(w.sent).toHaveLength(1)
+    expect(w.sent[0]).not.toHaveProperty('executionProviders')
     expect(w.sent[0]).toMatchObject({
       type: 'init',
       modelPath: '/models/classifier-stub.onnx',
-      executionProviders: ['webgpu', 'wasm'],
       inputSize: 128,
       norm: { mean: 0.45, std: 0.225 },
       warmup: true,

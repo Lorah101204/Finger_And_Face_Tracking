@@ -33,6 +33,11 @@ export type FakeHandsSpec = {
   jitter?: number
   /** PERF-01 (soak): cả hai tay chạy trên vòng tròn bán kính radius px quanh vị trí gốc, chu kỳ periodMs theo now. */
   orbit?: { radius: number; periodMs: number }
+  /**
+   * PERF-04 (D-064): chỉ sinh HandFrame mới khi camera có frame mới (như worker tay thật, khoảng 30 kết quả/s), giữa
+   * hai frame camera trả lại đúng đối tượng cũ; mặc định false: một HandFrame mới mỗi lần vòng lặp feed (mỗi rAF).
+   */
+  cameraRate?: boolean
 }
 
 /** Offset 21 landmark theo đơn vị spread: (dx, dy) tính từ tâm bàn tay. */

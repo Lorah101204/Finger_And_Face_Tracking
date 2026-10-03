@@ -86,7 +86,6 @@ export function readEnv(): EnvSnapshot {
       })(),
       moduleWorker: detectModuleWorker(),
       imageBitmap: typeof createImageBitmap === 'function' && typeof ImageBitmap === 'function',
-      webgpu: !!nav.gpu,
       wasmSimd: (() => {
         try {
           return WebAssembly.validate(WASM_SIMD)

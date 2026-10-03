@@ -58,6 +58,21 @@ test('chưa đồng ý mà mở #/app thì về trang chào', async ({ page }) =
   expect(await gumCalls(page)).toBe(0)
 })
 
+test('chưa đồng ý mà mở link kiosk #/app?mode=present thì về màn hình bắt đầu kiosk, không tải chunk sân khấu (PERF-03)', async ({
+  page,
+}) => {
+  const stageRequests: string[] = []
+  page.on('request', (r) => {
+    if (/pages\/StagePage/.test(r.url())) stageRequests.push(r.url())
+  })
+  await page.goto('about:blank')
+  await page.goto('/#/app?mode=present')
+  await expect(page.getByTestId('landing-kiosk')).toBeVisible()
+  await expect(page).toHaveURL(/#\/\?mode=present$/)
+  expect(stageRequests).toEqual([])
+  expect(await gumCalls(page)).toBe(0)
+})
+
 test('đồng ý phiên bản cũ không còn hiệu lực', async ({ page }) => {
   await seedConsent(page, '2000-01-01')
   await openApp(page)

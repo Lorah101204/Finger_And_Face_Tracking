@@ -29,22 +29,20 @@
     ]
   },
   "ort": {
-    "note": "CLS-02 (D-013), REL-01 (D-050): loader wasm của onnxruntime-web cho build tĩnh (dev dùng node_modules). Bundle webgpu (onnxruntime-web/webgpu) xin cặp asyncify, bundle wasm (onnxruntime-web) xin cặp jsep; unit tests/unit/ortLoaderFiles.test.ts đối chiếu với node_modules.",
+    "note": "CLS-02 (D-013), REL-01 (D-050), PERF-03 (D-062): loader wasm của onnxruntime-web cho build tĩnh (dev dùng node_modules). Worker phân loại chỉ nạp entry onnxruntime-web/wasm (ort.wasm.min.mjs), bundle này xin cặp thường ort-wasm-simd-threaded.{mjs,wasm}; unit tests/unit/basePath.test.ts đối chiếu với node_modules.",
     "package": "onnxruntime-web",
     "version": "1.30.0",
     "dest": "ort/",
     "files": [
-      "ort-wasm-simd-threaded.asyncify.mjs",
-      "ort-wasm-simd-threaded.asyncify.wasm",
-      "ort-wasm-simd-threaded.jsep.mjs",
-      "ort-wasm-simd-threaded.jsep.wasm"
+      "ort-wasm-simd-threaded.mjs",
+      "ort-wasm-simd-threaded.wasm"
     ]
   },
   "classifier": {
-    "note": "CLS-02 (D-044), CLS-03 (D-061): classifier-stub.onnx do tools/make-stub-classifier.mjs sinh (person = G - (R + B) / 2). classifier.onnx là model huấn luyện, không commit: tools/train/export_onnx.py --manifest ghi sha256, bytes, train vào đây; vite.config.ts (resolveClassifier) chỉ dùng nó khi file khớp sha256, không thì stub. source: URL tải (ví dụ asset của một GitHub Release) để models:fetch lấy model cho CI và trang public; trống thì chỉ máy đã train có model thật.",
+    "note": "CLS-02 (D-044), CLS-03 (D-061), CLS-04 (D-066): classifier-stub.onnx do tools/make-stub-classifier.mjs sinh (person = G - (R + B) / 2). classifier.onnx là model huấn luyện, không commit: tools/train/export_onnx.py --manifest ghi sha256, bytes, train vào đây; vite.config.ts (resolveClassifier) chỉ dùng nó khi file khớp sha256, không thì stub. `compression`: file đã nén cách lưu trọng số (int8 theo kênh và fp16, gập về fp32 lúc chạy) qua cổng so với bản fp32 (fp32Sha256) của tools/train/compress_select.py. source: URL tải (ví dụ asset của một GitHub Release) để models:fetch lấy model cho CI và trang public; trống thì chỉ máy đã train có model thật.",
     "stub": "classifier-stub.onnx",
     "file": "classifier.onnx",
-    "sha256": "8acdac994a3b7133fff2ace5abe20ed69533c9095a7089bfde38556d5f52d892",
+    "sha256": "87876480c83a725b3b06d06b9f71beb9d49e468f7d5ff77e12a0c52d9bef76f0",
     "inputSize": 128,
     "labels": [
       "person",
@@ -55,14 +53,14 @@
       "std": 0.225
     },
     "opset": 17,
-    "bytes": 6089235,
+    "bytes": 2001042,
     "train": {
       "backbone": "mobilenet_v3_small",
       "epoch": 60,
       "freeze": true,
       "select": "last",
-      "valAcc": 1.0,
-      "valBalancedAcc": 1.0,
+      "valAcc": 1,
+      "valBalancedAcc": 1,
       "samples": {
         "train": {
           "person": 6,
@@ -75,6 +73,26 @@
       },
       "torch": "2.14.0+cpu"
     },
-    "source": ""
+    "source": "",
+    "compression": {
+      "mode": "int8+fp16w",
+      "fp32Sha256": "8acdac994a3b7133fff2ace5abe20ed69533c9095a7089bfde38556d5f52d892",
+      "fp32Bytes": 6089235,
+      "layers": {
+        "int8": 13,
+        "fp16": 33
+      },
+      "agreement": {
+        "n": 194,
+        "nHeld": 95,
+        "nAug": 99,
+        "nBorderline": 17,
+        "argmax": 1,
+        "decisionFlips": 0,
+        "maxAbsDp": 0.0157,
+        "maxAbsDMarginHeld": 0.1738,
+        "maxAbsDMarginAug": 0.1827
+      }
+    }
   }
 }

@@ -142,6 +142,16 @@ describe('createHandPipeline', () => {
     expect(pipe.latest).toBeNull()
     pipe.feed(source, 1, 533)
     expect(pipe.latest?.frameId).toBe(3)
+    // PERF-04 (D-064): bộ sinh nhận frameId của frame camera hiện tại (để kịch bản sinh tay theo nhịp camera).
+    const cams: number[] = []
+    pipe.setFake((now, frameId, camFrame) => {
+      cams.push(camFrame)
+      return { frameId, ts: now, hands: [], uncertain: false }
+    })
+    pipe.feed(source, 1, 550)
+    source.stamp = { frameId: 7, ts: 66 }
+    pipe.feed(source, 1, 566)
+    expect(cams).toEqual([1, 7])
     pipe.setFake(null)
     expect(pipe.latest).toBeNull()
     expect(pipe.snapshot().fake).toBe(false)

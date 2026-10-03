@@ -49,5 +49,8 @@ export function stepOneEuro(
   const dx = ad * ((x - state.x) / dt) + (1 - ad) * state.dx
   const cutoff = Math.max(0.01, p.minCutoff) + Math.max(0, p.beta) * Math.abs(dx)
   const a = alpha(cutoff, dt)
-  return { x: a * x + (1 - a) * state.x, dx, ts }
+  // PERF-04 (D-064): state.x + a·(x − state.x) bằng đúng a·x + (1 − a)·state.x về toán, nhưng giữ điểm bất động:
+  // x không đổi thì đầu ra đứng yên tuyệt đối. Dạng cũ trôi vài ulp mỗi frame khi dt đổi, nên hình của tay đứng yên
+  // khác đi từng ulp và vòng lặp dựng lại mask (và vẽ lại) mọi frame dù không có gì thay đổi.
+  return { x: state.x + a * (x - state.x), dx, ts }
 }

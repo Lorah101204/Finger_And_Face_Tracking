@@ -112,7 +112,7 @@ test('model huấn luyện trên mặt người thật ngoài dataset (face.png 
   )
   const c = await readCls(page)
   expect(c.modelPath).toBe('/models/classifier.onnx')
-  expect(['wasm', 'webgpu']).toContain(c.ep)
+  expect(c.ep).toBe('wasm')
   expect(c.stats.errors).toBe(0)
   expect(l.face.subjectType).toBe('person')
   expect(l.subject.probs[0]).toBeGreaterThanOrEqual(0.7)

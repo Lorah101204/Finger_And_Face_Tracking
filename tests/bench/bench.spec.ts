@@ -18,12 +18,13 @@ import {
 } from '../e2e/helpers'
 
 // QA-02 (mục 7.24): benchmark một trình duyệt (project của playwright.bench.config.ts) trên máy hiện tại, kết quả thô
-// ghi reports/bench-<project>.json cho tools/benchmark-report.mjs (ma trận thiết bị trong docs/benchmark.md). Bốn ca,
+// ghi reports/bench-<project>.json cho tools/benchmark-report.mjs (ma trận thiết bị trong docs/benchmark.md). Ba ca,
 // chạy tuần tự trên cùng worker: (1) môi trường: trình duyệt, GPU WebGL, adapter WebGPU, các API app dựa vào, worker
 // mặt sẵn sàng với delegate nào; (2) cửa sổ chuột trên face.png (cục bộ) hay nền tổng hợp: fps, Hz mặt và phân loại,
 // p50/p95, khoảng cách giữa hai kết quả liên tiếp (đo theo rAF trong trang) để chốt tuổi kết quả, số kết quả bị loại
-// vì quá tuổi; (3) phân loại ép wasm để so với EP mặc định; (4) tay thật trên hands.jpg (cục bộ) với CPU rồi GPU
-// delegate: Hz, p50/p95, khoảng cách kết quả (tuổi điểm), độ rung đầu ngón trên ảnh tĩnh (hysteresis). Không khẳng
+// vì quá tuổi; (3) tay thật trên hands.jpg (cục bộ) với CPU rồi GPU delegate: Hz, p50/p95, khoảng cách kết quả (tuổi
+// điểm), độ rung đầu ngón trên ảnh tĩnh (hysteresis). PERF-03 (D-062): bỏ ca "phân loại ép wasm" vì ORT chỉ còn EP wasm
+// (ca 2 đo đúng EP đó); `clsWasm` giữ null để hàng cũ của ma trận vẫn đọc được. Không khẳng
 // định mục tiêu hiệu năng (đó là việc của bảng trong benchmark.md); chỉ khẳng định đường ống chạy và số đo hợp lệ.
 const SECONDS = Number(process.env.BENCH_SECONDS ?? 20)
 const FACE_FILE = 'public/spike-assets/face.png'
@@ -509,36 +510,6 @@ test('cửa sổ chuột: fps, Hz mặt và phân loại, khoảng cách kết q
       `${withFace ? `, ${facesSeen} mặt` : ''}); phân loại ${c1.ep} (init ${Math.round(c1.stats.initMs)} ms) ${vi(m.clsHzMedian)} Hz` +
       ` (p50 ${vi(c1.stats.p50InferMs)} / p95 ${vi(c1.stats.p95InferMs)} ms, khoảng cách p95 ${vi(m.clsInterval.p95, 0)} ms, tuổi lúc nhận p95 ${vi(m.clsAge.p95, 0)} ms, quá tuổi ${R.mouse.cls.stale});` +
       ` vẽ p95 ${vi(m.renderP95Max, 2)} ms, tick p95 ${vi(m.tickP95Max, 2)} ms`,
-  )
-})
-
-test('phân loại ép wasm (ep=wasm) để so với EP mặc định', async ({ page }) => {
-  const st = await openSynthetic(page, '&ep=wasm')
-  await waitFaceReady(page)
-  await openWindow(page, st, false)
-  await waitClassifierReady(page)
-  const c0 = await readCls(page)
-  expect(c0.failed, c0.lastError ?? '').toBe(false)
-  expect(c0.ep).toBe('wasm')
-  await expect
-    .poll(async () => (await readCls(page)).stats.results, { timeout: 30_000 })
-    .toBeGreaterThan(0)
-  const secs = Math.min(SECONDS, 10)
-  const m = await measure(page, secs)
-  const c1 = await readCls(page)
-  R.clsWasm = {
-    ep: c1.ep,
-    initMs: c1.stats.initMs,
-    warmupMs: c1.stats.warmupMs,
-    p50: c1.stats.p50InferMs,
-    p95: c1.stats.p95InferMs,
-    hz: m.clsHzMedian,
-  }
-  note(
-    `${c1.modelPath.split('/').pop()} wasm: init ${Math.round(c1.stats.initMs)} ms, warm-up ${Math.round(c1.stats.warmupMs)} ms, infer p50 ${vi(c1.stats.p50InferMs)} / p95 ${vi(c1.stats.p95InferMs)} ms, ${vi(m.clsHzMedian)} Hz` +
-      (R.mouse
-        ? `; EP mặc định ${R.mouse.cls.ep}: init ${Math.round(R.mouse.cls.initMs)} ms, p50 ${vi(R.mouse.cls.p50)} ms`
-        : ''),
   )
 })
 

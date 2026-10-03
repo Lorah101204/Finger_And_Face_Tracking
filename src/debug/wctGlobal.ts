@@ -29,7 +29,13 @@ export type CameraProbe = {
 export type WctGlobal = {
   camera?: { probe: CameraProbe; snapshot: () => CameraSnapshot }
   stage?: { snapshot: () => StageState }
-  loop?: { snapshot: () => LoopSnapshot; events: EventTarget }
+  loop?: {
+    snapshot: () => LoopSnapshot
+    events: EventTarget
+    /** PERF-04 (D-064): vẽ lại frame kế; bật/tắt vẽ mọi frame động (đo A/B, tools/measure-loop.mjs). */
+    invalidate: () => void
+    setPaintAlways: (on: boolean) => void
+  }
   /** FACE-01: trạng thái FaceClient. */
   face?: { snapshot: () => FaceSnapshot }
   /** BRAND-01: lớp logo trên màn che (công tắc, đang vẽ, rect và ô theo layout). */

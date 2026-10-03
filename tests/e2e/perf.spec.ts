@@ -28,7 +28,29 @@ async function openSynthetic(page: Page): Promise<StageSnap> {
 
 async function counters(page: Page) {
   const l = await readLoop(page)
-  return { frames: l.frames, paints: l.paints, builds: l.maskBuilds }
+  // PERF-04: output.frameId là frameId của frame camera (nguồn tổng hợp 30 fps) mà vòng lặp vừa dùng.
+  return { frames: l.frames, paints: l.paints, builds: l.maskBuilds, cam: l.output.frameId }
+}
+
+/** PERF-04: đếm tới khi vòng lặp chạy ít nhất 20 frame VÀ hơn số frame camera ít nhất 10 (camera thưa hơn vòng lặp), để
+ *  cận "số lần vẽ ≤ frame camera + 2" chặt hơn "≤ số frame"; tối đa 30 s. */
+async function deltaSparseCamera(page: Page) {
+  const a = await counters(page)
+  let b = a
+  const deadline = Date.now() + 30_000
+  while (
+    (b.frames - a.frames < 20 || b.frames - a.frames < b.cam - a.cam + 10) &&
+    Date.now() < deadline
+  ) {
+    await page.waitForTimeout(200)
+    b = await counters(page)
+  }
+  return {
+    frames: b.frames - a.frames,
+    paints: b.paints - a.paints,
+    builds: b.builds - a.builds,
+    cam: b.cam - a.cam,
+  }
 }
 
 /**
@@ -43,10 +65,15 @@ async function delta(page: Page, minFrames = 20) {
     await page.waitForTimeout(200)
     b = await counters(page)
   }
-  return { frames: b.frames - a.frames, paints: b.paints - a.paints, builds: b.builds - a.builds }
+  return {
+    frames: b.frames - a.frames,
+    paints: b.paints - a.paints,
+    builds: b.builds - a.builds,
+    cam: b.cam - a.cam,
+  }
 }
 
-test('frame tĩnh không vẽ lại: vùng đóng thì paints đứng yên trong khi frames tăng; mở vùng thì vẽ mỗi frame; đóng vùng vẽ đúng một lần; đổi vạch lưới vẽ một lần; canvas vẫn trắng', async ({
+test('frame tĩnh không vẽ lại: vùng đóng thì paints đứng yên trong khi frames tăng; mở vùng thì chỉ vẽ khi có frame camera mới (PERF-04, camera 4 fps), vẽ mọi frame khi bật paintAlways; đóng vùng vẽ đúng một lần; đổi vạch lưới vẽ một lần; canvas vẫn trắng', async ({
   page,
 }) => {
   await openSynthetic(page)
@@ -59,9 +86,24 @@ test('frame tĩnh không vẽ lại: vùng đóng thì paints đứng yên trong
 
   await page.evaluate(() => window.__scenario!.run('windowAt(20,10,12)'))
   await expect.poll(async () => (await readLoop(page)).reveal.kind).toBe('open')
-  const open = await delta(page)
-  expect(open.frames).toBeGreaterThanOrEqual(20)
-  expect(open.paints).toBe(open.frames)
+  // PERF-04 (D-064): cửa sổ chuột đứng yên nên chỉ frame camera mới đổi hình. Camera tổng hợp hạ xuống 4 fps để thưa hơn
+  // vòng lặp (headless shell vẽ khoảng 60 Hz, có lúc chậm hơn 30 fps), nên "≤ frame camera + 2" thật sự chặt hơn
+  // "≤ số frame": một vòng lặp vẽ mọi frame sẽ trượt. Cận theo bộ đếm (bài học 7d227c96), không theo giờ.
+  await page.evaluate(() => window.__scenario!.scene({ fps: 4 }))
+  await delta(page, 3)
+  const open = await deltaSparseCamera(page)
+  expect(open.frames).toBeGreaterThanOrEqual(open.cam + 10)
+  expect(open.cam).toBeGreaterThan(0)
+  expect(open.paints).toBeGreaterThanOrEqual(1)
+  expect(open.paints).toBeLessThanOrEqual(open.cam + 2)
+  expect(open.paints).toBeLessThan(open.frames)
+  // A/B trong cùng trang, cùng 4 fps: paintAlways khôi phục PERF-02 (vẽ mọi frame khi vùng mở).
+  await page.evaluate(() => window.__wct!.loop!.setPaintAlways(true))
+  await delta(page, 2)
+  const always = await delta(page)
+  await page.evaluate(() => window.__wct!.loop!.setPaintAlways(false))
+  expect(always.paints).toBe(always.frames)
+  await page.evaluate(() => window.__scenario!.scene({ fps: 30 }))
 
   await page.evaluate(() => window.__scenario!.run('coverAll'))
   await expect.poll(async () => (await readLoop(page)).reveal.kind).toBe('closed')
@@ -82,7 +124,8 @@ test('frame tĩnh không vẽ lại: vùng đóng thì paints đứng yên trong
   expect(lines.frames).toBeGreaterThanOrEqual(10)
   await expectCanvasWhite(page, true)
   note(
-    `vùng đóng: ${idle.frames} frame / ${idle.paints} lần vẽ; vùng mở: ${open.frames} frame / ${open.paints} lần vẽ;` +
+    `vùng đóng: ${idle.frames} frame / ${idle.paints} lần vẽ; vùng mở: ${open.frames} frame, ${open.cam} frame camera / ${open.paints} lần vẽ` +
+      ` (paintAlways: ${always.frames} frame / ${always.paints} lần vẽ);` +
       ` sau khi đóng: ${closed.frames} frame / ${closed.paints} lần vẽ; đổi vạch lưới: ${after.paints - before.paints} lần vẽ`,
   )
   await expectGateClean(page)

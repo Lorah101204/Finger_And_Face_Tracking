@@ -137,11 +137,10 @@ export const DEFAULTS = {
     unknownThreshold: 0.7,
     minRoiPx: 96,
     /**
-     * D-013: webgpu trước, wasm dự phòng; model export input cố định. QA-02: với model stub, wasm 4,7 ms nhanh hơn
-     * webgpu 19,6 ms (chi phí điều phối GPU trội) nhưng cả hai xa dưới nhịp 250 ms; S6 với MobileNetV2 thì webgpu
-     * nhanh gấp ba, nên giữ thứ tự và đo lại khi có model thật (`ep=wasm` để so).
+     * PERF-03 (D-062, thay thứ tự EP của D-013): chỉ EP wasm. Đo lại với model thật (MobileNetV3-Small, Chrome 154,
+     * RTX 3050): wasm init 965 ms, warm-up 63 ms, p50 11,4 / p95 15,8 ms; webgpu 1408 ms, 445 ms, 29 / 36 ms; nhịp 250 ms.
+     * Model export input cố định.
      */
-    executionProviders: ['webgpu', 'wasm'] as ('webgpu' | 'wasm')[],
     inputSize: 128,
     /** Thứ tự đầu ra của model (softmax trên logits). */
     labels: ['person', 'mannequin'] as ('person' | 'mannequin')[],
@@ -155,7 +154,7 @@ export const DEFAULTS = {
     trainedPath: '/models/classifier.onnx',
     modelPath:
       BUILD_CLASSIFIER === 'model' ? '/models/classifier.onnx' : '/models/classifier-stub.onnx',
-    /** D-013: loader ORT theo môi trường như MediaPipe; build tĩnh copy bằng models:fetch. */
+    /** D-013: loader ORT theo môi trường như MediaPipe; build tĩnh copy bằng models:fetch (D-062: chỉ cặp thường). */
     ortPathsDev: '/node_modules/onnxruntime-web/dist/',
     ortPathsProd: '/models/ort/',
     /** Chuẩn hóa (x / 255 − mean) / std, cùng giá trị trong script huấn luyện. */
@@ -249,8 +248,9 @@ export function modelUrls(
 /**
  * Danh sách file mà mọi phiên đều nạp, để service worker (public/sw.js) cache ngay lần mở đầu sau khi nó kích hoạt
  * (D-050: không precache lúc install; app nạp thật rồi mới báo). Loader MediaPipe theo FilesetResolver với
- * useModuleLoader và SIMD: `vision_wasm_module_internal.{js,wasm}`. Loader ORT không nằm đây vì tùy máy (asyncify khi
- * có WebGPU, jsep khi wasm) và được cache khi worker phân loại nạp thật.
+ * useModuleLoader và SIMD: `vision_wasm_module_internal.{js,wasm}`. Loader ORT (D-062: luôn
+ * ort-wasm-simd-threaded.{mjs,wasm}) không nằm đây: 14 MB chỉ đáng tải khi vùng mở lần đầu, lúc đó worker phân loại
+ * nạp thật và service worker cache.
  */
 export function modelWarmList(base: string = import.meta.env.BASE_URL): string[] {
   const u = modelUrls(base, false)

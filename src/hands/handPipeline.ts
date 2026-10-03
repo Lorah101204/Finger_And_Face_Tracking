@@ -38,7 +38,8 @@ export type HandPipelineOptions = {
 }
 
 /** Sinh HandFrame giả lập tại thời điểm now (ms của vòng lặp), frameId tăng dần. */
-export type FakeHandFrames = (now: number, frameId: number) => HandFrame | null
+/** camFrame: frameId của frame camera hiện tại (-1 khi chưa có), để kịch bản sinh tay theo nhịp camera (PERF-04). */
+export type FakeHandFrames = (now: number, frameId: number, camFrame: number) => HandFrame | null
 
 export type HandPipeline = {
   /**
@@ -81,7 +82,7 @@ export function createHandPipeline(opts: HandPipelineOptions): HandPipeline {
   return {
     feed(source, epoch, now = performance.now()) {
       if (fake) {
-        latest = fake(now, ++fakeFrameId)
+        latest = fake(now, ++fakeFrameId, source.lastStamp?.frameId ?? -1)
         return
       }
       if (!client.started) client.start()

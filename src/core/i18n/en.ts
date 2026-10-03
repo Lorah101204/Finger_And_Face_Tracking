@@ -13,6 +13,11 @@ export const en: Strings = {
     names: { vi: 'Tiếng Việt', en: 'English' },
     switchTo: { vi: 'Tiếng Việt', en: 'English' },
   },
+  boot: {
+    loading: 'Loading the stage…',
+    failed: 'Could not load the stage (offline, or the site was just updated).',
+    reload: 'Reload the page',
+  },
   landing: {
     eyebrow: 'Runs entirely in your browser · nothing is uploaded',
     title: 'Web Camera Tracking',

@@ -237,7 +237,6 @@ function matrixSection(rows) {
         offscreenCanvas: 'OffscreenCanvas',
         moduleWorker: 'module worker',
         imageBitmap: 'ImageBitmap',
-        webgpu: 'WebGPU',
         wasmSimd: 'wasm SIMD',
         sharedArrayBuffer: 'SharedArrayBuffer',
         fullscreen: 'fullscreen',
@@ -267,7 +266,9 @@ function matrixSection(rows) {
         : '?',
       r.clsWasm
         ? `init ${ms0(r.clsWasm.initMs)}; p50 ${vi(r.clsWasm.p50)} ms; ${vi(r.clsWasm.hz)} Hz`
-        : '?',
+        : m?.cls.ep === 'wasm'
+          ? 'same as the default EP (wasm only since D-062)'
+          : '?',
       hand(r.hands?.CPU),
       hand(r.hands?.GPU),
       (() => {

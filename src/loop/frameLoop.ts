@@ -17,6 +17,7 @@
 // của frame đó (canvas giữ nguyên nền trắng đã vẽ); `paints` đếm số frame có vẽ để đo.
 // BRAND-01: lớp logo (deps.logo) vẽ trong nền tĩnh; vùng mở đè video lên theo ô (compositor). Công tắc hay ảnh sẵn
 // sàng (version) đổi là một lần vẽ lại rồi lại tĩnh.
+import { createPaintGate, emptyPaintKey } from './paintGate'
 import { DEFAULTS } from '../core/config'
 import type { EpochCounter } from '../core/epoch'
 import { createLatencyWindow, type LatencyStats } from '../core/latency'
@@ -115,11 +116,18 @@ export type LoopSnapshot = {
   timing: { render: LatencyStats; tick: LatencyStats }
 }
 
+/** PERF-04: mảng mặt rỗng dùng chung (không bao giờ bị sửa), xem labelFaces. */
+const NO_FACES: ValidatedFace[] = []
+
 export type FrameLoop = {
   /** Gắn canvas và bắt đầu rAF; gọi lại với canvas khác thì đổi canvas. */
   attach(canvas: HTMLCanvasElement): void
   /** Dừng rAF, đóng vùng mở (lý do user), bỏ canvas. */
   detach(): void
+  /** PERF-04 (D-064): canvas vừa bị vẽ đè ngoài vòng lặp (StagePage vẽ nền); frame kế vẽ lại dù khóa không đổi. */
+  invalidate(): void
+  /** PERF-04: true vẽ mọi frame có nội dung động như PERF-02 (đo A/B trong cùng trang); false là mặc định. */
+  setPaintAlways(on: boolean): void
   snapshot(): LoopSnapshot
   /** FACE-02 bước 5: phát CustomEvent 'frame' với detail là FrameOutput sau mỗi frame. */
   events: EventTarget
@@ -203,13 +211,13 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     mirror: boolean
     hysteresis: number
   } | null = null
-  // PERF-02 (c): lần vẽ gần nhất có nội dung động không, và với layout, vạch lưới nào.
+  // PERF-04 (D-064, thay PERF-02 (c)): chỉ vẽ khi khóa của hình khác lần vẽ trước (paintGate.ts); paintAlways khôi
+  // phục cách PERF-02 (vẽ mọi frame có nội dung động) để đo A/B trong cùng trang.
+  const paintGate = createPaintGate()
+  const paintKey = emptyPaintKey()
+  let paintAlways = false
   let paintedDynamic = false
-  let paintLayout: Layout | null = null
-  let paintLines: boolean | null = null
-  // BRAND-01: lớp logo và version đã vẽ lần gần nhất.
-  let paintLogo: LogoPainter | null = null
-  let paintLogoVersion = 0
+  const onContextRestored = () => paintGate.invalidate()
   let logoVisible = false
   let lastTs = 0
   let reveal: RevealState = closedState('user')
@@ -223,7 +231,7 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
   let lastBuiltFrameId = -1
   let lastBuildAt = -Infinity
   let lastOpenEpoch = -1
-  let faces: ValidatedFace[] = []
+  let faces: ValidatedFace[] = NO_FACES
   let facesAt = -Infinity
   // CLS-02: nhãn gần nhất của epoch đang mở; gắn vào mặt qua decideSubject, hết hạn theo classifier.labelMaxAgeMs.
   let subject: SubjectLabel | null = null
@@ -254,7 +262,7 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     const openEpoch = reveal.kind === 'open' ? reveal.mask.epoch : -1
     if (openEpoch === lastOpenEpoch) return
     lastOpenEpoch = openEpoch
-    faces = []
+    faces = NO_FACES
     facesAt = -Infinity
     subject = null
     if (face) {
@@ -306,10 +314,8 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     if (ctx) {
       paints++
       paintedDynamic = false
-      paintLayout = layout
-      paintLines = settings.showLines
-      paintLogo = logoNow
-      paintLogoVersion = logoNow?.version ?? 0
+      // Vẽ ngoài tick: frame kế vẽ lại một lần thay vì đoán khóa của hình đóng này.
+      paintGate.invalidate()
       render(ctx, layout, {
         showLines: settings.showLines,
         mirror: settings.mirror,
@@ -363,6 +369,9 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
 
   /** CLS-02 bước 5: nhãn của epoch hiện tại gắn vào từng mặt qua quy tắc unknown (không dùng chuyển động). */
   function labelFaces(list: ValidatedFace[]): ValidatedFace[] {
+    // PERF-04: không có mặt thì trả cùng một mảng rỗng, để kết quả mặt hay nhãn không mặt nào không đổi khóa vẽ
+    // (paintGate so mảng faces theo đối tượng) và vòng lặp không vẽ lại hình y hệt ở nhịp worker.
+    if (list.length === 0) return NO_FACES
     return list.map((f) => {
       const d = decideSubject({
         probs: subject?.probs ?? null,
@@ -490,7 +499,7 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     }
 
     syncFaceGate()
-    if (faces.length > 0 && now - facesAt > faceExpiryMs) faces = []
+    if (faces.length > 0 && now - facesAt > faceExpiryMs) faces = NO_FACES
     if (subject && now - subject.at > DEFAULTS.classifier.labelMaxAgeMs) {
       subject = null
       faces = labelFaces(faces)
@@ -501,18 +510,31 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     logoVisible = logoNow !== null
 
     if (ctx) {
-      // PERF-02 (c): vẽ khi có nội dung động (vùng mở, overlay tay, đầu ngón), khi frame trước có nội dung động (để
-      // xóa), hoặc khi layout, vạch lưới hay lớp logo (công tắc, version) đổi; frame tĩnh giữ nguyên canvas (nền trắng,
-      // logo và lưới đã vẽ).
-      const handOverlay = handsActive && hands && hands.latest && hands.latest.hands.length > 0
-      const dynamic = mask !== null || handOverlay === true || fingers.length > 0
+      // PERF-04 (D-064): vẽ khi khóa của hình đổi (paintGate.ts): frame camera mới khi đang vẽ video, mask mới, kết
+      // quả mặt hay tay mới, tay chuyển sang cũ, đầu ngón dời hay đổi kiểu, layout, vạch lưới, mirror, ngôn ngữ, logo;
+      // không thì canvas giữ nguyên hình đã vẽ (frame tĩnh của PERF-02 là trường hợp riêng: khóa không đổi).
+      const handFrame = handsActive && hands ? hands.latest : null
+      const overlay = handFrame && handFrame.hands.length > 0 ? handFrame : null
+      const video = mask !== null && mask.cellCount > 0 && frame.drawable !== null
+      const langNow = lang?.()
+      paintKey.layout = layout
+      paintKey.showLines = settings.showLines
+      paintKey.mirror = settings.mirror
+      paintKey.lang = langNow
+      paintKey.logo = logoNow
+      paintKey.logoVersion = logoNow?.version ?? 0
+      paintKey.mask = mask
+      paintKey.drawable = video ? frame.drawable : null
+      paintKey.camFrame = video ? (frame.lastStamp?.frameId ?? -1) : -1
+      paintKey.faces = mask ? faces : null
+      paintKey.hands = overlay
+      paintKey.handsStale = overlay !== null && now - overlay.ts > DEFAULTS.freshness.pointMaxAgeMs
+      paintKey.fingers = fingers
+      const dynamic = mask !== null || overlay !== null || fingers.length > 0
       if (
-        dynamic ||
-        paintedDynamic ||
-        paintLayout !== layout ||
-        paintLines !== settings.showLines ||
-        paintLogo !== logoNow ||
-        (logoNow !== null && paintLogoVersion !== logoNow.version)
+        paintAlways
+          ? dynamic || paintedDynamic || paintGate.changed(paintKey)
+          : paintGate.changed(paintKey)
       ) {
         const r0 = performance.now()
         render(ctx, layout, {
@@ -524,16 +546,13 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
           hands: handsActive && hands ? hands.latest : null,
           now,
           fingers,
-          lang: lang?.(),
+          lang: langNow,
           logo: logoNow,
         })
         renderWin.push(performance.now() - r0)
         paints++
         paintedDynamic = dynamic
-        paintLayout = layout
-        paintLines = settings.showLines
-        paintLogo = logoNow
-        paintLogoVersion = logoNow?.version ?? 0
+        paintGate.commit(paintKey)
       }
       probes?.emitOutputFrame(ctx, { epoch: epoch.current, frameId: frames, ts: now })
     }
@@ -597,19 +616,30 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     events,
     attach(next) {
       if (canvas === next && raf) return
+      canvas?.removeEventListener('contextrestored', onContextRestored)
       canvas = next
       ctx = next.getContext('2d')
+      next.addEventListener('contextrestored', onContextRestored)
+      paintGate.invalidate()
       if (!raf) raf = requestAnimationFrame(tick)
     },
     detach() {
       if (raf) cancelAnimationFrame(raf)
       raf = 0
       if (reveal.kind === 'open') close('user')
+      canvas?.removeEventListener('contextrestored', onContextRestored)
       canvas = null
       ctx = null
       maskKey = null
-      paintLayout = null
-      paintLogo = null
+      paintedDynamic = false
+      paintGate.invalidate()
+    },
+    invalidate() {
+      paintGate.invalidate()
+    },
+    setPaintAlways(on) {
+      paintAlways = on
+      paintGate.invalidate()
     },
     snapshot() {
       return {

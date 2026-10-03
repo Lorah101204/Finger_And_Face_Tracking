@@ -21,11 +21,11 @@ const END = '<!-- report:end -->'
 
 /** Section 7 of WORK-BREAKDOWN covered by each test file (7.1 is the plan's case mapping table, 7.2 the hard gate). */
 const E2E_SECTIONS = {
-  'landing.spec.ts': '7.4, 7.21',
+  'landing.spec.ts': '7.4, 7.21, 7.36',
   'start.spec.ts': '7.21, 7.28',
   'dataset.spec.ts': '7.22, 7.2',
-  'classify.spec.ts': '7.23, 7.2',
-  'classifierModel.spec.ts': '7.35',
+  'classify.spec.ts': '7.23, 7.2, 7.36',
+  'classifierModel.spec.ts': '7.35, 7.36, 7.38',
   'log.spec.ts': '7.25',
   'camera.spec.ts': '7.5',
   'grid.spec.ts': '7.6',
@@ -43,10 +43,11 @@ const E2E_SECTIONS = {
   'present.spec.ts': '7.28, 7.2',
   'guide.spec.ts': '7.30, 7.2',
   'i18n.spec.ts': '7.31, 7.2',
-  'perf.spec.ts': '7.29, 7.2',
+  'perf.spec.ts': '7.29, 7.2, 7.37',
   'logo.spec.ts': '7.33, 7.2',
   'help.spec.ts': '7.34, 7.2',
-  'sw.spec.ts': '7.27, 7.35',
+  'sw.spec.ts': '7.27, 7.35, 7.36',
+  'split.spec.ts': '7.36',
 }
 const UNIT_SECTIONS = {
   cameraState: '7.5',
@@ -69,11 +70,11 @@ const UNIT_SECTIONS = {
   handTracker: '7.13, 7.32, 7.34',
   handLandmarker: '7.13',
   handClient: '7.13',
-  handPipeline: '7.13',
+  handPipeline: '7.13, 7.37',
   handBoundary: '7.13',
   fingerPose: '7.32',
   fingertips: '7.14, 7.26, 7.32, 7.34',
-  oneEuro: '7.15, 7.34',
+  oneEuro: '7.15, 7.34, 7.37',
   handWindowSource: '7.15, 7.17, 7.26',
   sensitivity: '7.15, 7.34',
   fakeHands: '7.15, 7.32',
@@ -87,15 +88,17 @@ const UNIT_SECTIONS = {
   recorder: '7.22',
   zip: '7.22',
   subjectRule: '7.23',
-  classifierClient: '7.23',
+  classifierClient: '7.23, 7.36',
   stubModel: '7.23',
-  classifierModel: '7.35',
+  classifierModel: '7.35, 7.38',
+  stageChunk: '7.36',
+  paintGate: '7.37',
   uiState: '7.20, 7.28, 7.33',
   i18n: '7.31, 7.34',
   landingScene: '7.28',
   envText: '7.24',
   localLog: '7.25',
-  basePath: '7.27',
+  basePath: '7.27, 7.36',
   networkGuard: '7.27',
   registerSw: '7.27',
   sw: '7.27',
@@ -111,6 +114,24 @@ function need(p, hint) {
 const unit = need(UNIT, 'npm run test:report (Vitest with --reporter=json)')
 const e2e = need(E2E, 'npm run test:report (Playwright with the json reporter)')
 const deploy = existsSync(DEPLOY) ? JSON.parse(readFileSync(DEPLOY, 'utf8')) : null
+
+// QA-03 (D-067): reports/unit.json và reports/e2e.json phải đến từ cùng một lần chạy. `playwright test --reporter=…`
+// thay cả danh sách reporter của config nên không ghi e2e.json, và báo cáo lặng lẽ sinh từ lần chạy trước (giờ, thời
+// gian ca, số buffer gate cũ). `npm run test:report` chạy unit rồi e2e ngay sau đó; lệch quá STALE_MIN phút thì dừng.
+// `--allow-stale` bỏ qua (ví dụ chỉ chạy lại unit). deploy.json chạy riêng (`npm run test:deploy`) nên chỉ in giờ.
+const STALE_MIN = 60
+const unitAt = new Date(unit.startTime ?? 0)
+const e2eAt = new Date(e2e.stats?.startTime ?? 0)
+const deployAt = deploy ? new Date(deploy.stats?.startTime ?? 0) : null
+const gapMin = Math.abs(e2eAt.getTime() - unitAt.getTime()) / 60_000
+if (gapMin > STALE_MIN && !process.argv.includes('--allow-stale')) {
+  console.error(
+    `reports/unit.json (${unitAt.toISOString()}) và reports/e2e.json (${e2eAt.toISOString()}) lệch ${Math.round(gapMin)} phút` +
+      ` (> ${STALE_MIN}): một file đến từ lần chạy cũ. Chạy lại \`npm run test:report\` (hay \`npx playwright test\` không có` +
+      ` --reporter để config ghi reports/e2e.json); --allow-stale để bỏ qua.`,
+  )
+  process.exit(1)
+}
 const pkg = (name) =>
   JSON.parse(readFileSync(join(ROOT, 'node_modules', name, 'package.json'), 'utf8')).version
 const models = JSON.parse(readFileSync(join(ROOT, 'public', 'models', 'models.json'), 'utf8'))
@@ -210,7 +231,7 @@ for (const s of deploy?.suites ?? []) {
   deployFiles.push({ file: basename(s.file ?? s.title), rows })
 }
 
-const ran = new Date(e2e.stats?.startTime ?? Date.now())
+const ran = e2eAt.getTime() > 0 ? e2eAt : new Date()
 const cpu = os.cpus()
 const env = [
   ['Operating system', `${os.type()} ${os.release()} (${os.arch()})`],
@@ -290,7 +311,7 @@ if (deploy) {
   out.push('### E2E on the production build (Playwright, `npm run test:deploy`, REL-01)')
   out.push('')
   out.push(
-    `\`dist/\` via \`vite preview\` (playwright.deploy.config.ts), projects ${projects || '?'}: ${deployTotal.tests} cases:` +
+    `\`dist/\` via \`vite preview\` (playwright.deploy.config.ts), run at ${deployAt && deployAt.getTime() > 0 ? deployAt.toISOString() : '?'}, projects ${projects || '?'}: ${deployTotal.tests} cases:` +
       ` ${deployTotal.pass} pass, ${deployTotal.fail} fail, ${deployTotal.skipped} skipped; total time ${secs(deployTotal.dur)} (sequential).`,
   )
   out.push('')

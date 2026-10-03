@@ -5,8 +5,8 @@ import { resolveBase } from './vite.config'
 // REL-01 (D-050, mục 7.27): kiểm bản build production (dist/) qua `vite preview`: service worker chỉ chạy ở build,
 // và đây là bộ test duy nhất chạy trên chính artefact sẽ deploy (đường dẫn theo VITE_BASE, loader ORT copy đúng cặp,
 // không có yêu cầu nào rời origin). Chạy: `npm run build` rồi `npm run test:deploy`; đặt VITE_BASE giống lúc build
-// (CI: /<repo>/). Project `chromium` (headless shell, không WebGPU: ORT wasm, loader jsep) luôn có; `chrome` thêm khi
-// Chrome cài trên máy (GPU thật, WebGPU: loader asyncify) để phủ cả hai cặp loader. Cổng 4174, một worker, không
+// (CI: /<repo>/). Project `chromium` (headless shell) luôn có; `chrome` thêm khi Chrome cài trên máy để chạy cùng bản
+// build với GPU thật. PERF-03 (D-062): cả hai nạp đúng một cặp loader ORT thường. Cổng 4174, một worker, không
 // song song với `test:e2e`. Kết quả JSON reports/deploy.json cho tools/test-report.mjs.
 export const BASE = resolveBase(process.env.VITE_BASE)
 const ORIGIN = 'http://127.0.0.1:4174'

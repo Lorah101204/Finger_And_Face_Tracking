@@ -14,6 +14,12 @@ export const vi = {
     names: { vi: 'Tiếng Việt', en: 'English' } as Record<'vi' | 'en', string>,
     switchTo: { vi: 'Tiếng Việt', en: 'English' } as Record<'vi' | 'en', string>,
   },
+  /** PERF-03 (D-063): khung chờ và lỗi nạp chunk sân khấu. */
+  boot: {
+    loading: 'Đang tải sân khấu…',
+    failed: 'Không tải được sân khấu (mất mạng hoặc trang vừa được cập nhật).',
+    reload: 'Tải lại trang',
+  },
   landing: {
     eyebrow: 'Chạy hoàn toàn trong trình duyệt · không tải lên',
     title: 'Web Camera Tracking',

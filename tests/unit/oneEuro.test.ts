@@ -62,3 +62,29 @@ describe('stepOneEuro', () => {
     expect(s1.x).toBeLessThan(11)
   })
 })
+
+// PERF-04 (mục 7.37, D-064): dạng nội suy giữ đúng điểm bất động.
+describe('One Euro giữ điểm bất động (D-064)', () => {
+  it('đầu vào không đổi với dt thay đổi mỗi frame: đầu ra đứng yên tuyệt đối (dạng cũ trôi vài ulp)', () => {
+    const p = { minCutoff: 3, beta: 0.02, dCutoff: 1 }
+    let s = stepOneEuro(null, 123.456789, 0, p)
+    let t = 0
+    for (let i = 0; i < 2000; i++) {
+      t += 6.9 + ((i * 7919) % 13) * 0.37 // rAF 144 Hz với jitter
+      s = stepOneEuro(s, 123.456789, t, p)
+      expect(s.x).toBe(123.456789)
+      expect(s.dx).toBe(0)
+    }
+    // Sau một bước nhảy, đầu ra hội tụ về đích và rồi đứng yên (không dao động quanh nó).
+    let prev = Number.NaN
+    let still = 0
+    for (let i = 0; i < 4000; i++) {
+      t += 7
+      s = stepOneEuro(s, 200, t, p)
+      if (s.x === prev) still++
+      prev = s.x
+    }
+    expect(Math.abs(s.x - 200)).toBeLessThan(1e-9)
+    expect(still).toBeGreaterThan(100)
+  })
+})

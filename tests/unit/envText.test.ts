@@ -15,7 +15,6 @@ const ALL: EnvFeatures = {
   offscreenCanvas: true,
   moduleWorker: true,
   imageBitmap: true,
-  webgpu: true,
   wasmSimd: true,
   sharedArrayBuffer: true,
   fullscreen: true,
@@ -74,9 +73,10 @@ describe('shortGpu', () => {
 describe('missingFeatures và describeEnv', () => {
   it('liệt kê tính năng thiếu theo thứ tự khai báo; bốn tính năng bắt buộc nằm trong danh sách', () => {
     expect(missingFeatures(ALL)).toEqual([])
-    expect(missingFeatures({ ...ALL, webgpu: false, directoryPicker: false, rvfc: false })).toEqual(
-      ['rVFC', 'WebGPU', 'chọn thư mục'],
-    )
+    expect(missingFeatures({ ...ALL, directoryPicker: false, rvfc: false })).toEqual([
+      'rVFC',
+      'chọn thư mục',
+    ])
     for (const k of REQUIRED_FEATURES) expect(ALL[k]).toBe(true)
     expect(REQUIRED_FEATURES).toEqual([
       'moduleWorker',
@@ -98,10 +98,10 @@ describe('missingFeatures và describeEnv', () => {
       crossOriginIsolated: false,
       webgl:
         'ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Laptop GPU (0x000025A2) Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      features: { ...ALL, webgpu: false },
+      features: { ...ALL, wasmSimd: false },
     }
     expect(describeEnv(s)).toBe(
-      'môi trường: Chrome 153 · Win32 · 16 luồng · WebGL NVIDIA GeForce RTX 3050 Laptop GPU · thiếu: WebGPU',
+      'môi trường: Chrome 153 · Win32 · 16 luồng · WebGL NVIDIA GeForce RTX 3050 Laptop GPU · thiếu: wasm SIMD',
     )
     expect(describeEnv({ ...s, features: ALL, platform: '', webgl: null })).toBe(
       'môi trường: Chrome 153 · ? · 16 luồng · WebGL không có WebGL · đủ API',

@@ -10,8 +10,6 @@ export type EnvFeatures = {
   moduleWorker: boolean
   /** createImageBitmap và transfer ImageBitmap (I1). Bắt buộc. */
   imageBitmap: boolean
-  /** navigator.gpu (secure context); có adapter hay không hỏi bằng gpuAdapter(). Thiếu thì ORT dùng wasm (D-013). */
-  webgpu: boolean
   /** wasm SIMD (MediaPipe và ORT cần). Bắt buộc. */
   wasmSimd: boolean
   /** Không cần (wasm đơn luồng, D-013), ghi để biết COOP/COEP. */
@@ -77,7 +75,6 @@ const FEATURE_TEXT: Record<keyof EnvFeatures, string> = {
   offscreenCanvas: 'OffscreenCanvas',
   moduleWorker: 'module worker',
   imageBitmap: 'ImageBitmap',
-  webgpu: 'WebGPU',
   wasmSimd: 'wasm SIMD',
   sharedArrayBuffer: 'SharedArrayBuffer',
   fullscreen: 'toàn màn hình',

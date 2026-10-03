@@ -3,14 +3,14 @@
 // File này chỉ import core/ để cả worker (lib WebWorker) lẫn client (lib DOM) dùng được.
 import type { ClassifyResult, RestrictedFrame } from '../core/types'
 
-export type ClassifierEp = 'webgpu' | 'wasm'
+/** PERF-03 (D-062): chỉ còn EP wasm; giữ trường `ep` trong 'ready' cho dòng debug và benchmark. */
+export type ClassifierEp = 'wasm'
 
 export type ClassifierInitMessage = {
   type: 'init'
-  /** Thư mục loader wasm của ORT (dev: node_modules, build: /models/ort/), D-013. */
+  /** Thư mục loader wasm của ORT (dev: node_modules, build: /models/ort/), D-013, D-062. */
   wasmPaths: string
   modelPath: string
-  executionProviders: ClassifierEp[]
   /** Cạnh input cố định của model (128 hoặc 160). */
   inputSize: number
   /** Chuẩn hóa (x / 255 − mean) / std cho cả ba kênh; script huấn luyện dùng cùng giá trị. */

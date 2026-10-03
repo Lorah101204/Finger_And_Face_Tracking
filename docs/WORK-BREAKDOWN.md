@@ -152,19 +152,19 @@ src/
   camera/         cameraSource.ts (getUserMedia + rVFC), cameraState.ts (pure state machine), syntheticCameraSource.ts, frameSource.ts
   hands/          handProtocol.ts, hand.worker.ts (the only worker that receives the raw frame), handClient.ts, handLandmarker.ts (normalizeHandedness, detection), handTracker.ts, handPipeline.ts, fingertips.ts (every selected fingertip of every hand, ROI-03)
   reveal/         windowSource.ts (interface, WindowSample), mouseWindowSource.ts, handWindowSource.ts (fingertips → solver), hullSolver.ts (convex hull, ROI-03), oneEuro.ts, sensitivity.ts
-  mask/           buildMask.ts, compositor.ts, restrictedFrame.ts
+  mask/           buildMask.ts, compositor.ts, palette.ts (colors, PERF-03), restrictedFrame.ts
   face/           faceProtocol.ts, face.worker.ts, faceClient.ts, faceMapping.ts, faceValidate.ts
   classify/       classifierProtocol.ts, classifier.worker.ts (ONNX Runtime Web), classifierClient.ts, subjectRule.ts (unknown rule)
   dataset/        recorder.ts (dataset mode CLS-01: reveal region crop via CropTap, metadata, zip), zip.ts (pure stored zip), sinks.ts (File System Access directory, zip download, PNG encoding)
   log/            localLog.ts (local log LOG-02: metadata events, limits, filtering, CSV; pure), idbStore.ts (IndexedDB wct-log)
   debug/          probes.ts (buffer tap), wctGlobal.ts (window.__wct), cameraProbe.ts, stageProbe.ts, loopProbe.ts, faceProbe.ts, handProbe.ts, classifierProbe.ts, stats.ts, statsProbe.ts, envText.ts + envProbe.ts (browser environment, QA-02), logProbe.ts (log, LOG-02), scenarios.ts, fakeHands.ts (fake hands for e2e)
-  loop/           frameLoop.ts (the loop of section 4.4, rAF), store.ts (settings, layout, epoch; read by React), closeGate.ts (no-camera, tab-hidden)
+  loop/           frameLoop.ts (the loop of section 4.4, rAF), paintGate.ts (paint only when the picture changes, PERF-04), store.ts (settings, layout, epoch; read by React), closeGate.ts (no-camera, tab-hidden)
 tests/
   unit/           vitest: coords, grid, cells, hullSolver, fingertips, handTracker, faceValidate, revealState, latency, stats, guidance, uiState…
   e2e/            playwright + fake camera and synthetic source: mask gate, late results, window close, stats, ux; soak/ (15 minutes); bench/ (device matrix QA-02, multiple browsers via playwright.bench.config.ts)
 tools/            python: generate y4m test clips; dataset/ (common.py, label.py, split.py, stats.py, test_dataset.py: labeling, split, statistics, raw frame check); train/ (dataset.py, train.py, export_onnx.py, check_onnx.py, eval.py, metrics.py + tests: training and ONNX export, CLS-02); make-stub-classifier.mjs (stub model)
 public/models/    tasks-vision wasm, hand_landmarker.task, face_landmarker.task, classifier.onnx, models.json
-src/app/          pages/ (LandingPage, StagePage), session.ts (consent), gate.ts (camera gate), SettingsPanel.tsx (settings column UX-03: GridControls.tsx, FingerControls.tsx, SensitivityControls.tsx, DatasetControls.tsx + datasetText.ts, LogControls.tsx; HelpTip.tsx the "?" notes UX-05), DebugPanel.tsx (debug drawer), Guide.tsx + guidance.ts (guidance UX-01), BrandMark.tsx, useFullscreen.ts + useIdle.ts (fullscreen and presentation overlay), uiState.ts + useUiState.ts (panel state and presentation mode), tick.ts, useStageCanvas.ts (DPR-scaled canvas), LandingPreview.tsx + landingScene.ts + landing.css (landing screen UX-02, UX-03), app.css (shared tokens)
+src/app/          pages/ (LandingPage, StagePage), session.ts (consent), gate.ts (camera gate), SettingsPanel.tsx (settings column UX-03: GridControls.tsx, FingerControls.tsx, SensitivityControls.tsx, DatasetControls.tsx + datasetText.ts, LogControls.tsx; HelpTip.tsx the "?" notes UX-05), DebugPanel.tsx (debug drawer), Guide.tsx + guidance.ts + guideSteps.ts (guidance UX-01), stageChunk.ts + stageLoader.ts + StageBoundary.tsx (the stage as a lazily loaded chunk, PERF-03), BrandMark.tsx, useFullscreen.ts + useIdle.ts (fullscreen and presentation overlay), uiState.ts + useUiState.ts (panel state and presentation mode), tick.ts, useStageCanvas.ts (DPR-scaled canvas), LandingPreview.tsx + landingScene.ts + landing.css (landing screen UX-02, UX-03), app.css (shared tokens)
 archive/backend/  backend, admin, telemetry dropped under D-019; only on the orphan branch `archive/backend` (D-024), ignored on main
 docs/             plan, decisions.md, spikes.md, test and benchmark reports
 ```
@@ -802,7 +802,7 @@ sequenceDiagram
 
 Execution order for one person:
 
-`SETUP-00 → SPIKE-00 → WEB-00 → CAM-01 → GRID-01 → ROI-00 → MASK-01 → TEST-00 → MASK-02 → FACE-01 → FACE-02 → HAND-01 → HAND-02 → ROI-01 → INT-01 → ROI-02 → QA-01 → PERF-01 → UX-01 → UX-02 → CLS-01 → CLS-02 → QA-02 → LOG-02 (optional) → ROI-03 → UX-03 → REL-01 → PERF-02 → UX-04 → I18N-01 → ROI-04 → BRAND-01 → UX-05 → CLS-03`
+`SETUP-00 → SPIKE-00 → WEB-00 → CAM-01 → GRID-01 → ROI-00 → MASK-01 → TEST-00 → MASK-02 → FACE-01 → FACE-02 → HAND-01 → HAND-02 → ROI-01 → INT-01 → ROI-02 → QA-01 → PERF-01 → UX-01 → UX-02 → CLS-01 → CLS-02 → QA-02 → LOG-02 (optional) → ROI-03 → UX-03 → REL-01 → PERF-02 → UX-04 → I18N-01 → ROI-04 → BRAND-01 → UX-05 → CLS-03 → PERF-03 → PERF-04 → CLS-04 → PERF-05 → QA-03`
 
 API-00, LOG-01, ADM-01, SEC-01, DEP-01 are dropped per D-019 (code in `archive/backend/`); static deployment to GitHub Pages with a custom domain is part of REL-01 (D-024, D-048). UX-02 (landing screen, D-023) depends only on WEB-00, so it can be pulled forward to any point after CAM-01; LOG-02 (local log, D-022) is optional and not a precondition of REL-01.
 
@@ -1516,6 +1516,134 @@ Remaining (data, not code): capture per `docs/dataset.md` section 4 with at leas
 
 Tests: section 7.35.
 
+#### PERF-03 Download economy: plain ORT wasm and a separate stage chunk
+
+Depends on: CLS-02 (classifier worker), REL-01 (manifest, service worker, `test:deploy`), CLS-03 (trained model for the measurements). Requested on 2026-10-03 as items 1 and 2 of the optimization review ("tổng hợp các công việc cần tối ưu").
+
+Motivation: the first `#/app` session downloaded 53 MB raw (20 MB gzip on GitHub Pages) of which the ORT runtime alone was 28.7 MB: the classifier worker imported the default bundle (`jsep` wasm, 28.3 MB) or, with a WebGPU adapter, the webgpu bundle (`asyncify` wasm, 26.8 MB), while the plain build `ort-wasm-simd-threaded.wasm` (14.2 MB) was never used; `dist/` carried both large builds (86.2 MB). Separately, the landing page downloaded the whole stage in one 444 kB chunk.
+
+Measurements (2026-10-03, development machine, Chrome 154 with RTX 3050 and the Playwright Chromium shell):
+
+| Item | Before | After | Use |
+|---|---|---|---|
+| Classifier on Chrome + RTX 3050, real model (bench case 2/3, two runs) | webgpu: init 1237 to 1408 ms, warm-up 399 to 445 ms, p50 23.4 to 29 / p95 36 to 37 ms | wasm: init 880 to 965 ms, warm-up 63 to 65 ms, p50 9.6 to 11.4 / p95 15.1 to 15.8 ms | WebGPU loses on every column at this model size; D-062 |
+| ORT runtime downloaded by the worker | 28.7 MB raw / 6.84 MB gzip (jsep), 26.9 / 6.71 MB (asyncify) | 14.3 / 3.72 MB | gzip estimated with zlib level 6, about 2 % low: the jsep wasm alone is 6.73 MB estimated, 6.85 MB served by the live site |
+| First `#/app` session that opens the region, stub build (public site) | 53.2 MB raw / 19.8 MB gzip | 38.7 / 16.7 MB | All files of the session from `dist/` |
+| `dist/` | 86.2 MB | 44.8 MB (40.8 MB with the CLS-04 model) | `wct-build` line of `vite.config.ts` |
+| `sw.spec` "lần 1 tải" (responses the page itself sees) | 12 responses, 40.1 MB (Chromium), 38.5 MB (Chrome) | 12 responses, 26.0 MB on both | Same instrument before and after |
+| ORT JavaScript chunk | `ort.min` 361 kB + `ort.webgpu.min` 65 kB | `ort.wasm.min` 49 kB | Vite build output |
+| Entry chunk (landing) | 444.5 kB, gzip 147.1 kB | 314.5 kB, gzip 102.7 kB | The stage chunk is 135.0 kB, gzip 47.1 kB (Vite's sizes; `split.spec` prints zlib level 6, about 1 kB lower) |
+| Landing → stage (production, `split.spec`) | the stage was in the entry chunk | chunk fetched 67 to 245 ms after `load`; Start → canvas 119 to 124 ms with 0 JS fetched | Idle and intent prefetch |
+
+Design (D-062, D-063):
+
+- Classifier: `import('onnxruntime-web/wasm')` only; with the `onnxruntime-web-use-extern-wasm` condition this is `ort.wasm.min.mjs`, which loads `ort-wasm-simd-threaded.{mjs,wasm}` from `wasmPaths` (no proxy worker, no threads with `numThreads` 1). `executionProviders: ['wasm']`; the adapter probe, the fallback, `DEFAULTS.classifier.executionProviders`, the init field, the `ep=wasm` parameter and the forced-wasm bench case are removed; `ClassifierEp` is the literal `'wasm'`. `models.json` `ort.files` lists the plain pair; `models:fetch` prunes the old builds from `public/models/ort/`.
+- Stage chunk: `app/stageLoader.ts` (the only `import('./pages/StagePage')`) through `createChunkLoader` (`app/stageChunk.ts`, one promise including a rejection); `AppRouter` renders `lazy(StagePage)` in one `<Suspense fallback={<StageFallback/>}>` around `<Routes>`, and `StageRoute` redirects to `/` without consent before loading the chunk; `StageErrorBoundary` reloads once on a chunk error (`allowChunkReload`, sessionStorage, 30 s) and then shows `role=alert` with a reload button. The landing prefetches on idle after `load` in the production build (`schedulePrefetchWhenIdle`: `requestIdleCallback` with a 2 s timeout, else 200 ms, skipped with Save-Data) and on intent (pointer, focus, touch on the consent card, ticking the box); Start navigates in `useTransition`, the button is busy and the "already agreed" link is hidden while pending. `mask/palette.ts` (colors) and `app/guideSteps.ts` (step ids) are leaf modules re-exported by `compositor.ts` and `guidance.ts`, so the landing graph no longer reaches the compositor, the guidance builder, fingertips or coordinates. `app.css` stays one file (the stage-only rules are about 2 kB gzip). New strings `boot.loading`, `boot.failed`, `boot.reload` in both dictionaries.
+- e2e: `openApp` waits until `window.__wct.stage` exists (or the landing shows after a redirect).
+
+Steps:
+
+1. Worker, protocol, client, config, StagePage, `models.json`, `models:fetch`; unit `basePath` (the worker's only ORT entry is `onnxruntime-web/wasm`, the bundle requests exactly the manifest pair) and `classifierClient`; e2e `classify.spec`, `classifierModel.spec` and deploy `sw.spec` expect EP `wasm` and the plain pair; bench case 3 removed (`clsWasm` stays null for old matrix rows).
+2. `palette.ts`, `guideSteps.ts`, `stageChunk.ts`, `stageLoader.ts`, `StageBoundary.tsx`, `AppRouter`, `LandingPage`, strings, `.stage-boot` CSS, `openApp` wait; unit `stageChunk` (loader, scheduler, error helpers, static graph of the landing); deploy `split.spec`; `sw.spec` checks the stage chunk in the app cache.
+3. Measurements above; D-062, D-063; README, this package, section 7.36.
+
+Done criteria: the worker and `dist/` contain only the plain ORT pair and every e2e, deploy and unit test passes with EP `wasm`; the entry chunk contains no camera or stage code (`getUserMedia`, `__scenario`, `requestVideoFrameCallback` only in the stage chunk) and stays under 115 kB gzip; the landing fetches only the files of `index.html` before `load`; entering from the landing fetches no further JavaScript; a blocked stage chunk reloads once and then shows the alert; offline open 3 of `sw.spec` still works.
+
+Tests: section 7.36.
+
+#### PERF-04 Paint at the content rate
+
+Depends on: PERF-02 (static-frame skip, mask reuse), REL-01 (measurement tool), ROI-04 (fake hands). Requested on 2026-10-03 as item 3 of the optimization review.
+
+Motivation: while the region was open the loop painted on every `requestAnimationFrame` (60 to 144 Hz) although the camera delivers about 30 frames per second and hand results arrive at most at that rate, so most paints redrew the same picture with a full `drawImage` of the video inside the clip path. The design review also found that still hands rebuilt their mask on most frames: One Euro's `a·x + (1 − a)·prev` moves a constant input by a few ulps when `dt` varies, so the hull never stood still.
+
+Measurements (2026-10-03, `tools/measure-loop.mjs --ab`, Chrome 154 headless, rAF about 140 Hz, synthetic camera 30 fps, three alternating pairs per state in the same page; "always" is the PERF-02 behavior; final build, measured while a review workflow ran in the background, so the absolute shares are about 0.5 points higher than an idle machine and the A/B difference is what counts):
+
+| State | Paints/s always → gate | Main thread always → gate | Mask builds/s |
+|---|---|---|---|
+| Region closed | 0 → 0 | 4.4 → 4.4 % | 0 |
+| Mouse window, still | 144 → 30 | 11.7 → 8.5 % | 0 |
+| Fake hands orbiting, per rAF (e2e default) | 144 → 143 | 17.3 → 17.4 % | 143 to 144 |
+| Fake hands still, per rAF | 144 → 143 | 14.5 → 14.9 % | 0 to 0.5 |
+| Fake hands orbiting at camera rate (like the real worker) | 144 → 30 | 15.6 → 10.9 % | 30 |
+| Fake hands still at camera rate | 144 → 30 | 16.1 → 10.2 % | 0 |
+| First run, before the shared empty faces array | mouse 144 → 39, camera-rate hands 144 → 40 | 9.7 → 7.7 %, 12.6 → 8.6 to 9.3 % | — |
+| One Euro with a constant input, jittered 144 Hz `dt`, 1500 steps | old form: output changed on 358 steps | new form: 0 | Node, the repository's `alpha` |
+| e2e `perf.spec` (Chromium shell, mouse window) | `paintAlways`: 27 paints in 27 frames | 16 paints in 26 frames with 45 camera frames | Counters, not wall time |
+
+Design (D-064): `loop/paintGate.ts` keeps a reused `PaintKey` of every input of `render()` and compares it with the last committed paint: layout object, grid lines, mirror, language, logo object and version, mask object; the video source and camera `frameId` only while video is drawn; the faces array only with a mask (`labelFaces` returns one shared empty array when there is no face, so face and classifier results without a face do not repaint); the `HandFrame` and its stale flag only while the hand overlay is drawn; the fingertips by value as `drawFingertips` draws them. `commit` comes after `render`, so a render that throws is retried. `invalidate()` on `attach`, `detach`, `contextrestored`, after `closeNow` and after StagePage paints the background itself; `setPaintAlways` restores PERF-02 for A/B (`window.__wct.loop`). One Euro uses `x + a·(target − x)`. Fake hands take `cameraRate` (a new `HandFrame` per camera frame; `FakeHandFrames` receives the camera `frameId`); `SyntheticCameraSource.setScene` stamps a new frame while running, since the canvas content changed. A unit guard maps every field of `RenderOptions` to a key field, so a new drawn input fails `tsc` until the gate knows it.
+
+Steps:
+
+1. `paintGate.ts` and unit tests (every key field, fingertip rounding, early-exit commit, the `RenderOptions` guard); One Euro fixed point test.
+2. `frameLoop.ts` integration, `FrameLoop.invalidate`/`setPaintAlways`, `loopProbe`, StagePage background effect.
+3. `cameraRate` in `fakeHands.ts`, `scenarios.ts`, `handPipeline.ts`; `measure-loop.mjs --ab` with two camera-rate states.
+4. `perf.spec` bounds by counters (paints ≤ min(frames, camera frames + 2), ≥ 1; `paintAlways` gives paints = frames); full e2e, soak unchanged.
+5. D-064, README, this package, section 7.37.
+
+Done criteria: with the region open and nothing moving, paints follow the camera rate, not the display rate, and every pixel test (7.6, 7.8, 7.10, 7.33) still passes; `paintAlways` reproduces PERF-02 exactly; a still hand builds no mask; no allocation per frame in the gate.
+
+Tests: section 7.37.
+
+#### CLS-04 Compact classifier file
+
+Depends on: CLS-03 (trained model, export, manifest gate), PERF-03 (the worker runs plain wasm). Requested on 2026-10-03 as item 5 of the optimization review.
+
+Motivation: the trained model is 6.09 MB and compresses only to 5.63 MB gzip; it is on the service worker's warm list, so every visitor of a build with the trained model downloads it on the first stage visit.
+
+Measurements (2026-10-03; Python onnxruntime 1.30 CPU and onnxruntime-web 1.30 wasm in Node 24; in Chrome from the e2e notes):
+
+| Candidate | Size raw / gzip | Agreement with fp32 | Speed | Verdict |
+|---|---|---|---|---|
+| fp32 (CLS-03) | 6.09 / 5.63 MB | reference | wasm p50 5.24 / p95 8.85 ms | fallback |
+| Dynamic int8 (ConvInteger, MatMulInteger) | 1.69 / 1.15 MB | displayed label kept on 5 of 33 samples, max \|Δp\| 0.55 | not measured | rejected |
+| Static QDQ int8 per channel (MinMax, Percentile, Entropy) | 1.85 / 1.49 MB | argmax 27 of 33 with every method (per tensor: 16 of 33) | not measured | rejected |
+| Head-only dynamic int8 | 4.33 / 3.85 MB | 33 of 33, max \|Δp\| 0.0002 | p50 3.8 ms | superseded |
+| Full fp16 graph (`convert_float_to_float16`) | 3.07 / 2.80 MB | 33 of 33 | casts around every node in wasm | avoided |
+| `fp16w` (fp16 storage, folded) | 3.10 / 2.83 MB | 194 inputs: argmax 100 %, 0 flips, max \|Δp\| 0.005, max \|Δmargin\| 0.04 / 0.07 | p50 4.70 ms | passes |
+| `int8+fp16w` (chosen: 13 int8 layers, 33 fp16 tensors) | 2.00 / 1.81 MB | 194 inputs (17 within 0.15 of the threshold): argmax 100 %, 0 flips, max \|Δp\| 0.016, max \|Δmargin\| 0.17 held-out / 0.18 augmented | p50 4.92 / p95 8.43 ms | shipped |
+| `int8+fp16w` on the first pack (blends on a 0.1 grid, 4 inputs near 0.7) | 1.97 / 1.78 MB | passed there; on the bisected pack the same search needs 20 fp16 layers instead of 18 | — | superseded by the stronger pack |
+| In Chrome (`classifierModel.spec`, `face.png`) | — | person 0.979 (fp32 0.980) | init 718 to 909 ms, warm-up 54 to 79 ms (2185 and 189 ms before PERF-03 and CLS-04) | — |
+
+Design (D-066): `export_onnx.py --compress auto` (default; `none` keeps the CLS-03 path) exports fp32 into `<checkpoint dir>/compress/`, builds the input pack (`compress.build_pack`: the captured samples, three augmented copies with seeds 2000 to 2002, distinct spike-asset crops when present, person ↔ mannequin blends at α 0 to 1 plus α bisected on the fp32 model for p(person) 0.8, 0.75, 0.7, 0.65 and 0.6, because the model jumps between the classes within one 0.1 step), measures each layer's sensitivity, searches greedily for the smallest `int8+fp16w` that passes the gates, adds `fp16w`, checks the structural folding with onnxruntime's basic optimizer, runs `tools/train/check_wasm.mjs` for wasm logits and timings, chooses with `compress_select.choose` (smallest passing, a size tie within 5 % goes to the smaller margin error, fp32 always passes) and copies the winner to `--out`. `models.json` `classifier.compression` holds only deterministic fields; `js_stable` writes integral floats as integers so the manifest survives a `JSON.stringify` round trip. The full report (timings, all candidates, sensitivity) stays in the gitignored work folder.
+
+Steps:
+
+1. `compress_select.py` (standard library) and `test_compress.py`; `compress.py`; `check_wasm.mjs`; `export_onnx.py` (`--compress`, `--root`, `--spike-dir`, `--work`, `compress_and_copy`, `js_stable`, `update_manifest` pops a stale block).
+2. Re-export the first model: `int8+fp16w` 2 001 042 bytes, `models.json` updated; unit `classifierModel` checks the block and the round trip; e2e `classifierModel.spec` and `classify.spec`, deploy suite.
+3. D-066, `docs/classifier-report.md`, README, tools/README, this package, section 7.38.
+
+Done criteria: the exported file is the smallest candidate that passes every gate on Python and wasm, fp32 otherwise; the manifest is byte-stable under `JSON.stringify`; the real face in Chrome keeps its label within 0.01; CI's standard-library Python tests cover the gate and the manifest logic.
+
+Remaining: the gates bound the difference to fp32 only; the 7.3 targets still need a capture with people in val and test, after which the export runs again.
+
+Tests: section 7.38.
+
+#### PERF-05 CPU hand input size (rejected with measurements)
+
+Depends on: HAND-01, QA-02 (delegate choice D-045). Requested on 2026-10-03 as item 4 of the optimization review: the CPU delegate reaches 9.5 to 11.5 Hz against the 20 Hz target.
+
+Measurements (2026-10-03, `tools/probe-hand-input.mjs`, Chrome 154, CPU delegate, VIDEO mode, numHands 2, 30 frames × 2 rotated rounds per width; detect p50 in ms):
+
+| Scene | Thread | 1280 | 960 | 640 | 480 | 320 px | Tip error at 480 / 320 px (mean / max) |
+|---|---|---|---|---|---|---|---|
+| `hands.jpg`, two hands | page | 43.5 | 46.1 | 43.4 | 44.5 | 43.8 | 2.0 / 3.7 px, 3.1 / 6.4 px |
+| `hands.jpg`, two hands | worker | 60.7 | 74.6 | 72.2 | 76.5 | 74.1 | same |
+| `pointing_up.jpg`, one hand | worker | 79.4 | 82.9 | 81.0 | 80.4 | 81.9 | 1.5 / 2.4 px, 1.7 / 2.6 px |
+| `hands.jpg` at half size | worker | 78.3 | 79.5 | 78.0 | 77.1 | 78.8 | 1.4 / 1.7 px, 2.3 / 3.6 px |
+
+Result (D-065): no speed gain at any width (the cost is the model, not the input upload), only lost accuracy, so the frame stays full resolution and no setting is added. MediaPipe tasks-vision 1.0.1 is single-threaded wasm, so cross-origin isolation would not help either. The same `detectForVideo` call, timed inside the thread that runs it, takes about 43 ms on the page thread against 60 to 80 ms in a worker (the transfer is not included): an open lead to examine on the kiosk hardware; the deciding measurement remains `npm run test:bench` there (GPU delegate 29 Hz in D-045). The probe stays as a tool and blocks cross-origin requests (the tasks-vision telemetry) like the app.
+
+Tests: section 7.39.
+
+#### QA-03 Test tooling: report integrity, weekly soak, local parallelism
+
+Depends on: QA-01 (report), PERF-01 (soak), CI. Requested on 2026-10-03 as item 6 of the optimization review, after a report regenerated from a stale JSON nearly went into a commit.
+
+Design (D-067): `tools/test-report.mjs` refuses to write when `reports/unit.json` and `reports/e2e.json` started more than 60 minutes apart (`--allow-stale` overrides) and prints the deploy run's own start time in its section; the CI soak also runs every Monday at 03:17 UTC (the check job is skipped on that trigger); Playwright runs 2 workers locally as on CI (was 6): measured on the full suite of 81 cases, 4 workers took 195 to 200 s with one flaky case per run, 3 workers 189 to 202 s with one run of two flaky cases, 2 workers 210 to 222 s and clean every time, because the MediaPipe workers already saturate the CPU; the manifest round-trip rule of D-066.
+
+Tests: section 7.40.
+
 ## 7. Mandatory test suite
 
 ### 7.1 Mapping the plan's test table to how it is carried out
@@ -1795,7 +1923,7 @@ After ROI-03 the quadrilateral is a special case of the convex hull (`polygon`):
 | Unknown rule | Unit `subjectRule`: no result yet → unknown 0; argmax with confidence = max(prob); below 0.7 → low-confidence; ROI < 96 px → roi-small even when confident; partial with < 60 % visible → partial, full is not checked; priority order; labels in the configured order; `subjectText`; `softmax` is stable | unit | CLS-02 |
 | Client | Unit `classifierClient` with a fake worker: init (loader per environment, model stub, EP, normalization), starting twice creates nothing extra; not-ready, not-accepting, busy close the bitmap; submit transfers the bitmap; a result for the right task → listener, p50/p95 by window rank, `lastProbs`, interval `max(250, p50)`; rejectAll drops late results; task error and init error; dispose | unit | CLS-02 |
 | Model stub | Unit `stubModel`: hand-encoded ONNX loaded with onnxruntime-web (Node, wasm), names `input`/`logits`, green → person > 0.999, magenta → mannequin, gray → 0.5/0.5 | unit | CLS-02 |
-| Pipeline | E2E `classify.spec` synthetic source: before the region opens the worker is not initialized and nothing is submitted (`submitted` 0, `classifierSubmitted` 0); open 10 cells on the green half → worker ready (wasm or webgpu), the gate accepts ≥ 3 results, `subject.probs[0]` > 0.99, correct epoch, correct `roiShortPx`, no epoch or no-mask rejections, `classifierSubmitted` equals `submitted` (I1), the `classifier-stat` line has probs; ≤ 5 Hz (+1) over 2 s; a scene drifting at 20 px/s is still person (motion is not used); move to magenta → mannequin in the same epoch; a 3-cell window (< 96 px) submits nothing more and the label expires after 1.5 s; close the region → label cleared, accepting off, nothing more submitted, the gate accepts nothing more; record measurements; gate audit clean | e2e | CLS-02 |
+| Pipeline | E2E `classify.spec` synthetic source: before the region opens the worker is not initialized and nothing is submitted (`submitted` 0, `classifierSubmitted` 0); open 10 cells on the green half → worker ready (wasm; wasm or webgpu before D-062), the gate accepts ≥ 3 results, `subject.probs[0]` > 0.99, correct epoch, correct `roiShortPx`, no epoch or no-mask rejections, `classifierSubmitted` equals `submitted` (I1), the `classifier-stat` line has probs; ≤ 5 Hz (+1) over 2 s; a scene drifting at 20 px/s is still person (motion is not used); move to magenta → mannequin in the same epoch; a 3-cell window (< 96 px) submits nothing more and the label expires after 1.5 s; close the region → label cleared, accepting off, nothing more submitted, the gate accepts nothing more; record measurements; gate audit clean | e2e | CLS-02 |
 | Label on the face (local) | E2E `classify.spec` with `face.png`: a 16-cell window around the face → the face has a valid `subjectType`, `subject.epoch` equals the epoch, confidence equals max(prob) when a label exists, closing the region clears the face and the label | local e2e | CLS-02 |
 | Metrics | `tools/train/test_metrics.py` (unittest): the same unknown rule as the app; precision, recall where unknown and wrong assignments count as missed recall and labeled background counts as FP; target 0.9; grouped by size, position, mannequin type; Markdown | unit (Python) | CLS-02 |
 | Real model | Training, export, `check_onnx.py`, `eval.py --doc` on the test split (section 7.3); measure EP and Hz on the target machine (QA-02) | manual: first run in CLS-03 (7.35); the section 7.3 target awaits a dataset with people in val and test | CLS-02 |
@@ -1809,8 +1937,8 @@ After ROI-03 the quadrilateral is a special case of the convex hull (`polygon`):
 | Hand delegate | Unit `handDelegate`: SwiftShader, llvmpipe, Microsoft Basic Render, missing WebGL are software; NVIDIA, Intel, Apple are hardware; `auto` → GPU on hardware, CPU on software or missing WebGL; an explicit pref wins; the config default is `auto` and the CPU point age is larger than the GPU one | unit | QA-02 |
 | Browser environment | Bench `bench.spec` case 1 (each project of `playwright.bench.config.ts`): `window.__wct.env.snapshot()` and `gpuAdapter()`, the `env-stat` line; asserts the four required APIs (module worker, OffscreenCanvas, ImageBitmap, wasm SIMD) and secure context; face worker ready, records delegate and init; records browser, WebGL GPU, WebGPU adapter, missing APIs | bench | QA-02 |
 | Mouse window | Bench case 2: `face.png` (local) or the synthetic background, `BENCH_SECONDS` seconds: stats every second (fps, face and classifier Hz, p50/p95, draw, tick) and an rAF-driven collector in the page records the timestamp of every result (p50/p95/max interval) and the age at gate acceptance for face and classifier; the number of results rejected as too old; fps > 5, face and classifier results present, pending ≤ 1; record measurements | bench | QA-02 |
-| Classifier on wasm | Bench case 3: `ep=wasm` → EP is wasm, init, warm-up, infer p50/p95, Hz; compared with the default EP of case 2 | bench | QA-02 |
-| Hands on CPU and GPU (local) | Bench case 4 with `hands.jpg`: `hands=CPU` then `hands=GPU` (page reload), point age 1000 ms: actual delegate, init, Hz, p50/p95, result interval, region-open ratio, thumb and index fingertip jitter (σ in camera px and cells) on a still image; results on both | local bench | QA-02 |
+| Classifier on wasm | Removed by PERF-03 (D-062): the classifier only runs wasm, so case 2 measures it; until then bench case 3 forced `ep=wasm` for comparison with the default EP | bench | QA-02 |
+| Hands on CPU and GPU (local) | Bench case 3 (case 4 before PERF-03) with `hands.jpg`: `hands=CPU` then `hands=GPU` (page reload), point age 1000 ms: actual delegate, init, Hz, p50/p95, result interval, region-open ratio, thumb and index fingertip jitter (σ in camera px and cells) on a still image; results on both | local bench | QA-02 |
 | Matrix and locked parameters | `tools/benchmark-report.mjs`: merges `reports/bench-*.json` into `docs/benchmark-matrix.json` (one row per machine + GPU + browser + headless), environment table, measurements and parameter cross-check: point age ≥ p95 interval + p95 infer of the hands (locked delegate); p95 age at acceptance ≤ 80 % of the max age and 0 too old for face and classifier; label age ≥ 2 × the classifier p95 interval; hysteresis ≥ 3σ jitter | script | QA-02 |
 | Firefox, Safari | `npx playwright install firefox webkit` then `npm run test:bench` (the project is added automatically when the binary exists); or open `#/app?debug=1&source=synthetic` in that browser and read the `env-stat`, `face-stat`, `hands-stat`, `classifier-stat` lines; record in the browser table of `docs/benchmark.md` | manual, pending | QA-02 |
 | Classifier metrics | Waits for the real model (sections 7.3, 7.23) | manual, pending | QA-02 |
@@ -1846,7 +1974,7 @@ After ROI-03 the quadrilateral is a special case of the convex hull (`polygon`):
 | Service worker (pure) | Unit `sw.test.ts` loads `public/sw.js` into `node:vm` (scope `/repo/`): install `skipWaiting`; activate deletes other `wct-*` keys, keeps the two current keys, does not touch foreign caches, `clients.claim`; `models/*` cache-first (no fetch the second time, 404 not cached, key drops the hash, `ignoreVary`); `assets/*` cache-first; pages network-first, writing the page key and using the cached copy when offline, an uncached asset while offline returns the error; cross-origin `Response.error()` without fetch; same-origin outside the scope, POST, `sw.js` are not intercepted; `warm` caches models, assets, pages, skips unknown and already-present URLs, reports `warmed` with the count of new entries | unit | REL-01 |
 | Registration and warm | Unit `registerSw.test.ts`: `serviceWorkerUrl(base)`; registers after `load` with url and scope per base; dev, unsupported, `register` throwing → false without throwing; `pickWarmAssets` takes the page (hash and query dropped) and assets under `base/assets/`, drops duplicates and anything else; `warmServiceWorker` sends `{ type: 'warm', urls }` to the active worker, false in dev, when empty or when there is no worker yet | unit | REL-01 |
 | Clean build | CI after `build`: `test ! -e dist/spike-assets`, `test -f dist/sw.js`, `dist/sw.js` no longer contains `__WCT_`; the `wctBuild` plugin prints the size of `dist/` and the largest file (80 MB, 28.3 MB); the Pages artifact is the very `dist/` that passed `test:deploy` | CI | REL-01 |
-| Production build via preview | E2E `tests/deploy/sw.spec.ts` with `playwright.deploy.config.ts` (`npm run test:deploy`, after `npm run build` with the same `VITE_BASE`): `webServer` is `vite preview` on port 4174, project `chromium` (headless shell, EP wasm → jsep loader) and `chrome` when Chrome is on the machine (WebGPU → asyncify loader); one shared context, sequential: (1) the key in `dist/sw.js` matches the sha256 of `models.json`; (2) the first page blocks `register`, sets consent, creates two old `wct-*` caches; (3) first load of `#/app?debug=1&source=synthetic`: face worker ready, open a 10-cell window, classifier worker ready, `navigator.serviceWorker.controller` present, `caches.keys()` is exactly the two keys (old caches deleted), the model cache has 7 files (wasm module js + wasm, three models, the loader pair per EP), the app cache has the page, `index-*.js`, `face.worker-*.js`; (4) second load: controlled from the start, every `models/` and `assets/` response is `fromServiceWorker()`, requests the worker sends to the network (`request.serviceWorker()`) contain no `models/` or `assets/` (real cache hits); (5) third load with `context.setOffline(true)`: page, assets, models, loader from cache, face and classifier workers ready, region open; (6) `context.on('request')` across all three loads has no other origin (I9). `note()` records EP, loader, cached file count, MB downloaded on first load, request count | e2e (preview) | REL-01 |
+| Production build via preview | E2E `tests/deploy/sw.spec.ts` with `playwright.deploy.config.ts` (`npm run test:deploy`, after `npm run build` with the same `VITE_BASE`): `webServer` is `vite preview` on port 4174, project `chromium` (headless shell) and `chrome` when Chrome is on the machine, both EP wasm with the plain loader pair since PERF-03 (before: jsep loader on `chromium`, asyncify with WebGPU on `chrome`); one shared context, sequential: (1) the key in `dist/sw.js` matches the sha256 of `models.json`; (2) the first page blocks `register`, sets consent, creates two old `wct-*` caches; (3) first load of `#/app?debug=1&source=synthetic`: face worker ready, open a 10-cell window, classifier worker ready, `navigator.serviceWorker.controller` present, `caches.keys()` is exactly the two keys (old caches deleted), the model cache has 7 files (wasm module js + wasm, three models, the plain ORT loader pair since PERF-03), the app cache has the page, `index-*.js`, `face.worker-*.js`; (4) second load: controlled from the start, every `models/` and `assets/` response is `fromServiceWorker()`, requests the worker sends to the network (`request.serviceWorker()`) contain no `models/` or `assets/` (real cache hits); (5) third load with `context.setOffline(true)`: page, assets, models, loader from cache, face and classifier workers ready, region open; (6) `context.on('request')` across all three loads has no other origin (I9). `note()` records EP, loader, cached file count, MB downloaded on first load, request count | e2e (preview) | REL-01 |
 | Deploy | The `deploy` job runs only after `check` on push to `main`; `page_url` printed in the summary; opening `https://<address>/#/app` directly returns the app page (no 404 thanks to the hash) | CI + manual | REL-01 |
 | Smoke on the public site | Chrome, Edge (Firefox, Safari manually per `docs/benchmark.md`): camera permission, face and hand workers ready, open a window; DevTools: same-origin requests, total download on first and second load, Cache Storage `wct-models-*`, `wct-app-*`; Lighthouse accessibility ≥ 90; record in `docs/deploy.md` | manual | REL-01 |
 | Domain | `dig <domain> +noall +answer -t A` returns the four GitHub Pages IPs; `https://<domain>/` and `https://www.<domain>/` open with a valid certificate; `http://` redirects to `https://` | manual | REL-01 |
@@ -1870,7 +1998,7 @@ After ROI-03 the quadrilateral is a special case of the convex hull (`polygon`):
 |---|---|---|---|
 | Shape comparison | Unit `revealShape`: windows equal by col, row, n; polygons equal vertex by vertex in order; different kind, vertex count, coordinate or order is different; same object is equal | unit | PERF-02 |
 | Cell caches | Unit `cells`: `cachedCells` returns the same array for the same object, equal to `listCells`, a different array for an equal but distinct object; `cachedOutlineEdges` is keyed by object and grid, recomputed for another grid and equal to `cellOutlineEdges` | unit | PERF-02 |
-| Static frames not painted | E2E `perf.spec` synthetic source, each window measured until the loop has advanced at least 20 frames (a loaded CI runner can stall rAF for a second while a worker initializes): region closed → `paints` grows by 0, canvas all white; window open → `paints` equals `frames`; `coverAll` → after the closing paint `paints` stays constant; unticking Vạch lưới (Grid lines) → 1 to 3 paints then constant, canvas pure white; gate audit clean; record the counters | e2e | PERF-02 |
+| Static frames not painted | E2E `perf.spec` synthetic source, each window measured until the loop has advanced at least 20 frames (a loaded CI runner can stall rAF for a second while a worker initializes): region closed → `paints` grows by 0, canvas all white; window open → `paints` equals `frames`; `coverAll` → after the closing paint `paints` stays constant; unticking Vạch lưới (Grid lines) → 1 to 3 paints then constant, canvas pure white; gate audit clean; record the counters | e2e | PERF-02 | PERF-04 (D-064) replaces the open-region part: with the synthetic camera at 4 fps the paints stay ≤ camera frames + 2 and below the loop frames, and `setPaintAlways(true)` gives paints = frames (section 7.37).
 | Mask reuse | E2E `perf.spec`: still mouse window → `maskBuilds` constant over 20 frames; `moveWindow` → exactly +1 and the cell list of `FrameOutput` still has 144 cells at the new box; orbiting fake hands → builds > 50 % of frames and ≤ frames (fake hands produce a new `HandFrame` per render frame: upper bound; with the real worker the frames between two 30 Hz results reuse the mask, which e2e cannot emulate); record the counters | e2e | PERF-02 |
 | Main-thread share | Script `tools/measure-loop.mjs` (Chrome headless, CDP metrics, not in CI): main-thread share, fps, tick and render p50/p95, `paints`/`frames` in five states (closed, mouse, orbiting hands, still hands, closed again); numbers in the implementation note | script | PERF-02 |
 | Nothing else changes | Every pixel case (7.6, 7.8, 7.10), the hard gate (7.2), the overlay and soak (7.19) pass unchanged; `check:invariants` still finds `drawImage` only in the compositor and the restricted frame builder | e2e + lint | PERF-02 |
@@ -1956,10 +2084,63 @@ After ROI-03 the quadrilateral is a special case of the convex hull (`polygon`):
 | Model selection | Unit `classifierModel`: `resolveClassifier` gives `model` when the file matches the sha256 (the reason names it), `stub` when the file is missing, the sha256 is empty or different, or the manifest has no file; Vitest gets `stub`; `WCT_CLASSIFIER=stub` and `model` force a side, forcing `model` without the file throws, an unknown value throws; `models.json` `classifier` has `stub`, `file`, a 64-hex or empty sha256, `source`, and input size, labels, normalization and opset equal to `DEFAULTS` | unit | CLS-03 |
 | Page override and demo suffix | Unit `classifierModel`: by default (Vitest) the stub; `setClassifierChoice('model')` → `/models/classifier.onnx` in `modelUrls` and the warm list, no demo suffix ("Người 97 %"); `'stub'` → the suffix; `null` → the build default | unit | CLS-03 |
 | Build default and override | E2E `classifierModel.spec` (only when `classifier.onnx` matches `models.json`): the default `#/app` has `modelPath` `/models/classifier.onnx` before the region opens; `openApp` (pins `classifier=stub`) gives `/models/classifier-stub.onnx` | local e2e | CLS-03 |
-| Real face in the app | E2E `classifierModel.spec` with `face.png` and `classifier=model`: 16-cell window on the face → worker ready (wasm or webgpu), no error, the validated face gets `person` with max(prob) ≥ 0.7 equal to its confidence after ≥ 3 accepted results, the guidance names "Người" without "demo"; record EP, init, warm-up, inferMs; gate audit clean | local e2e | CLS-03 |
+| Real face in the app | E2E `classifierModel.spec` with `face.png` and `classifier=model`: 16-cell window on the face → worker ready (wasm since D-062), no error, the validated face gets `person` with max(prob) ≥ 0.7 equal to its confidence after ≥ 3 accepted results, the guidance names "Người" without "demo"; record EP, init, warm-up, inferMs; gate audit clean | local e2e | CLS-03 |
 | Pipeline stays on the stub | E2E `classify.spec` unchanged: `openApp` pins the stub, green → person, magenta → mannequin whatever model the machine has | e2e | CLS-03 |
 | Deployment | `sw.spec`: the model cache holds the classifier file the page actually loaded (`classifier.onnx` when built with the trained model, the stub otherwise); passes with the trained model built in and with `WCT_CLASSIFIER=stub` (the CI case) | deploy | CLS-03 |
 | Training run | Import → `check` → split → `stats.py --doc` → `train.py --freeze` → `export_onnx.py --manifest` → `check_onnx.py` → `eval.py --doc`; numbers in the CLS-03 package | manual | CLS-03 |
+
+### 7.36 Download economy tests (PERF-03)
+
+| Case | Expected | How | Package |
+|---|---|---|---|
+| Only the plain ORT entry | Unit `basePath`: the classifier worker's only `onnxruntime-web` import is `onnxruntime-web/wasm`; its code (comments stripped) has no `webgpu`, `jsep` or `asyncify` and creates the session with `executionProviders: ['wasm']`; the extern-wasm bundle of that entry requests exactly `ort-wasm-simd-threaded.{mjs,wasm}`, which is exactly `models.json` `ort.files`, and both files exist in `node_modules` | unit | PERF-03 |
+| Init message | Unit `classifierClient`: the init message has no `executionProviders`, keeps the loader path, model, input size and normalization | unit | PERF-03 |
+| EP in the app | E2E `classify.spec` and `classifierModel.spec`: the worker is ready with EP `wasm` and the debug line reads "sẵn sàng (wasm"; labels and gates unchanged | e2e | PERF-03 |
+| Production first load | Deploy `sw.spec` open 1: EP `wasm`, the model cache holds exactly the plain loader pair (no `jsep`, `asyncify` or `jspi`), the note records its size and the first-load total; the app cache holds the `StagePage` chunk; open 3 offline enters the stage from the cache | deploy | PERF-03 |
+| Chunk layout | Deploy `split.spec` (1): one `StagePage-*.js`; `getUserMedia`, `__scenario`, `requestVideoFrameCallback` only in it, never in the entry chunk; entry under 115 kB gzip; sizes in the note | deploy | PERF-03 |
+| Landing loads only its files | Deploy `split.spec` (2): before the stage chunk, the landing requests exactly the JS/CSS of `index.html`; the idle prefetch starts after `load`; entering from the landing fetches no more JavaScript (workers aside); the note has the gzip bytes, the prefetch delay and the Start → canvas time | deploy | PERF-03 |
+| Direct `#/app` | Deploy `split.spec` (3): with consent, the stage chunk loads once and the stage probe appears | deploy | PERF-03 |
+| Kiosk link without consent | E2E `landing.spec`: `#/app?mode=present` without consent lands on the kiosk start screen (`#/?mode=present`), requests no stage module and no camera | e2e | PERF-03 |
+| Broken chunk | Deploy `split.spec` (4): with the chunk aborted, the landing's idle prefetch is attempted and blocked (counted), the landing is never reloaded and shows no alert; `#/app` reloads exactly once and then shows `role=alert` with "Tải lại trang" | deploy | PERF-03 |
+| Loader and scheduler | Unit `stageChunk`: one import for every caller, a rejection memoized (no second import), prefetch swallows errors; the idle scheduler waits for `load`, uses `requestIdleCallback` with 2 s or `setTimeout` 200 ms, does nothing with Save-Data and cancels cleanly; chunk errors of Chrome, Firefox, Safari and Vite's CSS preload are recognized; `allowChunkReload` allows one reload per 30 s and none when storage throws | unit | PERF-03 |
+| Landing graph | Unit `stageChunk`: the static import graph from `main.tsx` contains no StagePage, camera, loop, debug, dataset, log, face, hands, reveal, classifier client, compositor, restricted frame, logo layer or guidance builder; it contains the landing, the session and both dictionaries; `stageLoader.ts` holds the only `import('./pages/StagePage')`; `palette.ts` and `guideSteps.ts` import nothing | unit | PERF-03 |
+
+### 7.37 Paint gate tests (PERF-04)
+
+| Case | Expected | How | Package |
+|---|---|---|---|
+| Key fields | Unit `paintGate`: first check paints, the same key after commit does not, `invalidate` paints again; a change of each of the twelve scalar or object fields paints; every field of `RenderOptions` maps to a key field (`tsc` fails otherwise) | unit | PERF-04 |
+| Fingertips by value | Unit `paintGate`: a new array with the same values, or a move under half a pixel, does not paint; a move that changes the rounded position, a validity, folded or hand change, an empty list do; score and age do not | unit | PERF-04 |
+| One Euro fixed point | Unit `paintGate`: a constant input over 2000 jittered 144 Hz steps keeps `x` and `dx` exactly; after a step the output converges and then stands still | unit | PERF-04 |
+| Paints follow the camera | E2E `perf.spec`: region closed 0 paints; mouse window open with the synthetic camera at 4 fps (measured until loop frames ≥ camera frames + 10): 1 ≤ paints ≤ camera frames + 2 and paints < loop frames, so a loop that paints every frame fails; `setPaintAlways(true)` at the same rate gives paints = frames; closing paints once; toggling grid lines paints 1 to 3 times; gate audit clean | e2e | PERF-04 |
+| Mask reuse | E2E `perf.spec` (unchanged): a still mouse window builds no mask, a move builds one; orbiting fake hands rebuild at most once per frame | e2e | PERF-04 |
+| Pixel tests | 7.6, 7.8, 7.10, 7.33 and the rest of the suite pass unchanged with the gate | e2e | PERF-04 |
+| A/B on Chrome | `tools/measure-loop.mjs --ab`: paints/s and main-thread share per state (table in the PERF-04 package) | manual | PERF-04 |
+
+### 7.38 Compact classifier tests (CLS-04)
+
+| Case | Expected | How | Package |
+|---|---|---|---|
+| Gates | `test_compress`: identical logits pass; a label flip across 0.7 outside ±0.01 fails, inside it is tolerated; the margin gate is 0.25 on held-out inputs and 0.5 on augmented ones; an argmax change fails; lengths must match; `shown` follows the unknown rule | unit (Python) | CLS-04 |
+| Choice | `test_compress`: the smallest passing candidate wins; failing ones are skipped and fp32 is the fallback; a size tie within 5 % goes to the smaller margin error; fp32 is required; the speed gate needs both p50 and p95 slower, or a slow init | unit (Python) | CLS-04 |
+| Manifest | `test_compress`: the block is deterministic (rounded, integral floats as ints, no exponent), `js_stable` converts nested floats, `update_manifest` pops a stale block on an fp32 export and keeps the key order | unit (Python) | CLS-04 |
+| Committed manifest | Unit `classifierModel`: with a `compression` block the mode is known, the fp32 sha256 differs from the file's, `bytes` < `fp32Bytes`, argmax 1, 0 flips and the bounds hold; `models.json` survives a `JSON.stringify` round trip byte for byte; with the trained file present and matching, `bytes` is its size | unit | CLS-04 |
+| In the browser | E2E `classifierModel.spec` with the compressed model: real face `person` ≥ 0.7, no demo suffix, EP `wasm`; `classify.spec` unchanged on the stub | e2e | CLS-04 |
+| Export run | `export_onnx.py --compress auto` on the first model: candidate table, wasm check and the chosen file in the CLS-04 package | manual | CLS-04 |
+
+### 7.39 CPU hand input size probe (PERF-05)
+
+| Case | Expected | How | Package |
+|---|---|---|---|
+| Input width sweep | `tools/probe-hand-input.mjs` (page thread and `--worker`, three scenes, widths 1280 to 320): detect p50 per width and tip error against full resolution; a width is adopted only with a gain above the run-to-run spread; result in the PERF-05 package (no gain, so none adopted) | manual | PERF-05 |
+
+### 7.40 Test tooling (QA-03)
+
+| Case | Expected | How | Package |
+|---|---|---|---|
+| Stale report refused | `node tools/test-report.mjs` exits 1 with both start times when `reports/unit.json` and `reports/e2e.json` are more than 60 minutes apart, writes with `--allow-stale`, and prints the deploy run's own start time in its section | manual | QA-03 |
+| Weekly soak | `ci.yml`: `schedule` Monday 03:17 UTC runs the soak job and skips the check job; manual dispatch unchanged | CI | QA-03 |
+| Local parallelism | Repeated full e2e runs at the chosen local worker count pass without retries (D-067) | manual | QA-03 |
 
 ## 8. Handover
 
@@ -1986,7 +2167,7 @@ export const DEFAULTS = {
            handednessPenalty: 0.1, relabelFrames: 3, minTrackScore: 0.5, delegate: 'auto', handednessSwap: false },
   freshness: { pointMaxAgeMs: 600, pointMaxAgeMsCpu: 600, faceResultMaxAgeMs: 250 },  // 600 since UX-05 (D-059); D-045 had 150 / 250
   face: { minRoiPx: 64, inputSize: 256, padGray: 128, numFaces: 2, targetHz: 12, fullFaceMarginRatio: 0.04 },
-  classifier: { targetHz: 4, unknownThreshold: 0.7, minRoiPx: 96, executionProviders: ['webgpu', 'wasm'],
+  classifier: { targetHz: 4, unknownThreshold: 0.7, minRoiPx: 96,  // EP: wasm only since PERF-03 (D-062; D-013 had ['webgpu', 'wasm'])
                 resultMaxAgeMs: 600, labelMaxAgeMs: 1500, partialMinVisible: 0.6,
                 stubPath: '/models/classifier-stub.onnx', trainedPath: '/models/classifier.onnx' },  // modelPath = trainedPath when the build has a matching model (CLS-03, D-061)
   brand: { logo: { enabled: true, widthRatio: 0.3, maxHeightRatio: 0.6, marginRatio: 0.025, anchor: 'top-left', snapMaxWidthRatio: 0.5, textLength: 268 } },  // BRAND-01 (D-056 to D-058)

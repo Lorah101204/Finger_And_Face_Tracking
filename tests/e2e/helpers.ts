@@ -475,7 +475,12 @@ declare global {
     __wct?: {
       camera?: { probe: CameraProbe; snapshot: () => CameraSnap }
       stage?: { snapshot: () => StageSnap }
-      loop?: { snapshot: () => LoopSnap; events: EventTarget }
+      loop?: {
+        snapshot: () => LoopSnap
+        events: EventTarget
+        invalidate: () => void
+        setPaintAlways: (on: boolean) => void
+      }
       probes?: ProbesSnap
       face?: { snapshot: () => FaceSnap }
       hands?: { snapshot: () => HandsSnap }
@@ -600,6 +605,8 @@ export async function seedConsent(page: Page, value: string = CONSENT_VERSION): 
  * chạy trên màn che trơn; logo.spec bật rõ bằng `logo=1`. CLS-03 (D-061): thêm `classifier=stub` khi query chưa nói gì
  * về classifier, để nhãn tất định theo màu (classify.spec) dù máy chạy test đã có model huấn luyện;
  * classifierModel.spec mở rõ bằng `classifier=model`; bench (`pinStub: false`) đo model mặc định của build.
+ * PERF-03 (D-063): sân khấu là chunk nạp động, nên chờ tới khi StagePage đã gắn probe (window.__wct.stage) hay, khi chưa
+ * đồng ý, trang chào đã hiện (chuyển hướng về "/").
  */
 export async function openApp(
   page: Page,
@@ -613,6 +620,11 @@ export async function openApp(
   ]
   await page.goto('about:blank')
   await page.goto(`/#/app?${params.join('&')}`)
+  await page.waitForFunction(
+    () => !!window.__wct?.stage || !!document.querySelector('main.landing'),
+    undefined,
+    { timeout: 30_000 },
+  )
 }
 
 /**

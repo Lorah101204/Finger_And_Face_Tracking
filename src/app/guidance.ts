@@ -54,7 +54,8 @@ export type GuidanceInput = {
   subject?: { subjectType: SubjectType; confidence?: number } | null
 }
 
-export type GuidanceStep = 1 | 2 | 3
+import { GUIDE_STEP_IDS, type GuidanceStep } from './guideSteps'
+export { GUIDE_STEP_IDS, type GuidanceStep } from './guideSteps'
 export type GuidanceTone = 'info' | 'wait' | 'ok' | 'warn' | 'error'
 
 export type Guidance = {
@@ -65,8 +66,6 @@ export type Guidance = {
   /** Lý do đóng đang được giải thích; null khi vùng mở hoặc thông điệp thuộc bước camera. */
   reason: CloseReason | null
 }
-
-export const GUIDE_STEP_IDS: readonly GuidanceStep[] = [1, 2, 3]
 
 /** Ba bước với nhãn theo ngôn ngữ (Guide, trang chào). */
 export function guideSteps(lang: Lang = DEFAULT_LANG): { step: GuidanceStep; label: string }[] {

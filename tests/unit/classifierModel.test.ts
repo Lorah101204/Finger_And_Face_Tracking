@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { subjectText } from '../../src/classify/subjectRule'
@@ -85,6 +85,21 @@ describe('resolveClassifier (vite.config.ts)', () => {
         labels: string[]
         norm: { mean: number; std: number }
         opset: number
+        bytes?: number
+        compression?: {
+          mode: string
+          fp32Sha256: string
+          fp32Bytes: number
+          layers: { int8: number; fp16: number }
+          agreement: {
+            n: number
+            argmax: number
+            decisionFlips: number
+            maxAbsDp: number
+            maxAbsDMarginHeld: number
+            maxAbsDMarginAug: number
+          }
+        }
       }
     }
     const c = m.classifier
@@ -96,6 +111,30 @@ describe('resolveClassifier (vite.config.ts)', () => {
     expect(c.labels).toEqual([...DEFAULTS.classifier.labels])
     expect(c.norm).toEqual(DEFAULTS.classifier.norm)
     expect(c.opset).toBe(17)
+    // CLS-04 (D-066): model nén chỉ được ghi khi qua cổng của tools/train/compress_select.py so với bản fp32 của nó.
+    if (c.compression) {
+      const z = c.compression
+      expect(['fp16w', 'int8+fp16w']).toContain(z.mode)
+      expect(z.fp32Sha256).toMatch(/^[0-9a-f]{64}$/)
+      expect(z.fp32Sha256).not.toBe(c.sha256)
+      expect(c.bytes).toBeLessThan(z.fp32Bytes)
+      expect(z.agreement.n).toBeGreaterThan(0)
+      expect(z.agreement.argmax).toBe(1)
+      expect(z.agreement.decisionFlips).toBe(0)
+      expect(z.agreement.maxAbsDp).toBeLessThanOrEqual(0.02)
+      expect(z.agreement.maxAbsDMarginHeld).toBeLessThanOrEqual(0.25)
+      expect(z.agreement.maxAbsDMarginAug).toBeLessThanOrEqual(0.5)
+      // Ghi lại bằng JSON.stringify (fetch-models.mjs) không đổi byte nào: khóa cache model của SW ổn định.
+      const raw = readFileSync(resolve('public/models/models.json'), 'utf8')
+      expect(JSON.stringify(JSON.parse(raw), null, 2) + '\n').toBe(raw.replace(/\r\n/g, '\n'))
+    }
+    // File có mặt và khớp sha256 (máy đã train): cỡ ghi trong manifest đúng cỡ file.
+    const file = resolve('public/models', c.file)
+    if (c.sha256 && existsSync(file)) {
+      const blob = readFileSync(file)
+      if (createHash('sha256').update(blob).digest('hex') === c.sha256)
+        expect(c.bytes).toBe(blob.length)
+    }
   })
 })
 

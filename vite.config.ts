@@ -147,9 +147,10 @@ export default defineConfig(({ mode }) => {
     server: { port: 5173 },
     worker: { format: 'es' },
     resolve: {
-      // REL-01 (D-050): onnxruntime-web có export condition riêng cho biến thể không bundle wasm (ort.min.mjs,
-      // ort.webgpu.min.mjs): loader và wasm nạp từ env.wasm.wasmPaths (models:fetch copy vào public/models/ort/) thay vì
-      // bundle thêm 55 MB wasm trùng vào dist/assets. Cặp file cần theo bundle nằm trong models.json (unit test đối chiếu).
+      // REL-01 (D-050): onnxruntime-web có export condition riêng cho biến thể không bundle wasm; PERF-03 (D-062): worker
+      // chỉ nạp entry onnxruntime-web/wasm → ort.wasm.min.mjs, loader và wasm (ort-wasm-simd-threaded.{mjs,wasm}, 14 MB)
+      // nạp từ env.wasm.wasmPaths (models:fetch copy vào public/models/ort/, cache model của SW) thay vì Vite bundle wasm
+      // vào dist/assets (cache theo build). Cặp file cần theo bundle nằm trong models.json (unit test đối chiếu).
       conditions: ['onnxruntime-web-use-extern-wasm', ...defaultClientConditions],
     },
     test: {

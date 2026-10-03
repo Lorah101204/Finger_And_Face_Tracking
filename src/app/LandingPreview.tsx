@@ -8,7 +8,7 @@ import {
   FINGER_COLORS,
   GRID_LINE_COLOR,
   WINDOW_OUTLINE_COLOR,
-} from '../mask/compositor'
+} from '../mask/palette'
 import { sceneFrame, sceneGrid, type SceneFrame, type SceneVariant } from './landingScene'
 
 // UX-03 (D-049, thay minh họa SVG tĩnh của UX-02): minh họa động của màn hình bắt đầu vẽ bằng canvas 2D, không camera,

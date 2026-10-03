@@ -17,10 +17,13 @@ export default defineConfig({
   timeout: 60_000,
   fullyParallel: true,
   // HAND-01: các ca tay chạy worker CPU liên tục; 8 trang song song trên máy 16 luồng làm khởi tạo worker mặt và suy
-  // luận chậm gấp nhiều lần (kết quả mặt quá tuổi, khởi tạo hơn một phút). 6 worker giữ bộ test ổn định. QA-01: runner
+  // luận chậm gấp nhiều lần (kết quả mặt quá tuổi, khởi tạo hơn một phút); HAND-01 chọn 6 worker, QA-03 hạ xuống 2. QA-01: runner
   // CI (4 vCPU) chạy 2 worker và thử lại một lần; JSON reporter ghi reports/e2e.json cho tools/test-report.mjs (kèm annotations "đo"; không để trong test-results/ vì
   // Playwright xóa thư mục đó đầu mỗi lần chạy).
-  workers: process.env.CI ? 2 : 6,
+  // QA-03 (D-067): 2 worker cả khi chạy cục bộ. Đo 2026-10-03 trên máy 16 luồng (81 ca): 4 worker 195 đến 200 s và
+  // mỗi lượt một ca chập chờn, 3 worker 189 đến 202 s và một lượt hai ca chập chờn, 2 worker 210 đến 222 s và luôn đạt;
+  // các worker MediaPipe đã chiếm CPU nên thêm trang song song chỉ nhanh hơn khoảng 10 % mà làm kết quả quá tuổi.
+  workers: 2,
   retries: process.env.CI ? 1 : 0,
   // REL-01: trong GitHub Actions thêm reporter github để ca đỏ thành annotation của check run (đọc được không cần log).
   reporter: [

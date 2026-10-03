@@ -108,7 +108,7 @@ test('trang đầu (chặn đăng ký): đặt đồng ý và tạo hai cache wc
   await page.close()
 })
 
-test('lần mở 1 vào #/app: worker kích hoạt và điều khiển trang, xóa cache cũ, cache đủ model, wasm, loader ORT theo EP và asset của trang', async () => {
+test('lần mở 1 vào #/app: worker kích hoạt và điều khiển trang, xóa cache cũ, cache đủ model, wasm, đúng cặp loader ORT thường và asset của trang', async () => {
   const page = await context.newPage()
   const sizes: Array<[string, number]> = []
   page.on('response', async (res) => {
@@ -117,7 +117,8 @@ test('lần mở 1 vào #/app: worker kích hoạt và điều khiển trang, x�
       sizes.push([url, contentLength(await res.allHeaders())])
   })
   const ep = await openAndReveal(page)
-  expect(['wasm', 'webgpu']).toContain(ep)
+  // PERF-03 (D-062): chỉ còn EP wasm.
+  expect(ep).toBe('wasm')
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, undefined, {
     timeout: 30_000,
   })
@@ -142,19 +143,21 @@ test('lần mở 1 vào #/app: worker kích hoạt và điều khiển trang, x�
   const dump = await dumpCaches(page)
   expect(Object.keys(dump).sort()).toEqual([APP_CACHE, MODELS_CACHE].sort())
   for (const u of wantModels) expect(dump[MODELS_CACHE]).toContain(u)
-  // Loader ORT theo bundle worker đã nạp: asyncify khi có adapter WebGPU (bundle webgpu; EP báo về vẫn có thể là wasm
-  // nếu tạo session webgpu lỗi, ví dụ adapter phần mềm trên runner), jsep khi không có adapter. Một cặp trọn phải có.
-  const loaderOf = (name: string) =>
-    dump[MODELS_CACHE].filter((u) => u.includes(`ort-wasm-simd-threaded.${name}.`)).length
-  const loader = loaderOf('asyncify') === 2 ? 'asyncify' : loaderOf('jsep') === 2 ? 'jsep' : 'thiếu'
-  expect(loader).not.toBe('thiếu')
-  if (ep === 'webgpu') expect(loader).toBe('asyncify')
+  // PERF-03 (D-062): worker chỉ nạp entry onnxruntime-web/wasm nên cache có đúng cặp loader thường
+  // ort-wasm-simd-threaded.{mjs,wasm} và không có biến thể jsep, asyncify hay jspi nào (mỗi bản 16 đến 28 MB).
+  const ortFiles = dump[MODELS_CACHE].filter((u) => u.includes('/models/ort/'))
+    .map((u) => u.slice(u.lastIndexOf('/') + 1))
+    .sort()
+  expect(ortFiles).toEqual(['ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.wasm'])
+  const ortBytes = sizes.filter(([u]) => u.includes('/models/ort/')).reduce((a, [, n]) => a + n, 0)
   expect(dump[APP_CACHE]).toContain(PAGE_KEY)
   expect(dump[APP_CACHE].some((u) => /assets\/index-[\w-]+\.js$/.test(u))).toBe(true)
   expect(dump[APP_CACHE].some((u) => /assets\/face\.worker-[\w-]+\.js$/.test(u))).toBe(true)
+  // PERF-03 (D-063): chunk sân khấu nạp động cũng vào cache app (lần mở 3 offline cần nó).
+  expect(dump[APP_CACHE].some((u) => /assets\/StagePage-[\w-]+\.js$/.test(u))).toBe(true)
   const total = sizes.reduce((a, [, n]) => a + n, 0)
   note(
-    `EP ${ep} → loader ${loader}; phân loại ${clsModel.slice(BASE.length)}; cache model ${dump[MODELS_CACHE].length} file, cache app ${dump[APP_CACHE].length} file; ` +
+    `EP ${ep} → loader thường (${(ortBytes / 1e6).toFixed(1)} MB); phân loại ${clsModel.slice(BASE.length)}; cache model ${dump[MODELS_CACHE].length} file, cache app ${dump[APP_CACHE].length} file; ` +
       `lần 1 tải ${sizes.length} phản hồi models/ + assets/, ${(total / 1e6).toFixed(1)} MB theo Content-Length`,
   )
   await page.close()

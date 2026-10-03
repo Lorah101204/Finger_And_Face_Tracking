@@ -79,7 +79,6 @@ export function defaultClassifierInit(): Omit<ClassifierInitMessage, 'type'> {
   return {
     wasmPaths: urls.ortPaths,
     modelPath: urls.classifierModel,
-    executionProviders: [...c.executionProviders],
     inputSize: c.inputSize,
     norm: { ...c.norm },
     warmup: true,

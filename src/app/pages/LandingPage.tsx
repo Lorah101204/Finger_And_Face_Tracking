@@ -1,11 +1,13 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, useTransition, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { DEFAULTS } from '../../core/config'
 import { BrandMark } from '../BrandMark'
-import { GUIDE_STEP_IDS } from '../guidance'
+import { GUIDE_STEP_IDS } from '../guideSteps'
 import { LandingPreview } from '../LandingPreview'
 import { LanguageSwitch } from '../LanguageSwitch'
 import { CONSENT_VERSION, consentScopeNote, giveConsent, useConsent } from '../session'
+import { schedulePrefetchWhenIdle } from '../stageChunk'
+import { prefetchStage } from '../stageLoader'
 import { useLang, useStrings } from '../useLang'
 import '../landing.css'
 
@@ -28,18 +30,35 @@ export function LandingPage() {
   const s = useStrings()
   const scopeNote = consentScopeNote(DEFAULTS.consent.scope, lang)
   const appPath = present ? '/app?mode=present' : '/app'
+  // PERF-03 (D-063): nạp trước chunk sân khấu lúc rảnh (chỉ bản build) và khi có ý định; chuyển trang trong transition
+  // để trang chào giữ nguyên (nút bận) tới khi chunk sẵn sàng.
+  const [pending, startTransition] = useTransition()
+  useEffect(() => (import.meta.env.PROD ? schedulePrefetchWhenIdle(prefetchStage) : undefined), [])
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (!agreed) return
     giveConsent()
-    navigate(appPath)
+    startTransition(() => navigate(appPath))
   }
 
   const consentCard = (
-    <form onSubmit={onSubmit} className={`consent-card${agreed ? ' agreed' : ''}`}>
+    <form
+      onSubmit={onSubmit}
+      className={`consent-card${agreed ? ' agreed' : ''}`}
+      onPointerEnter={() => prefetchStage()}
+      onFocus={() => prefetchStage()}
+      onTouchStart={() => prefetchStage()}
+    >
       <label className="consent">
-        <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={agreed}
+          onChange={(e) => {
+            setAgreed(e.target.checked)
+            if (e.target.checked) prefetchStage()
+          }}
+        />
         <span>{s.landing.consent(CONSENT_VERSION)}</span>
       </label>
       {scopeNote && (
@@ -48,10 +67,15 @@ export function LandingPage() {
         </p>
       )}
       <div className="actions">
-        <button type="submit" className="primary" disabled={!agreed}>
+        <button
+          type="submit"
+          className="primary"
+          disabled={!agreed || pending}
+          aria-busy={pending || undefined}
+        >
           {s.landing.start}
         </button>
-        {consented && (
+        {consented && !pending && (
           <span className="muted">
             {s.landing.consentedBefore} <Link to={appPath}>{s.landing.goStraight}</Link>.
           </span>
