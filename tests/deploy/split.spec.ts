@@ -79,6 +79,12 @@ test('trang chào: chỉ tải tập file của index.html; chunk sân khấu n�
   await expect
     .poll(() => got.some((f) => f.startsWith('assets/StagePage-')), { timeout: 15_000 })
     .toBe(true)
+  // `got` ghi lúc request bắt đầu, còn entry Resource Timing chỉ có khi chunk tải xong: chờ entry rồi mới đọc.
+  await page.waitForFunction(() =>
+    performance
+      .getEntriesByType('resource')
+      .some((r) => /\/assets\/StagePage-[\w-]+\.js$/.test(r.name)),
+  )
   const timing = await page.evaluate(() => {
     const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming
     const st = performance
