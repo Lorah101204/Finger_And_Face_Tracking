@@ -39,7 +39,7 @@
     ]
   },
   "classifier": {
-    "note": "CLS-02 (D-044), CLS-03 (D-061), CLS-04 (D-066): classifier-stub.onnx do tools/make-stub-classifier.mjs sinh (person = G - (R + B) / 2). classifier.onnx là model huấn luyện, không commit: tools/train/export_onnx.py --manifest ghi sha256, bytes, train vào đây; vite.config.ts (resolveClassifier) chỉ dùng nó khi file khớp sha256, không thì stub. `compression`: file đã nén cách lưu trọng số (int8 theo kênh và fp16, gập về fp32 lúc chạy) qua cổng so với bản fp32 (fp32Sha256) của tools/train/compress_select.py. source: URL tải (ví dụ asset của một GitHub Release) để models:fetch lấy model cho CI và trang public; trống thì chỉ máy đã train có model thật.",
+    "note": "CLS-02 (D-044), CLS-03 (D-061), CLS-04 (D-066), REL-02 (D-068): classifier-stub.onnx do tools/make-stub-classifier.mjs sinh (person = G - (R + B) / 2). classifier.onnx là model huấn luyện, không commit: tools/train/export_onnx.py --manifest ghi sha256, bytes, train vào đây; vite.config.ts (resolveClassifier) chỉ dùng nó khi file khớp sha256, không thì stub. `compression`: file đã nén cách lưu trọng số (int8 theo kênh và fp16, gập về fp32 lúc chạy) qua cổng so với bản fp32 (fp32Sha256) của tools/train/compress_select.py. source: URL raw.githubusercontent.com ghim theo commit của nhánh `models` (npm run models:publish, REL-02, D-068); models:fetch tải nó cho CI và trang public; trống thì chỉ máy đã train có model thật.",
     "stub": "classifier-stub.onnx",
     "file": "classifier.onnx",
     "sha256": "87876480c83a725b3b06d06b9f71beb9d49e468f7d5ff77e12a0c52d9bef76f0",
@@ -73,7 +73,7 @@
       },
       "torch": "2.14.0+cpu"
     },
-    "source": "",
+    "source": "https://raw.githubusercontent.com/Lorah101204/Finger_And_Face_Tracking/e2121a7d7c2d17092fb16ff76e15c3f266aef0cc/classifier-87876480c83a.onnx",
     "compression": {
       "mode": "int8+fp16w",
       "fp32Sha256": "8acdac994a3b7133fff2ace5abe20ed69533c9095a7089bfde38556d5f52d892",

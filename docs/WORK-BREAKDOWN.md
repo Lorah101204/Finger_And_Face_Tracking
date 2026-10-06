@@ -802,7 +802,7 @@ sequenceDiagram
 
 Execution order for one person:
 
-`SETUP-00 → SPIKE-00 → WEB-00 → CAM-01 → GRID-01 → ROI-00 → MASK-01 → TEST-00 → MASK-02 → FACE-01 → FACE-02 → HAND-01 → HAND-02 → ROI-01 → INT-01 → ROI-02 → QA-01 → PERF-01 → UX-01 → UX-02 → CLS-01 → CLS-02 → QA-02 → LOG-02 (optional) → ROI-03 → UX-03 → REL-01 → PERF-02 → UX-04 → I18N-01 → ROI-04 → BRAND-01 → UX-05 → CLS-03 → PERF-03 → PERF-04 → CLS-04 → PERF-05 → QA-03`
+`SETUP-00 → SPIKE-00 → WEB-00 → CAM-01 → GRID-01 → ROI-00 → MASK-01 → TEST-00 → MASK-02 → FACE-01 → FACE-02 → HAND-01 → HAND-02 → ROI-01 → INT-01 → ROI-02 → QA-01 → PERF-01 → UX-01 → UX-02 → CLS-01 → CLS-02 → QA-02 → LOG-02 (optional) → ROI-03 → UX-03 → REL-01 → PERF-02 → UX-04 → I18N-01 → ROI-04 → BRAND-01 → UX-05 → CLS-03 → PERF-03 → PERF-04 → CLS-04 → PERF-05 → QA-03 → REL-02`
 
 API-00, LOG-01, ADM-01, SEC-01, DEP-01 are dropped per D-019 (code in `archive/backend/`); static deployment to GitHub Pages with a custom domain is part of REL-01 (D-024, D-048). UX-02 (landing screen, D-023) depends only on WEB-00, so it can be pulled forward to any point after CAM-01; LOG-02 (local log, D-022) is optional and not a precondition of REL-01.
 
@@ -1497,7 +1497,7 @@ Design (D-061):
 - Metrics: a class without samples has recall `None` (n/a), a class never predicted has precision `None`; the target line reads "not measurable (no … samples in this split)".
 - Export: `dynamo=False` when `torch.onnx.export` accepts it; `--manifest public/models/models.json` writes `file`, `sha256`, `bytes`, `inputSize`, `labels`, `norm`, `opset` and `train` (backbone, epoch, freeze, select, val accuracy, class counts, torch version) into the `classifier` entry and keeps `stub`, `source` and `note`. A new sha256 also changes the service worker's model cache key (D-050), so returning browsers fetch the new model.
 - Model selection: `public/models/classifier.onnx` is a training artifact and stays uncommitted. `resolveClassifier()` in `vite.config.ts` returns `model` only when the file exists and its sha256 equals `models.json`, otherwise `stub` with the reason; the config prints `wct-classifier: model (classifier.onnx 6.1 MB, sha256 8acdac994a3b)` or `wct-classifier: stub (…)` and defines `import.meta.env.VITE_WCT_CLASSIFIER`. Vitest always gets the stub; `WCT_CLASSIFIER=stub|model` forces a side, and forcing `model` without a matching file fails the build instead of silently shipping the stub. `core/config.ts` reads the value with `import.meta.env?.` (Playwright loads the file in Node for `DEFAULTS`); `DEFAULTS.classifier` has `stubPath`, `trainedPath` and `modelPath` (the build's choice). `?classifier=stub|model` on `#/app` overrides it for that opening (`setClassifierChoice` from `StagePage`, `classifierModelPath()` used by `modelUrls`); `isDemoClassifier()` defaults to the model actually used, so the " · demo" suffix and the guidance sentence about the color model (D-051) disappear only with the trained model. A model trained on 33 samples therefore reaches only the machine it was trained on; CI and the public site keep the stub until a model is published through `classifier.source`.
-- `models:fetch`: when `classifier.file` is present and matches, "ok"; when `classifier.source` and `sha256` are set, it downloads and verifies the file (for CI and the public build, for example from a GitHub Release asset); a mismatching local file is reported and kept; it never deletes the model.
+- `models:fetch`: when `classifier.file` is present and matches, "ok"; when `classifier.source` and `sha256` are set, it downloads and verifies the file (for CI and the public build, for example from a GitHub Release asset); a mismatching local file is reported and kept; it never deletes the model. REL-02 (D-068) publishes to the `models` branch instead of a release and keeps a mismatching local file even when a source is set.
 - Tests: e2e `openApp` appends `classifier=stub` unless the query names a classifier, so every existing case keeps the deterministic color labels on a machine that has a trained model. `sw.spec` expects the model the page actually loaded in the model cache.
 - The venv `.venv/` (`python -m venv .venv`, `.venv/Scripts/pip install -r tools/train/requirements.txt`: torch 2.14 CPU, torchvision 0.29, onnx 1.23, onnxruntime 1.30, Pillow, numpy on Python 3.14) is ignored by git, ESLint and Prettier.
 
@@ -1512,7 +1512,7 @@ Steps:
 
 Done criteria: a capture zip imports into `data/dataset/` with `check` clean, a re-import changes nothing and a conflicting session is refused; the split puts both model classes in every split when each has at least three subjects and warns otherwise; the trained model exports with opset 17 and a fixed input and matches torch; the app uses it without a source change when the file matches `models.json` and labels a real face as person without the demo suffix; a build without the file (CI) uses the stub with the suffix; the whole suite passes with and without the model.
 
-Remaining (data, not code): capture per `docs/dataset.md` section 4 with at least three people and three mannequins so that val and test contain both classes (better 8 to 10 people and 6 or more real mannequins: plastic, fabric, silicone), several window sizes, edge positions and lighting conditions, plus background, hands-only and unknown samples; with several hundred samples per class from several subjects train without `--freeze`; lock the unknown threshold on val; publish the model (a GitHub Release asset in `classifier.source`) only after the section 7.3 target passes on test.
+Remaining (data, not code): capture per `docs/dataset.md` section 4 with at least three people and three mannequins so that val and test contain both classes (better 8 to 10 people and 6 or more real mannequins: plastic, fabric, silicone), several window sizes, edge positions and lighting conditions, plus background, hands-only and unknown samples; with several hundred samples per class from several subjects train without `--freeze`; lock the unknown threshold on val; publish the model (a GitHub Release asset in `classifier.source`) only after the section 7.3 target passes on test. Publishing became REL-02 (the `models` branch); the first model was published on 2026-10-06 before that target, at the owner's request.
 
 Tests: section 7.35.
 
@@ -1643,6 +1643,46 @@ Depends on: QA-01 (report), PERF-01 (soak), CI. Requested on 2026-10-03 as item 
 Design (D-067): `tools/test-report.mjs` refuses to write when `reports/unit.json` and `reports/e2e.json` started more than 60 minutes apart (`--allow-stale` overrides) and prints the deploy run's own start time in its section; the CI soak also runs every Monday at 03:17 UTC (the check job is skipped on that trigger); Playwright runs 2 workers locally as on CI (was 6): measured on the full suite of 81 cases, 4 workers took 195 to 200 s with one flaky case per run, 3 workers 189 to 202 s with one run of two flaky cases, 2 workers 210 to 222 s and clean every time, because the MediaPipe workers already saturate the CPU; the manifest round-trip rule of D-066.
 
 Tests: section 7.40.
+
+#### REL-02 Publishing the trained classifier for CI and the public site
+
+Depends on: CLS-03 (sha256 gate, `models.json` entry), CLS-04 (compressed file and its `compression` block), REL-01 (CI, model cache, GitHub Pages). Goal: the public site uses the trained classifier while `main` still commits no model file (D-061).
+
+Motivation: until REL-02 the trained model reached only the machine it was trained on. `classifier.onnx` is not committed, so CI built the public site with the color stub and its " · demo" suffix. CLS-03 left a `classifier.source` field for a download URL but no way to publish one, and its `models:fetch` overwrote a local model with another sha256 (one just trained) whenever a source was set.
+
+Measurements (2026-10-06, first publish):
+
+| Item | Value |
+|---|---|
+| Published file | `classifier-87876480c83a.onnx`, 2 001 042 bytes (`int8+fp16w`, CLS-04), with `classifier-87876480c83a.json` and `README.md`; commit `e2121a7d` on the new orphan branch `models` |
+| Source | `https://raw.githubusercontent.com/Lorah101204/Finger_And_Face_Tracking/e2121a7d7c2d17092fb16ff76e15c3f266aef0cc/classifier-87876480c83a.onnx`; the download has the sha256 of `models.json` |
+| CI path | `syncClassifier` into an empty folder with the committed manifest: `downloaded`, 2.00 MB, sha256 `87876480c83a` |
+| Unit | `classifierSource` 11 cases; 340 of 340 once the source is set (the committed-manifest case fails until the first publish) |
+| Model | Still the CLS-03 model (33 samples, one person); the section 7.3 target is not measurable, so the public labels lose the demo suffix before the target passes: the owner's decision |
+
+Design (D-068):
+
+- `npm run models:publish [-- --dry-run] [--remote origin] [--branch models] [--trailer "<last line of the commit>"]` (`tools/publish-classifier.mjs`): refuses when `public/models/classifier.onnx` does not match `classifier.sha256`; names the file `classifier-<first 12 hex of the sha256>.onnx`, so a source tells by its name whether it is the model of `models.json`; writes it, a card `classifier-<…>.json` (the `classifier` entry without `note`, `stub`, `source`, plus the file name, the commit of `main` and the time) and a README to the branch with low-level git: `hash-object -w --no-filters` (no line-ending conversion of the model bytes), `mktree` with the parent's other entries, `commit-tree` on the previous tip, `push` of `<commit>:refs/heads/models` without force. The index, the working tree and the checked-out branch are untouched, and no API or token is needed beyond the existing push right.
+- After the push the tool downloads `https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<file>` (6 tries, 5 s apart, for the CDN delay) and compares the sha256, then writes that URL to `classifier.source`; when the source is already valid it only re-checks (`already`). The branch keeps every published model and is never force-pushed: older revisions of `models.json` point at its commits, so a rollback is restoring an older `classifier` entry on `main`.
+- `models:fetch` (`tools/classifier-source.mjs`, `syncClassifier`): a matching file is `ok`; a local file with another sha256 is `kept` (it may be a model just trained; the app uses the stub until `export_onnx.py --manifest` records it); with no file and a source it downloads, checks the sha256 and writes through `classifier.onnx.download` then a rename (`downloaded`); no file and no source is `none` (stub). `sourceProblem` requires https, a 64-hex sha256, the first 12 hex of that sha256 in the file name (catches a re-export without publishing) and a 40-hex commit as the ref on raw.githubusercontent.com (never a branch name); a GitHub Release asset URL with the sha in its name is also accepted. A source problem, an HTTP error or a sha256 mismatch throws, so CI stops instead of building the public site with the stub.
+- `export_onnx.py --manifest` keeps the old source when the sha256 changes and prints a reminder to run `npm run models:publish` before pushing `models.json` (otherwise `models:fetch` on CI fails on the name).
+- CI caches `classifier.onnx` with the `.task` models under the `models.json` key; on CI, `sw.spec` requires the production build to load `classifier.onnx` when a source is set; the first case of `classifierModel.spec` (the build default is the trained model) now runs on CI as well.
+- I9: only `models:fetch` on CI (Node) contacts raw.githubusercontent.com; the browser loads the model from the site's own origin (`models/classifier.onnx`), cached by the service worker like the other models.
+
+Steps:
+
+1. `tools/classifier-source.mjs` (`assetName`, `parseGithubRemote`, `rawUrl`, `sourceProblem`, `syncClassifier`) and `tools/publish-classifier.mjs` (`npm run models:publish`), with `.d.mts` declarations for the unit test.
+2. `tools/fetch-models.mjs` calls `syncClassifier`; `.gitignore` ignores `public/models/*.download`.
+3. `export_onnx.py` reminder with its `test_compress` case.
+4. CI model cache, `sw.spec` CI check, `classifierModel.spec` comment.
+5. Unit `classifierSource` (7.41); `tools/test-report.mjs`; documentation: D-068, README, tools/README, `docs/classifier-report.md`, `docs/deploy.md`, the note of `models.json`.
+6. First publish, then commit `models.json` and push `main`.
+
+Done criteria: `npm run models:publish` creates or extends the `models` branch and pins `classifier.source` to the commit; a machine without the model gets it from `models:fetch` with the right sha256; a re-export without publishing fails `models:fetch` instead of shipping the stub; a local model with another sha256 is never overwritten; CI builds the public site with the trained model and `sw.spec` confirms it.
+
+Publishing a retrained model: `export_onnx.py --manifest` (prints the reminder), `npm run models:publish`, commit `public/models/models.json`, push `main`.
+
+Tests: section 7.41.
 
 ## 7. Mandatory test suite
 
@@ -2141,6 +2181,19 @@ After ROI-03 the quadrilateral is a special case of the convex hull (`polygon`):
 | Stale report refused | `node tools/test-report.mjs` exits 1 with both start times when `reports/unit.json` and `reports/e2e.json` are more than 60 minutes apart, writes with `--allow-stale`, and prints the deploy run's own start time in its section | manual | QA-03 |
 | Weekly soak | `ci.yml`: `schedule` Monday 03:17 UTC runs the soak job and skips the check job; manual dispatch unchanged | CI | QA-03 |
 | Local parallelism | Repeated full e2e runs at the chosen local worker count pass without retries (D-067) | manual | QA-03 |
+
+### 7.41 Trained classifier publishing tests (REL-02)
+
+| Case | Expected | How | Package |
+|---|---|---|---|
+| Names and sources | Unit `classifierSource`: the published name carries the first 12 hex of the sha256 (a malformed sha256 throws); owner and repo from every github.com remote form (https with or without `.git`, a trailing slash or a user, scp-style ssh, `ssh://`), none for another host or a local path; an empty source is valid; a source must be https, carry the sha of `models.json` (a re-export without publishing asks for `models:publish`) and pin a 40-hex commit on raw.githubusercontent.com; a GitHub Release asset URL with the sha is accepted; http, a branch ref, a malformed URL or a missing sha256 are refused | unit | REL-02 |
+| Committed manifest | Unit `classifierSource`: `public/models/models.json` has a source on raw.githubusercontent.com pinned to a commit, with the file name of its sha256 | unit | REL-02 |
+| `models:fetch` step | Unit `classifierSource`: a matching file downloads nothing; no file and a source downloads it, checks the sha256 and leaves no `.download`; a wrong sha256 or an HTTP error throws and writes nothing; a local file with another sha256 is kept and nothing is downloaded; no file and no source is `none`; a branch-pinned source throws before any download | unit | REL-02 |
+| Publish | Unit `classifierSource` with a local bare remote: a dry run writes nothing; the first publish creates the orphan branch with the model (bytes unchanged), its card and the README, pins the URL in `models.json`, carries the trailer and leaves the working tree clean; a second run is `already`; a new model is committed on top of the old one and both files stay | unit | REL-02 |
+| Refusals | Unit `classifierSource`: a model that does not match `models.json` is refused before any push; a URL that returns other bytes leaves the source empty | unit | REL-02 |
+| Reminder | `test_compress`: `update_manifest` returns the `models:publish` reminder when the sha256 changes under a set source and keeps the source; nothing when unchanged or unpublished | unit (Python) | REL-02 |
+| Public build uses the model | `sw.spec` on CI: with a source set, the production build loads `classifier.onnx`; `classifierModel.spec` case 1 (the build default is `classifier.onnx`) runs on CI | deploy, e2e | REL-02 |
+| First publish | `npm run models:publish`; the raw URL returns the sha256 of `models.json`; `models:fetch` into an empty folder downloads it (2026-10-06) | manual | REL-02 |
 
 ## 8. Handover
 

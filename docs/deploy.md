@@ -15,7 +15,7 @@ Operations document for the public release: address, how to deploy and roll back
 
 Every push to `main` runs the `CI` workflow ([.github/workflows/ci.yml](../.github/workflows/ci.yml)):
 
-1. Job `check`: lint, boundaries, invariants, Prettier, Mermaid, unit, Python unittest, e2e (fake camera), `npm run build` with `VITE_BASE` (repository variable `PAGES_BASE`, default `/<repo>/`), clean build check (`dist/spike-assets` absent, `dist/sw.js` has its key replaced, size printed), `npm run test:deploy` on that same `dist/` (service worker, base path, no cross-origin requests), then upload `dist/` as the Pages artifact.
+1. Job `check`: `models:fetch` (since REL-02 it also downloads the trained classifier from `classifier.source`, so the build prints `wct-classifier: model`), lint, boundaries, invariants, Prettier, Mermaid, unit, Python unittest, e2e (fake camera), `npm run build` with `VITE_BASE` (repository variable `PAGES_BASE`, default `/<repo>/`), clean build check (`dist/spike-assets` absent, `dist/sw.js` has its key replaced, size printed), `npm run test:deploy` on that same `dist/` (service worker, base path, no cross-origin requests), then upload `dist/` as the Pages artifact.
 2. Job `deploy` (only on push to `main`, after `check`): `actions/configure-pages` then `actions/deploy-pages`; the address is printed in the run summary and in the `github-pages` environment.
 
 One-time repo prerequisite: Settings → Pages → Build and deployment → Source: **GitHub Actions**. No `.nojekyll` or `CNAME` is needed in `public/`.

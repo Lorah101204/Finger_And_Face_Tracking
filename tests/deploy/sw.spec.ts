@@ -122,12 +122,16 @@ test('lần mở 1 vào #/app: worker kích hoạt và điều khiển trang, x�
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, undefined, {
     timeout: 30_000,
   })
-  // CLS-03 (D-061): build chọn classifier.onnx khi máy build có model huấn luyện khớp models.json, không thì stub
-  // (CI); modelPath đã ghép base.
+  // CLS-03 (D-061): build chọn classifier.onnx khi máy build có model huấn luyện khớp models.json, không thì stub;
+  // modelPath đã ghép base. REL-02 (D-068): trên CI models:fetch tải model từ classifier.source, nên khi source có giá
+  // trị thì bản build cho trang public phải dùng model đó, không lặng lẽ quay về stub.
   const clsModel = await page.evaluate(() => window.__wct!.classifier!.snapshot().modelPath)
   expect([`${BASE}models/classifier-stub.onnx`, `${BASE}models/classifier.onnx`]).toContain(
     clsModel,
   )
+  const published = !!JSON.parse(readFileSync(resolve('public/models/models.json'), 'utf8'))
+    .classifier?.source
+  if (process.env.CI && published) expect(clsModel).toBe(`${BASE}models/classifier.onnx`)
   const wantModels = [
     ...[
       `models/wasm/vision_wasm_module_internal.js`,

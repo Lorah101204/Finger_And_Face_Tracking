@@ -30,6 +30,7 @@
     "screenshots": "node tools/screenshots.mjs",
     "check:invariants": "node tools/check-invariants.mjs",
     "models:fetch": "node tools/fetch-models.mjs",
+    "models:publish": "node tools/publish-classifier.mjs",
     "spikes:fetch": "node tools/fetch-spike-assets.mjs"
   },
   "dependencies": {

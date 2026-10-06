@@ -59,11 +59,14 @@ def js_stable(v):
     return v
 
 
-def update_manifest(manifest: Path, info: dict) -> None:
+def update_manifest(manifest: Path, info: dict) -> str | None:
     """Ghi thông tin model vào mục classifier, giữ nguyên các khóa khác (stub, source, note…) và thứ tự khóa. CLS-04:
-    `compression` chỉ ghi khi model nén được chọn; export fp32 xóa mục cũ để không mô tả sai file."""
+    `compression` chỉ ghi khi model nén được chọn; export fp32 xóa mục cũ để không mô tả sai file. REL-02 (D-068): trả
+    lời nhắc khi sha256 đổi mà `source` còn trỏ model đã publish trước; `source` được giữ nguyên để models:fetch trên CI
+    dừng (tên file trong URL không mang sha256 mới) thay vì lặng lẽ build trang public với stub."""
     data = read_json(manifest)
     c = data.setdefault("classifier", {})
+    old_sha = c.get("sha256")
     for k in ("file", "sha256", "bytes", "inputSize", "labels", "norm", "opset", "train"):
         c[k] = js_stable(info[k])
     if info.get("compression"):
@@ -72,6 +75,10 @@ def update_manifest(manifest: Path, info: dict) -> None:
         c.pop("compression", None)
     c.setdefault("source", "")
     manifest.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    if c["source"] and old_sha != c["sha256"]:
+        return (f"classifier.source vẫn trỏ model đã publish trước ({c['source']}); chạy `npm run models:publish` rồi"
+                " mới push models.json, không thì models:fetch trên CI dừng (REL-02, D-068)")
+    return None
 
 
 def compress_and_copy(fp32: Path, out: Path, work: Path, size: int, args) -> dict | None:
@@ -188,8 +195,10 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(info, indent=2, ensure_ascii=False))
     print(f"đã ghi {args.out} ({len(blob)} byte)")
     if args.manifest:
-        update_manifest(args.manifest, info)
+        reminder = update_manifest(args.manifest, info)
         print(f"đã ghi sha256 vào mục classifier của {args.manifest}")
+        if reminder:
+            print(reminder)
     else:
         print("chưa ghi manifest: chạy lại với --manifest public/models/models.json để app dùng model này")
     return 0

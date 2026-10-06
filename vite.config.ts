@@ -33,7 +33,8 @@ export type ClassifierResolution = { choice: ClassifierChoice; reason: string }
  * CLS-03 (D-061): model phân loại mà dev server hay build dùng, đưa vào app qua import.meta.env.VITE_WCT_CLASSIFIER.
  * `model` (public/models/<classifier.file>, classifier.onnx) chỉ khi file có mặt và sha256 khớp mục classifier của
  * models.json (tools/train/export_onnx.py --manifest ghi); không thì `stub` (D-044) kèm lý do. File model là sản phẩm
- * huấn luyện, không commit: CI và trang public chưa có nó (trừ khi models:fetch tải từ `source`) nên vẫn chạy stub.
+ * huấn luyện, không commit vào main: CI và trang public có nó vì models:fetch tải từ `classifier.source` (nhánh
+ * `models`, REL-02, D-068); máy chưa chạy models:fetch hay có file lệch sha256 thì chạy stub.
  * Vitest (mode test) luôn stub để unit test tất định. WCT_CLASSIFIER=stub|model ép một bên; ép model mà thiếu file hay
  * sha256 lệch thì lỗi (không lặng lẽ quay về stub).
  */

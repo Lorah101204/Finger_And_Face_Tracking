@@ -137,6 +137,22 @@ class ManifestTest(unittest.TestCase):
             self.assertEqual(c["compression"]["mode"], "int8+fp16w")
             self.assertEqual(c["compression"]["agreement"]["argmax"], 1)
 
+    def test_update_manifest_reminds_to_publish_when_the_published_model_changes(self) -> None:
+        # REL-02 (D-068): source giữ nguyên (CI dừng thay vì build stub), kèm lời nhắc models:publish khi sha256 đổi.
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "models.json"
+            url = "https://raw.githubusercontent.com/o/r/" + "c" * 40 + "/classifier-aaaaaaaaaaaa.onnx"
+            p.write_text(json.dumps({"classifier": {"sha256": "a" * 64, "source": url}}), encoding="utf-8")
+            info = {"file": "classifier.onnx", "sha256": "a" * 64, "bytes": 10, "inputSize": 128,
+                    "labels": ["person", "mannequin"], "norm": {"mean": 0.45, "std": 0.225}, "opset": 17,
+                    "train": {}}
+            self.assertIsNone(update_manifest(p, info))  # cùng model: không nhắc
+            reminder = update_manifest(p, {**info, "sha256": "b" * 64})
+            self.assertIn("models:publish", reminder or "")
+            self.assertEqual(json.loads(p.read_text(encoding="utf-8"))["classifier"]["source"], url)
+            p.write_text(json.dumps({"classifier": {"source": ""}}), encoding="utf-8")
+            self.assertIsNone(update_manifest(p, {**info, "sha256": "b" * 64}))  # chưa publish: không nhắc
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -25,7 +25,7 @@ const E2E_SECTIONS = {
   'start.spec.ts': '7.21, 7.28',
   'dataset.spec.ts': '7.22, 7.2',
   'classify.spec.ts': '7.23, 7.2, 7.36',
-  'classifierModel.spec.ts': '7.35, 7.36, 7.38',
+  'classifierModel.spec.ts': '7.35, 7.36, 7.38, 7.41',
   'log.spec.ts': '7.25',
   'camera.spec.ts': '7.5',
   'grid.spec.ts': '7.6',
@@ -46,7 +46,7 @@ const E2E_SECTIONS = {
   'perf.spec.ts': '7.29, 7.2, 7.37',
   'logo.spec.ts': '7.33, 7.2',
   'help.spec.ts': '7.34, 7.2',
-  'sw.spec.ts': '7.27, 7.35, 7.36',
+  'sw.spec.ts': '7.27, 7.35, 7.36, 7.41',
   'split.spec.ts': '7.36',
 }
 const UNIT_SECTIONS = {
@@ -91,6 +91,7 @@ const UNIT_SECTIONS = {
   classifierClient: '7.23, 7.36',
   stubModel: '7.23',
   classifierModel: '7.35, 7.38',
+  classifierSource: '7.41',
   stageChunk: '7.36',
   paintGate: '7.37',
   uiState: '7.20, 7.28, 7.33',

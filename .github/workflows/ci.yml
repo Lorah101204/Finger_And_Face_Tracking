@@ -1,6 +1,9 @@
 # QA-01 (D-039): CI runs every check of the README section "Tests and lint" on Linux with Playwright's Chromium and a
 # fake camera. Models (.task) are downloaded per public/models/models.json and cached by the manifest's sha256; wasm is
 # copied from node_modules. E2E cases that need local assets (face.png, hands.jpg, not committed) skip themselves.
+# REL-02 (D-068): models:fetch also downloads the trained classifier from `classifier.source` (the `models` branch,
+# pinned to a commit, sha256-checked) and fails the job when it cannot, so the public build never falls back to the stub
+# silently; the file is cached with the .task models under the same key.
 # REL-01 (D-048, D-050): the check job builds with VITE_BASE (repository variable PAGES_BASE, default /<repo>/ for
 # https://<user>.github.io/<repo>/), verifies the production build with `test:deploy` (service worker, base path, I9) and
 # uploads dist/ as the Pages artifact; the deploy job publishes it to GitHub Pages only on push to main (Settings → Pages →
@@ -52,10 +55,12 @@ jobs:
 
       - run: npm ci
 
-      - name: Cache MediaPipe models
+      - name: Cache models
         uses: actions/cache@v6
         with:
-          path: public/models/*.task
+          path: |
+            public/models/*.task
+            public/models/classifier.onnx
           key: models-${{ hashFiles('public/models/models.json') }}
 
       - run: npm run models:fetch
@@ -174,10 +179,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Cache MediaPipe models
+      - name: Cache models
         uses: actions/cache@v6
         with:
-          path: public/models/*.task
+          path: |
+            public/models/*.task
+            public/models/classifier.onnx
           key: models-${{ hashFiles('public/models/models.json') }}
       - run: npm run models:fetch
       - run: npx playwright install --with-deps chromium
@@ -213,10 +220,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Cache MediaPipe models
+      - name: Cache models
         uses: actions/cache@v6
         with:
-          path: public/models/*.task
+          path: |
+            public/models/*.task
+            public/models/classifier.onnx
           key: models-${{ hashFiles('public/models/models.json') }}
       - run: npm run models:fetch
       - run: npx playwright install --with-deps chromium

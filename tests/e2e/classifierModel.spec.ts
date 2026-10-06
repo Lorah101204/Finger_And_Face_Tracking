@@ -13,9 +13,9 @@ import {
 } from './helpers'
 
 // CLS-03 (mục 7.35, D-061): model phân loại huấn luyện (public/models/classifier.onnx, không commit). Chỉ chạy khi máy
-// có file và sha256 khớp models.json, đúng điều kiện vite.config.ts (resolveClassifier) dùng để chọn model; CI chưa có
-// model nên bỏ qua (classify.spec vẫn kiểm đường ống với stub). Ca mặt dùng public/spike-assets/face.png (người thật,
-// không có trong dataset) như classify.spec.
+// có file và sha256 khớp models.json, đúng điều kiện vite.config.ts (resolveClassifier) dùng để chọn model. REL-02
+// (mục 7.41, D-068): CI có file vì models:fetch tải từ classifier.source, nên ca đầu chạy cả trên CI; ca mặt cần
+// public/spike-assets/face.png (người thật, không có trong dataset, không commit) như classify.spec nên chỉ chạy cục bộ.
 const MODEL_FILE = 'public/models/classifier.onnx'
 const FACE_FILE = 'public/spike-assets/face.png'
 const FACE_SRC = '/spike-assets/face.png'
