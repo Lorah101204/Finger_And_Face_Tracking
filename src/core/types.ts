@@ -58,6 +58,11 @@ export type CropMeta = {
   box: Size
   cells: number
   holes: number
+  /**
+   * CLS-05 (D-070): bbox của mặt mà classifier đang nhìn, tọa độ theo crop này (gốc ở góc crop, có thể vượt mép crop khi
+   * mặt bị cắt); null khi chưa có mặt. tools/train dựng lại đúng crop quanh mặt từ đây.
+   */
+  face: Rect | null
 }
 
 /**
@@ -103,8 +108,11 @@ export type FaceResult = {
   frameId: number
   ts: number
   inferMs: number
-  /** landmarks chuẩn hóa theo ảnh letterbox */
-  faces: { landmarksNorm: [number, number, number][] }[]
+  /**
+   * landmarks chuẩn hóa theo ảnh letterbox; CLS-06 (D-071): `blink` = blendshapes [eyeBlinkLeft, eyeBlinkRight] (0..1)
+   * khi worker bật blendshapes.
+   */
+  faces: { landmarksNorm: [number, number, number][]; blink?: [number, number] }[]
 }
 
 export type ClassifyResult = {
@@ -121,6 +129,8 @@ export type SubjectType = 'person' | 'mannequin' | 'unknown'
 
 export type ValidatedFace = {
   status: 'full' | 'partial'
+  /** CLS-05 (D-070): bbox landmark ở px camera (chưa mirror), để dựng crop quanh mặt cho classifier. */
+  bboxCam: Rect
   bboxStage: Rect
   /** đã clip vào mask hiện tại */
   landmarksStage: Point[]
@@ -128,6 +138,10 @@ export type ValidatedFace = {
   visible: number
   subjectType: SubjectType
   confidence?: number
+  /** CLS-06 (D-071): điểm nhắm hai mắt = min(eyeBlinkLeft, eyeBlinkRight) của kết quả này; thiếu khi tắt blendshapes. */
+  eyesClosed?: number
+  /** CLS-06: mặt này vừa chớp mắt (tín hiệu sống) nên nhãn là "Người" bất kể classifier. */
+  live?: boolean
 }
 
 export type Handedness = 'left' | 'right'

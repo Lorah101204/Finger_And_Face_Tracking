@@ -85,15 +85,23 @@ export type RestrictedStatsSnap = {
   lastLetterbox: { scale: number; dx: number; dy: number; size: number } | null
   lastCrop: { w: number; h: number } | null
   lastKind: 'ok' | 'too-small' | 'no-frame' | null
+  /** CLS-05: buffer dựng từ crop con (crop quanh mặt của classifier) và crop con gần nhất. */
+  subBuilds: number
+  lastSubRoiCam: Rect | null
 }
 export type ValidatedFaceSnap = {
   status: 'full' | 'partial'
+  /** CLS-05: bbox landmark ở px camera. */
+  bboxCam: Rect
   bboxStage: Rect
   landmarksStage: { x: number; y: number }[]
   /** CLS-02: tỉ lệ landmark còn trong vùng mở; nhãn và độ tin cậy theo quy tắc unknown. */
   visible: number
   subjectType: string
   confidence?: number
+  /** CLS-06: điểm nhắm hai mắt (blendshapes) và cờ tín hiệu sống. */
+  eyesClosed?: number
+  live?: boolean
 }
 export type FrameOutputSnap = {
   epoch: number
@@ -201,7 +209,12 @@ export type SubjectSnap = {
   epoch: number
   taskId: number
   frameId: number
+  /** CLS-05: trung bình đã làm mượt; raw là kết quả mới nhất, count số kết quả đã gộp. */
   probs: number[]
+  raw: number[]
+  count: number
+  roiCam: Rect
+  crop: 'face' | 'region'
   roiShortPx: number
   at: number
   ageMs: number
@@ -226,6 +239,17 @@ export type LoopSnap = {
     last: SubjectSnap | null
   }
   subject: SubjectSnap | null
+  /** CLS-06: bộ phát hiện chớp mắt của mặt mục tiêu. */
+  liveness: {
+    enabled: boolean
+    live: boolean
+    state: 'unknown' | 'open' | 'closed'
+    blinks: number
+    lastBlinkAt: number | null
+    lastScore: number | null
+    samples: number
+    target: Rect | null
+  }
   faceGate: {
     accepted: number
     facesDropped: number

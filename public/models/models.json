@@ -42,7 +42,7 @@
     "note": "CLS-02 (D-044), CLS-03 (D-061), CLS-04 (D-066), REL-02 (D-068): classifier-stub.onnx do tools/make-stub-classifier.mjs sinh (person = G - (R + B) / 2). classifier.onnx là model huấn luyện, không commit: tools/train/export_onnx.py --manifest ghi sha256, bytes, train vào đây; vite.config.ts (resolveClassifier) chỉ dùng nó khi file khớp sha256, không thì stub. `compression`: file đã nén cách lưu trọng số (int8 theo kênh và fp16, gập về fp32 lúc chạy) qua cổng so với bản fp32 (fp32Sha256) của tools/train/compress_select.py. source: URL raw.githubusercontent.com ghim theo commit của nhánh `models` (npm run models:publish, REL-02, D-068); models:fetch tải nó cho CI và trang public; trống thì chỉ máy đã train có model thật.",
     "stub": "classifier-stub.onnx",
     "file": "classifier.onnx",
-    "sha256": "87876480c83a725b3b06d06b9f71beb9d49e468f7d5ff77e12a0c52d9bef76f0",
+    "sha256": "d33781a8831c85827f5d70b935e556741af8c5a9925c0175a0aaeda9cf932a1a",
     "inputSize": 128,
     "labels": [
       "person",
@@ -53,45 +53,46 @@
       "std": 0.225
     },
     "opset": 17,
-    "bytes": 2001042,
+    "bytes": 2339997,
     "train": {
       "backbone": "mobilenet_v3_small",
-      "epoch": 60,
-      "freeze": true,
-      "select": "last",
-      "valAcc": 1,
-      "valBalancedAcc": 1,
+      "epoch": 7,
+      "freeze": false,
+      "select": "val",
+      "crop": "face",
+      "valAcc": 0.9551971326164874,
+      "valBalancedAcc": 0.9387860082304527,
       "samples": {
         "train": {
-          "person": 6,
-          "mannequin": 12
+          "person": 2244,
+          "mannequin": 332
         },
         "val": {
-          "person": 0,
-          "mannequin": 6
+          "person": 486,
+          "mannequin": 72
         }
       },
-      "torch": "2.14.0+cpu"
+      "torch": "2.15.0+cpu"
     },
-    "source": "https://raw.githubusercontent.com/Lorah101204/Finger_And_Face_Tracking/e2121a7d7c2d17092fb16ff76e15c3f266aef0cc/classifier-87876480c83a.onnx",
+    "source": "https://raw.githubusercontent.com/Lorah101204/Finger_And_Face_Tracking/7a1581df3e1797bbc414ef3e2b564a16f9f34cfd/classifier-d33781a8831c.onnx",
     "compression": {
       "mode": "int8+fp16w",
-      "fp32Sha256": "8acdac994a3b7133fff2ace5abe20ed69533c9095a7089bfde38556d5f52d892",
+      "fp32Sha256": "b422a5c729b78ed704c1a191f2e490b14a3a95291f274e1595f4d29f3646c7ce",
       "fp32Bytes": 6089235,
       "layers": {
-        "int8": 13,
-        "fp16": 33
+        "int8": 6,
+        "fp16": 40
       },
       "agreement": {
-        "n": 194,
-        "nHeld": 95,
-        "nAug": 99,
-        "nBorderline": 17,
+        "n": 2057,
+        "nHeld": 557,
+        "nAug": 1500,
+        "nBorderline": 955,
         "argmax": 1,
         "decisionFlips": 0,
-        "maxAbsDp": 0.0157,
-        "maxAbsDMarginHeld": 0.1738,
-        "maxAbsDMarginAug": 0.1827
+        "maxAbsDp": 0.0199,
+        "maxAbsDMarginHeld": 0.1149,
+        "maxAbsDMarginAug": 0.1264
       }
     }
   }

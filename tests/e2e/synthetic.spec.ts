@@ -72,6 +72,7 @@ test('nguồn tổng hợp: không gọi camera thật; cửa sổ bên phải x
     'logo',
     'delayWorker',
     'faceMaxAge',
+    'blink',
   ])
   await expectCanvasWhite(page)
 

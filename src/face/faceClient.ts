@@ -84,6 +84,7 @@ export function defaultInit(): Omit<FaceInitMessage, 'type'> {
     numFaces: DEFAULTS.face.numFaces,
     useModuleLoader: mp.useModuleLoader,
     warmupSize: DEFAULTS.face.inputSize,
+    blendshapes: DEFAULTS.face.liveness.enabled,
   }
 }
 

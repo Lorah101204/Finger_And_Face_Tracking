@@ -38,3 +38,20 @@ export function bboxOfPoints(pts: readonly Point[]): Rect | null {
   }
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 }
+
+/**
+ * CLS-05, CLS-06: hai rect (crop hay bbox mặt ở hai thời điểm) là cùng một mục tiêu: tâm của mỗi rect nằm trong rect kia
+ * (cạnh chạm vẫn tính) và cạnh ngắn không đổi quá hai lần. Dùng để bộ làm mượt xác suất và bộ phát hiện chớp mắt không
+ * gộp hai mặt khác nhau.
+ */
+export function rectsSameTarget(a: Rect, b: Rect): boolean {
+  const inside = (r: Rect, x: number, y: number) =>
+    x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h
+  const sa = Math.min(a.w, a.h)
+  const sb = Math.min(b.w, b.h)
+  if (sa <= 0 || sb <= 0) return false
+  const ratio = sa > sb ? sa / sb : sb / sa
+  return (
+    ratio <= 2 && inside(a, b.x + b.w / 2, b.y + b.h / 2) && inside(b, a.x + a.w / 2, a.y + a.h / 2)
+  )
+}

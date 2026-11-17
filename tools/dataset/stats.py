@@ -20,9 +20,11 @@ END = "<!-- dataset:end -->"
 
 DIMENSIONS: list[tuple[str, str, tuple[str, ...]]] = [
     ("By window size (short side px)", "sizeClass", ("small", "medium", "large")),
-    ("By lighting", "lighting", ("normal", "bright", "dim", "backlit")),
-    ("By mannequin type", "mannequinType", ("none", "plastic", "fabric", "silicone")),
+    ("By lighting", "lighting", ("normal", "bright", "dim", "backlit", "unknown")),
+    ("By mannequin type", "mannequinType", ("none", "plastic", "fabric", "silicone", "doll", "unknown")),
     ("By window position", "position", ("center", "edge")),
+    # CLS-07 (D-072): mẫu thu bằng webcam (dataset mode) hay lấy từ Open Images (tools/openimages.mjs).
+    ("By source", "source", ("webcam", "openimages")),
 ]
 
 
@@ -37,7 +39,7 @@ def cross(samples: list[Sample], key: str, values: tuple[str, ...]) -> str:
     counts: dict[str, Counter] = defaultdict(Counter)
     extra: set[str] = set()
     for s in samples:
-        v = s.field(key)
+        v = s.field(key, "webcam") if key == "source" else s.field(key)
         counts[s.label][v] += 1
         if v not in values:
             extra.add(v)

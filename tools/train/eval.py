@@ -3,10 +3,14 @@
 docs/classifier-report.md giữa hai mốc <!-- classifier:begin --> và <!-- classifier:end -->.
 
   python tools/train/eval.py public/models/classifier.onnx data/dataset [--split test] [--doc docs/classifier-report.md]
+      [--crop face|region] [--person-threshold 0.7] [--mannequin-threshold 0.9]
 
 Precision và recall từng lớp (unknown và miss tính vào thiếu recall), tỉ lệ hình nộm bị gán người, tỉ lệ unknown, theo
 cỡ cửa sổ, theo vị trí cắt biên, hình nộm silicone báo riêng (metrics.py). Mẫu background và unknown của tập test cũng
 được đưa qua model để đo nhãn sai trên nền (tính vào FP).
+
+CLS-05 (D-069, D-070): ngưỡng theo nhãn như app (person 0,7, mannequin 0,9) và `--crop face` cắt mẫu quanh bbox mặt
+như app (mẫu cũ không có bbox thì cả crop); cạnh ROI so với --min-roi là cạnh của crop thật sự đưa vào model.
 """
 
 from __future__ import annotations
@@ -19,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dataset"))
 from common import utf8_console  # noqa: E402
-from metrics import apply_unknown_rule, precision_recall, rates, render_markdown  # noqa: E402
+from metrics import THRESHOLDS, apply_unknown_rule, precision_recall, rates, render_markdown  # noqa: E402
 
 BEGIN = "<!-- classifier:begin -->"
 END = "<!-- classifier:end -->"
@@ -32,35 +36,41 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("root", type=Path)
     p.add_argument("--split", default="test")
     p.add_argument("--doc", type=Path)
-    p.add_argument("--threshold", type=float, default=0.7)
+    p.add_argument("--person-threshold", type=float, default=THRESHOLDS["person"])
+    p.add_argument("--mannequin-threshold", type=float, default=THRESHOLDS["mannequin"])
     p.add_argument("--min-roi", type=int, default=96)
+    p.add_argument("--crop", default="face", choices=("face", "region"))
     args = p.parse_args(argv)
 
     import numpy as np
     import onnxruntime as ort
 
     from common import all_samples, load_root, read_json
-    from dataset import CropAugment, to_tensor
+    from dataset import CropAugment, classifier_view, to_tensor
 
     sess = ort.InferenceSession(str(args.onnx), providers=["CPUExecutionProvider"])
     size = int(sess.get_inputs()[0].shape[-1])
     aug = CropAugment(size, train=False)
     splits = read_json(args.root / "splits.json")
     by_sample = splits.get("bySample", {})
+    thresholds = {"person": args.person_threshold, "mannequin": args.mannequin_threshold}
     records = []
+    face_cropped = 0
     from PIL import Image
 
     for s in all_samples(load_root(args.root)):
         if by_sample.get(s.id) != args.split:
             continue
         with Image.open(s.png) as img:
-            x = to_tensor(aug(img)).numpy()[None].astype(np.float32)
+            view, box = classifier_view(img.convert("RGB"), s.meta, args.crop)
+            x = to_tensor(aug(view)).numpy()[None].astype(np.float32)
+        face_cropped += int(box is not None)
         logits = sess.run(["logits"], {"input": x})[0][0]
         e = np.exp(logits - logits.max())
         probs = (e / e.sum()).tolist()
-        crop = s.meta.get("crop") or {}
+        crop = box or s.meta.get("crop") or {}
         roi_short = min(int(crop.get("w", 0)), int(crop.get("h", 0)))
-        pred, conf = apply_unknown_rule(probs, args.threshold, roi_short, args.min_roi)
+        pred, conf = apply_unknown_rule(probs, thresholds, roi_short, args.min_roi)
         records.append(
             {
                 "id": s.id,
@@ -74,7 +84,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     if not records:
         raise SystemExit(f"split {args.split} is empty")
-    body = render_markdown(records, f"Split {args.split} ({args.onnx.name})")
+    print(f"crop {args.crop}: {face_cropped}/{len(records)} mẫu cắt quanh mặt, ngưỡng {thresholds}")
+    body = render_markdown(records, f"Split {args.split} ({args.onnx.name}, crop {args.crop})")
     summary = {"pr": precision_recall(records), **rates(records)}
     print(body)
     print(json.dumps(summary, indent=2, ensure_ascii=False))

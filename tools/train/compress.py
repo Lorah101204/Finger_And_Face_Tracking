@@ -36,6 +36,9 @@ AUG_SEEDS = (2000, 2001, 2002)
 SPIKE_FILES = ("face.png", "hands.jpg", "thumbs_up.jpg", "pointing_up.jpg")
 SPIKE_SIDES = (300, 450, 700)
 BLEND_TARGETS = (0.8, 0.75, 0.7, 0.65, 0.6)
+# CLS-07 (D-072): bộ đầu vào giữ tối đa chừng này mẫu thật mỗi lớp (chọn tất định), nên với dataset Open Images vài
+# nghìn mẫu bộ kiểm nén (thật × 4 với augment) vẫn vài trăm MB thay vì 2,9 GB (quá 2 GiB mà check_wasm.mjs đọc được).
+MAX_REAL_PER_CLASS = 250
 
 
 def build_pack(root: Path, spike_dir: Path | None, input_size: int, fp32: Path | None = None):
@@ -47,9 +50,22 @@ def build_pack(root: Path, spike_dir: Path | None, input_size: int, fp32: Path |
 
     from dataset import CropAugment, CropDataset, load_split, to_tensor
 
+    import random
+
     xs, tags, people, others = [], [], [], []
+    chosen: list[tuple[str, object]] = []
     for split in ("train", "val", "test"):
-        samples = load_split(root, split)
+        chosen += [(split, s) for s in load_split(root, split)]
+    by_class: dict[str, list] = {}
+    for split, s in chosen:
+        by_class.setdefault(s.label, []).append((split, s))
+    rng = random.Random(0)
+    chosen = []
+    for label in sorted(by_class):
+        items = by_class[label]
+        chosen += items if len(items) <= MAX_REAL_PER_CLASS else rng.sample(items, MAX_REAL_PER_CLASS)
+    for split in ("train", "val", "test"):
+        samples = [s for sp, s in chosen if sp == split]
         ds = CropDataset(samples, input_size, train=False)
         for i, s in enumerate(samples):
             xs.append(ds[i][0].numpy())

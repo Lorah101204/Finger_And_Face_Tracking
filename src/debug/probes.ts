@@ -5,7 +5,8 @@
 import type { Rect } from '../core/types'
 
 export type ProbeFrameMeta = { epoch: number; frameId: number; ts: number }
-export type RestrictedMeta = ProbeFrameMeta & { taskId: number; roiCam: Rect }
+/** CLS-05: `sub` khi buffer dựng từ crop con (crop quanh mặt cho classifier, D-070), không phải cả vùng mở. */
+export type RestrictedMeta = ProbeFrameMeta & { taskId: number; roiCam: Rect; sub?: boolean }
 
 export type ProbeCounters = {
   faceDetectSubmitted: number
@@ -30,6 +31,11 @@ export type Probes = {
    * faceMaxAge: e2e dời cửa sổ khi tác vụ đang chạy cần kết quả của ROI cũ được nhận dù suy luận chậm dưới tải.
    */
   faceMaxAgeMs: number
+  /**
+   * CLS-06: kịch bản blink(ms) đặt cửa sổ thời gian (gốc performance.now, như ts của frame); kết quả mặt của frame trong
+   * cửa sổ có điểm nhắm mắt 1, để e2e kiểm đường tín hiệu sống trên ảnh tĩnh. null khi không giả lập.
+   */
+  blinkWindow: { from: number; to: number } | null
   onRestrictedFrame(cb: RestrictedListener): () => void
   onOutputFrame(cb: OutputListener): () => void
   /** MASK-02 hỏi trước khi tốn getImageData: có ai nghe và đã tới nhịp chưa. */
@@ -58,6 +64,7 @@ export function createProbes(enabled: boolean): Probes {
     minIntervalMs: { restricted: 500, output: 250 },
     workerDelayMs: 0,
     faceMaxAgeMs: 0,
+    blinkWindow: null,
     onRestrictedFrame(cb) {
       restricted.add(cb)
       return () => {

@@ -94,6 +94,15 @@ export function installScenarios(deps: ScenarioDeps): () => void {
       probes.faceMaxAgeMs = Math.max(0, ms)
       return { faceMaxAgeMs: probes.faceMaxAgeMs }
     },
+    /**
+     * CLS-06: giả lập một lần chớp mắt: kết quả mặt của các frame trong ms tới (mặc định 300) có điểm nhắm mắt 1, rồi
+     * về điểm thật của ảnh (mắt mở) nên bộ phát hiện thấy mở → nhắm → mở. 0 hủy.
+     */
+    blink: (ms = 300) => {
+      const now = performance.now()
+      probes.blinkWindow = ms > 0 ? { from: now, to: now + ms } : null
+      return { blinkWindow: probes.blinkWindow }
+    },
   }
 
   const api: ScenarioApi = {

@@ -125,3 +125,93 @@ test('model huấn luyện trên mặt người thật ngoài dataset (face.png 
   )
   await expectGateClean(page)
 })
+
+/** CLS-05: mở face.png với cửa sổ N ô quanh mặt rồi trả p(person) thô của `count` kết quả đầu tiên được gate nhận. */
+async function personProbs(page: Page, N: number, extra: string, count: number) {
+  await installGumCounter(page)
+  await seedConsent(page)
+  await openApp(page, `?debug=1&source=synthetic&classifier=model${extra}`)
+  await expect(page.locator('canvas#stage')).toBeVisible()
+  const st = await readStage(page)
+  await installGateAudit(page)
+  const IMG = { x: 400, y: 20, w: 479, h: 679 }
+  const FACE_CAM = { x: 560, y: 70, w: 170, h: 210 }
+  await page.evaluate(
+    ([src, img]) => window.__scenario!.scene({ person: null, face: { src, ...img } }),
+    [FACE_SRC, IMG] as const,
+  )
+  await page.waitForFunction(() => window.__wct?.face?.snapshot().ready === true, undefined, {
+    timeout: 120_000,
+  })
+  const L = st.layout
+  const center = { x: FACE_CAM.x + FACE_CAM.w / 2, y: FACE_CAM.y + FACE_CAM.h / 2 }
+  const sx = (st.settings.mirror ? L.cam.w - center.x : center.x) * L.scale + L.board.x
+  const sy = center.y * L.scale + L.board.y
+  const clamp = (v: number, hi: number) => Math.max(0, Math.min(hi, v))
+  const col = clamp(Math.round((sx - L.board.x) / L.c - N / 2), L.cols - N)
+  const row = clamp(Math.round((sy - L.board.y) / L.c - N / 2), L.rows - N)
+  await page.evaluate(
+    ([c, r, n]) => window.__scenario!.run(`windowAt(${c},${r},${n})`),
+    [col, row, N],
+  )
+  await page.waitForFunction(() => window.__wct?.classifier?.snapshot().ready === true, undefined, {
+    timeout: 120_000,
+  })
+  return page.evaluate(
+    (want) =>
+      new Promise<{ raw: number[]; labels: string[]; crop: string; roi: number[]; mask: number[] }>(
+        (resolve, reject) => {
+          const raw: number[] = []
+          const labels: string[] = []
+          let last = window.__wct!.loop!.snapshot().classifyGate.accepted
+          const t0 = performance.now()
+          const poll = () => {
+            const s = window.__wct!.loop!.snapshot()
+            if (s.classifyGate.accepted !== last && s.subject) {
+              last = s.classifyGate.accepted
+              raw.push(s.subject.raw[0])
+              labels.push(s.output.faces[0]?.subjectType ?? 'no-face')
+            }
+            if (raw.length >= want && s.subject && s.mask) {
+              const r = s.subject.roiCam
+              const m = s.mask.cameraRect
+              return resolve({
+                raw,
+                labels,
+                crop: s.subject.crop,
+                roi: [r.x, r.y, r.w, r.h],
+                mask: [m.x, m.y, m.w, m.h],
+              })
+            }
+            if (performance.now() - t0 > 90_000) return reject(new Error('hết 90 s chờ kết quả'))
+            requestAnimationFrame(poll)
+          }
+          poll()
+        },
+      ),
+    count,
+  )
+}
+
+test('CLS-05 (mục 7.42): cửa sổ lớn 24 ô quanh face.png: crop quanh mặt giữ "Người" ≥ 0,95, crop cả vùng (tay, vai, nền) thấp hơn', async ({
+  page,
+}) => {
+  test.skip(skipReason !== null, skipReason ?? '')
+  test.skip(!existsSync(FACE_FILE), `thiếu ${FACE_FILE} (asset spike cục bộ, không commit)`)
+  test.setTimeout(240_000)
+  const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length
+  const region = await personProbs(page, 24, '&clsCrop=region', 4)
+  expect(region.crop).toBe('region')
+  expect(region.roi).toEqual(region.mask)
+  await expectGateClean(page)
+  const face = await personProbs(page, 24, '', 4)
+  expect(face.crop).toBe('face')
+  expect(face.roi[2] * face.roi[3]).toBeLessThan(face.mask[2] * face.mask[3])
+  expect(mean(face.raw)).toBeGreaterThanOrEqual(0.95)
+  expect(mean(face.raw)).toBeGreaterThanOrEqual(mean(region.raw))
+  expect(face.labels.every((l) => l === 'person')).toBe(true)
+  note(
+    `cửa sổ 24 ô (${region.mask[2]}×${region.mask[3]} px): p(person) crop cả vùng ${mean(region.raw).toFixed(3)}, crop quanh mặt ${mean(face.raw).toFixed(3)} (${face.roi[2]}×${face.roi[3]} px)`,
+  )
+  await expectGateClean(page)
+})

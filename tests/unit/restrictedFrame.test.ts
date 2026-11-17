@@ -298,6 +298,7 @@ describe('createRestrictedFrameBuilder với tứ giác', () => {
           box: { w: 8, h: 8 },
           cells: 64,
           holes: 0,
+          face: null,
         },
       },
     ])
@@ -307,5 +308,108 @@ describe('createRestrictedFrameBuilder với tứ giác', () => {
       log.findIndex((l) => l.startsWith('crop.drawImage video') && log.indexOf(l) > 3),
     )
     expect(log.slice(i + 1).some((l) => l.startsWith('lb.drawImage crop'))).toBe(true)
+  })
+})
+
+// CLS-05 (D-070, mục 7.42): crop con cho classifier (crop quanh mặt). Rect cắt lại theo cameraRect của mask trước khi
+// đọc video, ô lỗ vẫn tô xám (tọa độ theo gốc crop con), dataset mode không nhận crop con, probe nhận kèm sub: true;
+// thống kê của buffer cả vùng (builds, lastRoiCam, lastTaskId) không đổi.
+describe('createRestrictedFrameBuilder với crop con (CLS-05)', () => {
+  it('đọc đúng crop con 1:1 từ video, frame mang roiCam của crop con; thống kê cả vùng giữ nguyên', () => {
+    const { builder, log, source } = setup()
+    const roi = { x: 240, y: 120, w: 100, h: 100 }
+    const r = builder.build(source, mask, stamp, 3, 7, 1, { roi })
+    expect(r.kind).toBe('ok')
+    if (r.kind !== 'ok') return
+    expect(r.frames).toHaveLength(1)
+    expect(r.frames[0].roiCam).toEqual(roi)
+    expect(r.frames[0].taskId).toBe(7)
+    expect(r.frames[0].letterbox).toEqual(computeLetterbox(100, 100, 256))
+    expect(log).toContain('crop.drawImage video 240,120,100,100,0,0,100,100')
+    expect(log.filter((l) => l.startsWith('crop.drawImage'))).toHaveLength(1)
+    expect(builder.stats).toMatchObject({
+      builds: 0,
+      subBuilds: 1,
+      bitmaps: 1,
+      lastRoiCam: null,
+      lastTaskId: -1,
+      lastSubRoiCam: roi,
+    })
+  })
+
+  it('crop con vượt cameraRect được cắt lại (không đọc pixel ngoài hộp bao); quá nhỏ sau khi cắt thì too-small mà không đổi bộ đếm cả vùng', () => {
+    const { builder, log, source } = setup()
+    const cr = mask.cameraRect
+    const r = builder.build(source, mask, stamp, 3, 1, 1, {
+      roi: { x: cr.x - 50, y: cr.y - 40, w: 150, h: 160 },
+    })
+    expect(r.kind).toBe('ok')
+    if (r.kind === 'ok') expect(r.frames[0].roiCam).toEqual({ x: cr.x, y: cr.y, w: 100, h: 120 })
+    expect(log).toContain(`crop.drawImage video ${cr.x},${cr.y},100,120,0,0,100,120`)
+    const tiny = builder.build(source, mask, stamp, 3, 2, 1, {
+      roi: { x: cr.x + cr.w - 30, y: cr.y, w: 100, h: 100 },
+    })
+    expect(tiny).toEqual({ kind: 'too-small', side: 30, minRoiPx: 64 })
+    const outside = builder.build(source, mask, stamp, 3, 3, 1, {
+      roi: { x: 900, y: 600, w: 100, h: 100 },
+    })
+    expect(outside.kind).toBe('too-small')
+    expect(builder.stats).toMatchObject({ tooSmall: 0, lastKind: null, subBuilds: 1 })
+  })
+
+  it('ô lỗ của mask tô xám theo gốc crop con', () => {
+    const quad = buildMask(
+      polygonShape([
+        { x: 201, y: 101 },
+        { x: 359, y: 101 },
+        { x: 359, y: 259 },
+        { x: 358, y: 259 },
+      ]),
+      L,
+      false,
+      3,
+    )
+    const { builder, log, source } = setup()
+    const roi = { x: 220, y: 140, w: 120, h: 110 }
+    expect(builder.build(source, quad, stamp, 3, 9, 1, { roi }).kind).toBe('ok')
+    const fills = log.filter((l) => l.startsWith('crop.fillRect'))
+    expect(fills).toHaveLength(quad.holesCam.length)
+    for (const h of quad.holesCam)
+      expect(fills).toContain(
+        `crop.fillRect ${h.x - roi.x},${h.y - roi.y},${h.w},${h.h} rgb(128, 128, 128)`,
+      )
+  })
+
+  it('dataset mode: crop con không vào CropTap; crop cả vùng mang bbox mặt theo gốc crop (CropMeta.face)', () => {
+    const got: { face: unknown }[] = []
+    const builder = createRestrictedFrameBuilder({
+      crops: { wants: () => true, emit: (_img, meta) => got.push({ face: meta.face }) },
+      createCanvas: (w, h) => new StubCanvas('c', w, h, []) as unknown as OffscreenCanvas,
+    })
+    const { source } = setup()
+    const cr = mask.cameraRect
+    builder.build(source, mask, stamp, 3, 1, 1, { roi: { x: cr.x, y: cr.y, w: 100, h: 100 } })
+    expect(got).toEqual([])
+    builder.build(source, mask, stamp, 3, 2, 1, {
+      faceCam: { x: cr.x + 30, y: cr.y + 20, w: 50, h: 60 },
+    })
+    builder.build(source, mask, stamp, 3, 3)
+    expect(got).toEqual([{ face: { x: 30, y: 20, w: 50, h: 60 } }, { face: null }])
+  })
+
+  it('probe nhận buffer của crop con với sub: true (gate audit của e2e đo cả buffer classifier)', () => {
+    const metas: unknown[] = []
+    const probes = {
+      wantsRestrictedFrame: () => true,
+      emitRestrictedFrame: (_img: ImageData, meta: unknown) => metas.push(meta),
+    } as unknown as Probes
+    const { builder, source } = setup({ probes })
+    const roi = { x: 240, y: 120, w: 100, h: 100 }
+    builder.build(source, mask, stamp, 3, 4, 1, { roi })
+    builder.build(source, mask, stamp, 3, 5)
+    expect(metas).toEqual([
+      { epoch: 3, frameId: 42, ts: 1000, taskId: 4, roiCam: roi, sub: true },
+      { epoch: 3, frameId: 42, ts: 1000, taskId: 5, roiCam: mask.cameraRect },
+    ])
   })
 })

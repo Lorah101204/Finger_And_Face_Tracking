@@ -119,7 +119,13 @@ def check(sessions: list[Session]) -> list[str]:
     errors: list[str] = []
     for ses in sessions:
         sid = ses.id
-        if ses.meta.get("participantConsent") is not True:
+        # CLS-07 (D-072): phiên lấy từ dataset công khai (tools/openimages.mjs) không có người tham gia ký phiếu đồng ý;
+        # thay vào đó phải ghi nguồn và license, và mỗi mẫu ghi license, tác giả của ảnh gốc.
+        public = ses.meta.get("source") == "openimages"
+        if public:
+            if not ses.meta.get("license"):
+                errors.append(f"{sid}: phiên dataset công khai thiếu license")
+        elif ses.meta.get("participantConsent") is not True:
             errors.append(f"{sid}: session.json thiếu participantConsent = true (bước 1)")
         if ses.path.name != sid:
             errors.append(f"{ses.path.name}: sessionId trong session.json là {sid}")
@@ -144,6 +150,8 @@ def check(sessions: list[Session]) -> list[str]:
                     errors.append(f"{s.id}: PNG {w}×{h} bằng hoặc lớn hơn khung camera {cw}×{ch}: frame gốc?")
                 elif w > cw or h > ch:
                     errors.append(f"{s.id}: PNG {w}×{h} vượt khung camera {cw}×{ch}")
+            if public and not (s.meta.get("oi") or {}).get("imageId"):
+                errors.append(f"{s.id}: mẫu dataset công khai thiếu oi.imageId (nguồn ảnh)")
             if s.meta.get("sessionId") != sid:
                 errors.append(f"{s.id}: sessionId {s.meta.get('sessionId')} khác phiên {sid}")
             if s.meta.get("label") not in LABELS:

@@ -184,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
             "epoch": ck.get("epoch"),
             "freeze": ck.get("freeze", False),
             "select": ck.get("select", "val"),
+            "crop": ck.get("crop", "region"),
             "valAcc": ck.get("valAcc"),
             "valBalancedAcc": ck.get("valBalancedAcc"),
             "samples": ck.get("samples"),

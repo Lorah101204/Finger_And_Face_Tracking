@@ -3,7 +3,7 @@
 
   python tools/train/train.py data/dataset --out data/train/run1 [--epochs 20] [--input-size 128] [--batch 64]
       [--lr 1e-3] [--backbone mobilenet_v3_small|efficientnet_b0] [--weights default|none] [--seed 1] [--device cpu]
-      [--freeze] [--select auto|val|last]
+      [--freeze] [--select auto|val|last] [--crop face|region]
 
 Backbone nhỏ của torchvision, đầu ra 2 lớp; tập chia theo subjectId (tools/dataset/split.py); augment mô phỏng đường
 chạy (dataset.py). Lưu checkpoint (data/train/run1/classifier.pt), nhật ký JSON và cấu hình để export_onnx.py và
@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dataset"))
 from common import utf8_console  # noqa: E402
-from dataset import CLASSES, CropDataset, class_counts, load_split  # noqa: E402
+from dataset import CLASSES, CROP_MODES, FACE_CROP_SCALE, CropDataset, class_counts, face_counts, load_split  # noqa: E402
 
 BACKBONES = ("mobilenet_v3_small", "efficientnet_b0")
 
@@ -104,6 +104,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--workers", type=int, default=2)
     p.add_argument("--freeze", action="store_true", help="chỉ học phần đầu phân loại (dataset nhỏ)")
     p.add_argument("--select", default="auto", choices=("auto", "val", "last"))
+    p.add_argument(
+        "--crop",
+        default="face",
+        choices=CROP_MODES,
+        help="CLS-05: face cắt quanh bbox mặt của metadata như app (mẫu cũ không có bbox thì giữ cả crop); region là cách CLS-02",
+    )
     args = p.parse_args(argv)
 
     import torch
@@ -120,11 +126,20 @@ def main(argv: list[str] | None = None) -> int:
     if select == "auto":
         select = "val" if all(val_counts[c] > 0 for c in CLASSES) else "last"
     print(f"train {len(train_s)} {class_counts(train_s)}; val {len(val_s)} {val_counts}; device {device}; chọn {select}")
+    if args.crop == "face":
+        fc = face_counts(train_s + val_s)
+        print(f"crop face: {fc['face']} mẫu có bbox mặt, {fc['regionOnly']} mẫu cũ giữ cả crop vùng")
+        if fc["regionOnly"]:
+            print(
+                "CẢNH BÁO mẫu thu trước CLS-05 không có bbox mặt nên lệch với ảnh app đưa vào lúc chạy (crop quanh mặt); "
+                "thu lại bằng dataset mode của bản hiện tại",
+                file=sys.stderr,
+            )
     if select == "last" and args.select == "auto":
         missing = [c for c in CLASSES if not val_counts[c]]
         print(f"CẢNH BÁO val không có {', '.join(missing)}: lấy checkpoint epoch cuối thay vì theo val", file=sys.stderr)
-    train_ds = CropDataset(train_s, args.input_size, train=True, seed=args.seed)
-    val_ds = CropDataset(val_s, args.input_size, train=False)
+    train_ds = CropDataset(train_s, args.input_size, train=True, seed=args.seed, crop=args.crop)
+    val_ds = CropDataset(val_s, args.input_size, train=False, crop=args.crop)
     train_dl = DataLoader(train_ds, batch_size=args.batch, shuffle=True, num_workers=args.workers, drop_last=False)
     val_dl = DataLoader(val_ds, batch_size=args.batch, shuffle=False, num_workers=args.workers)
 
@@ -175,6 +190,8 @@ def main(argv: list[str] | None = None) -> int:
                     "valBalancedAcc": val["balancedAcc"],
                     "freeze": args.freeze,
                     "select": select,
+                    "crop": args.crop,
+                    "faceCropScale": FACE_CROP_SCALE,
                     "samples": {"train": class_counts(train_s), "val": val_counts},
                 },
                 args.out / "classifier.pt",

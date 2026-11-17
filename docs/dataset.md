@@ -56,6 +56,7 @@ data/dataset/
 | `sizeClass` | `small` < 160 px, `medium` < 320 px, `large` (short side of the crop, `DEFAULTS.dataset`) |
 | `position`, `edges` | `edge` when `cameraRect` touches the camera border (head cut off: `top`; shoulders cut off: `bottom`; side cut off: `left`, `right`), otherwise `center` |
 | `grid`, `mirror` | grid at capture time and the mirror flag (the crop is not mirrored) |
+| `face` | CLS-05 (D-070): bbox `{x, y, w, h}` of the face the classifier was looking at, in crop coordinates (it may extend past the crop when the face is cut), or `null` without a face. Since CLS-05 the app classifies a square crop around this face (1.6 × its long side, inside the crop); `tools/train` (`--crop face`) rebuilds exactly that crop from this field. Samples captured before CLS-05 have no `face` and are used whole |
 
 `session.json` holds the fields entered by the collector, `participantConsent`, `startedAt`, `stoppedAt`, `samples` and `app` (`consentVersion`, `rateHz`, `grid`, `camera`).
 
@@ -75,7 +76,7 @@ Minimum targets for the first set; each cell is one or more sessions. The "Sessi
 | Hands only (`background`) | normal | medium | ≥ 60 samples | 0 |
 | Unclear (`unknown`): window too small, most of the face cut off | | small, edge | ≥ 100 samples | 0 |
 
-Note: small, medium and large windows follow `sizeClass`; edge follows `position`. The person standing still and the mannequin being moved make sure the classifier does not rely on motion (CLS-02 step 2 uses no motion).
+Note: small, medium and large windows follow `sizeClass`; edge follows `position`. The person standing still and the mannequin being moved make sure the classifier does not rely on motion (CLS-02 step 2 uses no motion). CLS-06 (D-071) adds blink liveness at runtime as positive evidence for person only; the classifier itself still sees single still images, so these two special cases stay in the matrix. Capture with the hand source as well as the mouse, so the crops hold what real use holds (the user's hands at the edges of the region, gray holes).
 
 ## 5. Labeling (step 4)
 
@@ -178,6 +179,46 @@ Final labels assigned (labelFinal): 0/33; the rest use the app's provisional lab
 - Done: dataset mode in the app (reveal-region crop only, folder or zip, indicator, mandatory consent), labeling, split and statistics tools, leakage check and raw-frame check; automated tests in WORK-BREAKDOWN section 7.22.
 - First capture (2026-09-23): imported with `import_zip.py`, `check` 0 errors, split with a warning (the only person subject is in train, so val and test have no person), statistics in section 7; the first model trained on it is described in [classifier-report.md](classifier-report.md).
 - Pending: capture per the matrix in section 4 with participants who have signed appendix A and real mannequins: at least three people and three mannequins so every split holds both classes (better 8 to 10 people and 6 or more mannequins of the three types), small and medium windows, edge positions, the three other lighting conditions, background, hands-only and unknown samples; keep one `subjectId` per person across sessions; after each capture run `import_zip.py`, `split.py`, `stats.py --doc` and update the "Sessions" column of section 4.
+
+## 9. Public data: Open Images V7 (CLS-07, D-072)
+
+Without participants or real mannequins in front of the camera, the person and mannequin classes are filled from [Open Images V7](https://storage.googleapis.com/openimages/web/index.html) with `tools/openimages.mjs` (2026-11-18). The images are not committed and not redistributed: they stay in `data/openimages/` and the samples in `data/dataset/ses-oi-*`, each with `oi.license`, `oi.author` and `oi.landing` from the Open Images metadata (all selected images are listed as CC BY 2.0; the annotations are CC BY 4.0).
+
+| Step | What it does | Result (2026-11-18) |
+|---|---|---|
+| Index | Stream-filter the human-verified image-level labels (train 2.6 GB, never stored; val and test downloaded) for "Mannequin" (`/m/01gl_m`, image-level only, no boxes) and "Doll" (`/m/0167gd`); keep the val and test boxes of "Human face" (`/m/0dzct`) and "Doll" | 731 mannequin images (496 train, 235 val and test), 1192 doll images, 22 602 face boxes |
+| `select` | Mannequin: every image; doll: up to 1200; person: 3000 images with 1 to 4 faces, the face not a group, not a depiction (`IsDepiction` 0), at least 6 % of the image wide, image not rotated, no Mannequin or Doll label | 4923 images |
+| `download` | The resized copies of the public Open Images bucket | 1.37 GB |
+| `faces` | The app's own Face Landmarker (IMAGE, CPU) on 256 px gray letterboxes like `restrictedFrame`: around each box when there is one, on the whole image and five overlapping tiles otherwise; one sample per face ≥ 48 px: the square region of 2.4 × the face (≤ 448 px) with `face` in region coordinates, the same metadata as dataset mode, one `subjectId` per image | 3938 faces from 4923 images; 1769 images had no usable face |
+| Review | Contact sheets of the crop the classifier sees (`sheets`), every face of the mannequin and doll sessions and every person face of the test split looked at and relabeled with `label` (`labelFinal`, `reviewed: true`; commands in `data/openimages/review.log`) | see below |
+| `split.py` | By subject (image), class-stratified; unknown subjects go to val and test only | train 2244 person / 332 mannequin; val 486 / 72 / 109 unknown; test 438 / 75 / 155 unknown after review |
+
+Label noise found by the review (the image-level label says the image contains a mannequin or a doll, not that every face in it is one):
+
+| Session | Faces | Real mannequin, doll or statue | Real person | Unusable (print, drawing, cartoon, plush, no face) |
+|---|---|---|---|---|
+| mannequin, train | 176 | 90 | 59 | 27 |
+| mannequin, val and test | 57 | 48 | 3 | 6 |
+| doll, train | 651 | 303 | 184 | 164 |
+| doll, val and test | 84 | 33 | 7 | 44 |
+| person, test split (all 461) | 461 | 2 | 413 | 46 |
+
+So roughly half of the faces found in "Mannequin" and "Doll" images are real people (shoppers next to a shop window, children holding dolls); used unreviewed they would teach exactly the error users report. Real people found there were moved to the person class; statues, wax figures and realistic sculptures count as mannequin (human-like, not alive); prints, paintings, screens, cartoons, plush toys and masks are `unknown` (not trained, counted as false positives when they get a label). The person sessions outside the test split were spot-checked only (2 sheets: 4 to 10 % statues, carvings, dolls or drawings); that noise leans toward "person", the safe direction for this complaint. The review was done by the assistant on 128 px thumbnails; a few calls (blurred faces, wax figures, realistic dolls) are judgment calls.
+
+Domain gap: these are photographs, mostly sharp and well lit, of people and mannequins in the wild, not webcam frames of a reveal region. The face crop of CLS-05 makes the classifier input comparable (a square around a face), and the training augmentation adds webcam-like degradations, but a capture per section 4 is still needed to measure the real use; webcam samples go into the same `data/dataset` root and the same split.
+
+Re-run:
+
+```bash
+node tools/openimages.mjs select --person 3000 --mannequin 0 --doll 1200
+node tools/openimages.mjs download
+node tools/openimages.mjs faces
+node tools/openimages.mjs sheets --session ses-oi-mannequin-train
+node tools/openimages.mjs label ses-oi-mannequin-train-000 person 6,7 unknown 0,3
+python tools/dataset/split.py data/dataset
+```
+
+The index files of the first step are built by hand (commands in the CLS-07 package of WORK-BREAKDOWN).
 
 ## Appendix A. Participant consent form template
 

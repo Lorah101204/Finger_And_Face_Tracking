@@ -109,9 +109,13 @@ def verify_no_leak(sessions: list[Session], subject_split: dict[str, str]) -> li
     session_splits: dict[str, set[str]] = defaultdict(set)
     subject_splits: dict[str, set[str]] = defaultdict(set)
     for ses in sessions:
+        # CLS-07 (D-072): một phiên Open Images gom nhiều ảnh không liên quan; đơn vị chống rò của nó là subject (một
+        # ảnh, các mặt của ảnh đó đi cùng nhau), nên chỉ phiên thu bằng webcam mới phải nằm trọn trong một tập.
+        public = ses.meta.get("source") == "openimages"
         for s in ses.samples:
             sp = subject_split[s.subject_id]
-            session_splits[s.session_id].add(sp)
+            if not public:
+                session_splits[s.session_id].add(sp)
             subject_splits[s.subject_id].add(sp)
     for sid, sps in session_splits.items():
         if len(sps) > 1:
@@ -146,9 +150,12 @@ def make_splits(sessions: list[Session], ratios: dict[str, float], seed: int) ->
     for ses in sessions:
         if not ses.samples:
             continue
-        sp = subject_split[ses.samples[0].subject_id]
-        result[sp]["sessions"].append(ses.id)
+        # Theo từng mẫu (subject của chính mẫu đó): phiên webcam chỉ có một subject nên nằm trọn trong một tập; phiên
+        # Open Images (CLS-07) có nhiều subject nên trải qua nhiều tập và được ghi vào danh sách phiên của từng tập.
         for s in ses.samples:
+            sp = subject_split[s.subject_id]
+            if ses.id not in result[sp]["sessions"]:
+                result[sp]["sessions"].append(ses.id)
             result[sp]["samples"] += 1
             result[sp]["byLabel"][s.label] = result[sp]["byLabel"].get(s.label, 0) + 1
             result["bySample"][s.id] = sp

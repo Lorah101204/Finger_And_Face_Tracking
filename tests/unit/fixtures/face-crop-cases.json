@@ -1,0 +1,40 @@
+{
+  "comment": "CLS-05 (D-070): các ca chung của faceCropRect (src/classify/faceCrop.ts, tests/unit/faceCrop.test.ts) và face_crop_box (tools/train/dataset.py, tools/train/test_face_crop.py); hai bên phải cho cùng rect nguyên.",
+  "cases": [
+    {
+      "name": "giữa vùng: cạnh 1,6 × 210 = 336, tâm (645, 175)",
+      "face": { "x": 560, "y": 70, "w": 170, "h": 210 },
+      "bounds": { "x": 0, "y": 0, "w": 1280, "h": 720 },
+      "scale": 1.6,
+      "want": { "x": 477, "y": 7, "w": 336, "h": 336 }
+    },
+    {
+      "name": "chạm mép trên của bounds: dời xuống, vẫn vuông",
+      "face": { "x": 560, "y": 70, "w": 170, "h": 210 },
+      "bounds": { "x": 400, "y": 40, "w": 480, "h": 480 },
+      "scale": 1.6,
+      "want": { "x": 477, "y": 40, "w": 336, "h": 336 }
+    },
+    {
+      "name": "bounds hẹp hơn cạnh: cắt theo bounds ở trục đó",
+      "face": { "x": 100, "y": 100, "w": 100, "h": 100 },
+      "bounds": { "x": 80, "y": 0, "w": 120, "h": 400 },
+      "scale": 1.6,
+      "want": { "x": 80, "y": 70, "w": 120, "h": 160 }
+    },
+    {
+      "name": "tâm 35,5 − 31 = 4,5 làm tròn kiểu Math.round (nửa lên) thành 5; round() của Python sẽ cho 4",
+      "face": { "x": 10.5, "y": 20.5, "w": 41, "h": 30 },
+      "bounds": { "x": 0, "y": 0, "w": 640, "h": 480 },
+      "scale": 1.5,
+      "want": { "x": 0, "y": 5, "w": 62, "h": 62 }
+    },
+    {
+      "name": "mặt vượt mép trái của crop (mặt bị cắt): dời vào trong",
+      "face": { "x": -40, "y": 50, "w": 120, "h": 140 },
+      "bounds": { "x": 0, "y": 0, "w": 400, "h": 300 },
+      "scale": 1.6,
+      "want": { "x": 0, "y": 8, "w": 224, "h": 224 }
+    }
+  ]
+}

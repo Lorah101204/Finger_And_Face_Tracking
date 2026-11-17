@@ -3,8 +3,9 @@ import { softmax } from '../../src/classify/classifierProtocol'
 import { decideSubject, subjectText } from '../../src/classify/subjectRule'
 import { DEFAULTS, isDemoClassifier } from '../../src/core/config'
 
-// CLS-02 bước 2 (mục 7.23): quy tắc unknown thuần, không có đầu vào chuyển động: max(prob) < 0,7, cạnh ROI < 96 px,
-// mặt partial nhìn thấy dưới 60 %; ngược lại argmax theo thứ tự nhãn [person, mannequin].
+// CLS-02 bước 2 (mục 7.23): quy tắc unknown thuần, không có đầu vào chuyển động: cạnh ROI < 96 px, mặt partial nhìn
+// thấy dưới 60 %; ngược lại argmax theo thứ tự nhãn [person, mannequin]. CLS-05 (D-069, mục 7.42): ngưỡng theo nhãn bất
+// đối xứng (person 0,7, mannequin 0,9) và số kết quả đã gộp tối thiểu (person 1, mannequin 2).
 describe('decideSubject', () => {
   it('chưa có kết quả → unknown, độ tin cậy 0', () => {
     expect(decideSubject({ probs: null, roiShortPx: 300 })).toEqual({
@@ -15,15 +16,11 @@ describe('decideSubject', () => {
     expect(decideSubject({ probs: [], roiShortPx: 300 }).reason).toBe('no-result')
   })
 
-  it('argmax theo nhãn với độ tin cậy = max(prob); dưới ngưỡng 0,7 → unknown low-confidence', () => {
+  it('argmax theo nhãn với độ tin cậy = max(prob); person dưới 0,7 → unknown low-confidence', () => {
     expect(decideSubject({ probs: [0.93, 0.07], roiShortPx: 300 })).toEqual({
       subjectType: 'person',
       confidence: 0.93,
       reason: null,
-    })
-    expect(decideSubject({ probs: [0.2, 0.8], roiShortPx: 300 })).toMatchObject({
-      subjectType: 'mannequin',
-      confidence: 0.8,
     })
     expect(decideSubject({ probs: [0.69, 0.31], roiShortPx: 300 })).toMatchObject({
       subjectType: 'unknown',
@@ -32,6 +29,43 @@ describe('decideSubject', () => {
     })
     expect(decideSubject({ probs: [0.7, 0.3], roiShortPx: 300 }).subjectType).toBe('person')
     expect(decideSubject({ probs: [0.5, 0.5], roiShortPx: 300 }).reason).toBe('low-confidence')
+  })
+
+  it('CLS-05: mannequin cần ≥ 0,9 và ≥ 2 kết quả đã gộp; 0,8 hay một kết quả lẻ chỉ là unknown', () => {
+    expect(DEFAULTS.classifier.thresholds).toEqual({ person: 0.7, mannequin: 0.9 })
+    expect(DEFAULTS.classifier.minResults).toEqual({ person: 1, mannequin: 2 })
+    // Trước CLS-05 [0,2, 0,8] là "Hình nộm 80 %": đúng loại nhầm người dùng báo, nay là chưa phân loại.
+    expect(decideSubject({ probs: [0.2, 0.8], roiShortPx: 300, count: 4 })).toMatchObject({
+      subjectType: 'unknown',
+      confidence: 0.8,
+      reason: 'low-confidence',
+    })
+    expect(decideSubject({ probs: [0.05, 0.95], roiShortPx: 300, count: 1 })).toMatchObject({
+      subjectType: 'unknown',
+      confidence: 0.95,
+      reason: 'few-results',
+    })
+    // count thiếu coi là 1.
+    expect(decideSubject({ probs: [0.05, 0.95], roiShortPx: 300 }).reason).toBe('few-results')
+    expect(decideSubject({ probs: [0.05, 0.95], roiShortPx: 300, count: 2 })).toEqual({
+      subjectType: 'mannequin',
+      confidence: 0.95,
+      reason: null,
+    })
+    expect(decideSubject({ probs: [0.1, 0.9], roiShortPx: 300, count: 3 }).subjectType).toBe(
+      'mannequin',
+    )
+    // person chỉ cần một kết quả.
+    expect(decideSubject({ probs: [0.9, 0.1], roiShortPx: 300, count: 1 }).subjectType).toBe(
+      'person',
+    )
+    // Ngưỡng và số kết quả ghi đè được theo từng nhãn.
+    expect(
+      decideSubject(
+        { probs: [0.2, 0.8], roiShortPx: 300, count: 1 },
+        { thresholds: { mannequin: 0.75 }, minResults: { mannequin: 1 } },
+      ).subjectType,
+    ).toBe('mannequin')
   })
 
   it('ROI nhỏ hơn minRoiPx → unknown dù rất chắc; ngưỡng theo DEFAULTS và ghi đè được', () => {
@@ -46,7 +80,8 @@ describe('decideSubject', () => {
       decideSubject({ probs: [0.99, 0.01], roiShortPx: 50 }, { minRoiPx: 40 }).subjectType,
     ).toBe('person')
     expect(
-      decideSubject({ probs: [0.75, 0.25], roiShortPx: 300 }, { unknownThreshold: 0.8 }).reason,
+      decideSubject({ probs: [0.75, 0.25], roiShortPx: 300 }, { thresholds: { person: 0.8 } })
+        .reason,
     ).toBe('low-confidence')
   })
 
@@ -78,6 +113,10 @@ describe('decideSubject', () => {
       decideSubject({ probs: [0.1, 0.9], roiShortPx: 300 }, { labels: ['mannequin', 'person'] })
         .subjectType,
     ).toBe('person')
+    expect(
+      decideSubject({ probs: [0.9, 0.1], roiShortPx: 300 }, { labels: ['mannequin', 'person'] })
+        .reason,
+    ).toBe('few-results')
     expect(
       decideSubject({ probs: [0.1, 0.9], roiShortPx: 300 }, { labels: ['person'] }).reason,
     ).toBe('no-result')

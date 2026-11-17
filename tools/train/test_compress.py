@@ -56,14 +56,22 @@ class AgreementTest(unittest.TestCase):
         self.assertTrue(any("giữ lại" in w for w in why))
 
     def test_argmax_change_fails_on_its_own(self) -> None:
-        # p 0,501 → 0,499: cả hai đều unknown (không lật nhãn), Δp 0,002, Δmargin 0,008: chỉ cổng argmax bắt được.
-        a = agreement([[0.004, 0.0]], [[-0.004, 0.0]], ["blend:0.5"])
+        # p 0,52 → 0,48: cả hai đều unknown (không lật nhãn), Δp 0,04 vượt 0,02 nên nới cổng Δp để chỉ còn argmax bắt.
+        a = agreement([[0.08, 0.0]], [[-0.08, 0.0]], ["blend:0.5"])
+        self.assertEqual(a["nTies"], 0)
         self.assertEqual(a["argmax"], 0.0)
         self.assertEqual(a["decisionFlips"], 0)
-        ok, why = passes(a)
+        ok, why = passes(a, {"maxAbsDp": 0.05})
         self.assertFalse(ok)
         self.assertEqual(len(why), 1)
         self.assertTrue(why[0].startswith("argmax"))
+
+    def test_argmax_ignores_fp32_ties(self) -> None:
+        # CLS-07 (D-072): p 0,501 → 0,499 (fp32 hòa trong ±0,01): không tính vào argmax; đầu vào khác vẫn được tính.
+        a = agreement([[0.004, 0.0], [2.0, 0.0]], [[-0.004, 0.0], [2.0, 0.0]], ["aug", "real:train"])
+        self.assertEqual(a["nTies"], 1)
+        self.assertEqual(a["argmax"], 1.0)
+        self.assertTrue(passes(a)[0])
 
     def test_lengths_must_match(self) -> None:
         with self.assertRaises(ValueError):
@@ -71,7 +79,10 @@ class AgreementTest(unittest.TestCase):
 
     def test_shown_matches_the_unknown_rule(self) -> None:
         self.assertEqual(shown([0.93, 0.07]), 0)
-        self.assertEqual(shown([0.2, 0.8]), 1)
+        # CLS-05: hình nộm cần ≥ 0,9.
+        self.assertEqual(shown([0.2, 0.8]), -1)
+        self.assertEqual(shown([0.05, 0.95]), 1)
+        self.assertEqual(shown([0.2, 0.8], 0.7), 1)
         self.assertEqual(shown([0.69, 0.31]), -1)
 
 

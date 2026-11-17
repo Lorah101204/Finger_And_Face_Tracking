@@ -124,6 +124,20 @@ export const DEFAULTS = {
     fullFaceMarginRatio: 0.04,
     /** D-008: GPU 14 ms so với CPU 39 ms mỗi ảnh. */
     delegate: 'GPU' as 'CPU' | 'GPU',
+    /**
+     * CLS-06 (D-071): tín hiệu sống một chiều từ chớp mắt. Worker mặt xuất blendshapes eyeBlinkLeft/Right (cùng buffer
+     * giới hạn, không thêm đường đọc ảnh); điểm nhắm = min của hai mắt. Một lần chớp = mặt mục tiêu đã thấy mở
+     * (≤ openMax) rồi nhắm (≥ closedMin) rồi mở lại trong maxClosedMs. Có chớp trong holdMs gần nhất của cùng mặt, cùng
+     * epoch thì nhãn là "Người" bất kể classifier; không chớp KHÔNG BAO GIỜ suy ra hình nộm (người đứng yên vẫn để
+     * classifier quyết). Ngưỡng chưa hiệu chỉnh với webcam thật. `?liveness=0|1` đè cho một lần mở.
+     */
+    liveness: {
+      enabled: true,
+      openMax: 0.3,
+      closedMin: 0.5,
+      maxClosedMs: 500,
+      holdMs: 10_000,
+    },
   },
   /** CLS-01 (I8): dataset mode chỉ lưu crop vùng mở; nhịp lưu và số mẫu tối đa mỗi phiên; ngưỡng cỡ theo cạnh ngắn px. */
   dataset: {
@@ -134,7 +148,28 @@ export const DEFAULTS = {
   },
   classifier: {
     targetHz: 4,
-    unknownThreshold: 0.7,
+    /**
+     * CLS-05 (D-069, thay ngưỡng chung unknownThreshold 0,7 của CLS-02): ngưỡng theo nhãn, bất đối xứng. Gọi nhầm người
+     * thật là hình nộm (phản hồi của người dùng) nặng hơn chiều ngược lại, nên "Hình nộm" cần xác suất đã làm mượt ≥ 0,9
+     * và ít nhất 2 kết quả trong cửa sổ làm mượt; "Người" giữ 0,7 và 1 kết quả. Dưới ngưỡng là "Khuôn mặt chưa phân
+     * loại". Chưa hiệu chỉnh được vì tập val và test chưa có người (classifier-report mục 6).
+     */
+    thresholds: { person: 0.7, mannequin: 0.9 },
+    minResults: { person: 1, mannequin: 2 },
+    /**
+     * CLS-05 (D-069): nhãn quyết định trên trung bình xác suất của các kết quả cùng epoch và cùng mục tiêu (cùng mặt) trong
+     * windowMs tính lùi từ kết quả mới nhất, tối đa maxResults (4 Hz: khoảng 1 s). Chỉ gộp ảnh tĩnh, không dùng chuyển động.
+     */
+    smoothing: { windowMs: 1200, maxResults: 4 },
+    /**
+     * CLS-05 (D-070, thay "bitmap thứ hai của cùng crop" của D-044): classifier nhìn crop quanh khuôn mặt đã validate
+     * ('face') thay vì cả vùng mở ('region'): hình vuông cạnh faceCropScale × cạnh dài bbox landmark, dời vào trong
+     * cameraRect của mask (không bao giờ ra ngoài), ô lỗ vẫn tô xám. Không có mặt thì không phân loại (nhãn chỉ gắn vào
+     * mặt). `?clsCrop=region` đè cho một lần mở (so sánh, e2e của stub trên nguồn tổng hợp không có mặt).
+     */
+    crop: 'face' as 'face' | 'region',
+    faceCropScale: 1.6,
+    /** Cạnh ngắn tối thiểu (px camera) của crop gửi classifier; nhỏ hơn thì không gửi và nhãn là unknown. */
     minRoiPx: 96,
     /**
      * PERF-03 (D-062, thay thứ tự EP của D-013): chỉ EP wasm. Đo lại với model thật (MobileNetV3-Small, Chrome 154,

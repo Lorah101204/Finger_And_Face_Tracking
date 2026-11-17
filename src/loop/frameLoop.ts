@@ -17,6 +17,12 @@
 // của frame đó (canvas giữ nguyên nền trắng đã vẽ); `paints` đếm số frame có vẽ để đo.
 // BRAND-01: lớp logo (deps.logo) vẽ trong nền tĩnh; vùng mở đè video lên theo ô (compositor). Công tắc hay ảnh sẵn
 // sàng (version) đổi là một lần vẽ lại rồi lại tĩnh.
+// CLS-05 (D-069, D-070): ở chế độ crop 'face' (mặc định) classifier nhận buffer riêng dựng từ crop vuông quanh mặt mục
+// tiêu (classify/faceCrop.ts, nằm trong cameraRect, qua cùng restrictedFrame), không còn bitmap thứ hai của cả vùng; không
+// có mặt thì không phân loại. Xác suất được làm mượt theo mục tiêu (subjectSmoother) rồi quyết định bằng ngưỡng bất đối
+// xứng (subjectRule); nhãn chỉ gắn vào mặt có tâm nằm trong crop đã phân loại. 'region' giữ cách của CLS-02.
+// CLS-06 (D-071): mỗi kết quả mặt cho điểm nhắm mắt của mặt mục tiêu vào bộ phát hiện chớp (face/blinkLiveness.ts);
+// mặt mục tiêu vừa chớp trong holdMs thì nhãn là "Người" (live) bất kể classifier. Một chiều: không chớp không đổi gì.
 import { createPaintGate, emptyPaintKey } from './paintGate'
 import { DEFAULTS } from '../core/config'
 import type { EpochCounter } from '../core/epoch'
@@ -41,13 +47,16 @@ import type {
 import type { FrameSource } from '../camera/frameSource'
 import type { Probes } from '../debug/probes'
 import type { FaceClient, PendingTask } from '../face/faceClient'
+import { createBlinkLiveness, type LivenessSnapshot } from '../face/blinkLiveness'
 import { validateFace, type RejectReason } from '../face/faceValidate'
 import type { HandPipeline } from '../hands/handPipeline'
 import { cachedCells } from '../core/cells'
 import type { Layout } from '../core/coords'
 import { fingertipsGuidance, toPoints } from '../hands/fingertips'
 import type { ClassifierClient, ClassifyTask } from '../classify/classifierClient'
+import { faceCropRect, faceInCrop, pickTargetFace } from '../classify/faceCrop'
 import { decideSubject } from '../classify/subjectRule'
+import { createSubjectSmoother } from '../classify/subjectSmoother'
 import { buildMask } from '../mask/buildMask'
 import { render, type LogoPainter } from '../mask/compositor'
 import type { RestrictedFrameBuilder, RestrictedStats } from '../mask/restrictedFrame'
@@ -68,13 +77,21 @@ export type FaceGateStats = {
   lastAccepted: { taskId: number; epoch: number; roiCam: Rect; ageMs: number; faces: number } | null
 }
 
+export type ClassifierCrop = 'face' | 'region'
+
 /** CLS-02: kết quả phân loại gần nhất được gate nhận cho epoch đang mở. */
 export type SubjectLabel = {
   epoch: number
   taskId: number
   frameId: number
-  /** [person, mannequin] */
+  /** [person, mannequin]; CLS-05: trung bình đã làm mượt của `count` kết quả cùng mục tiêu, là đầu vào của quyết định. */
   probs: number[]
+  /** CLS-05: xác suất của riêng kết quả mới nhất và số kết quả đã gộp vào `probs`. */
+  raw: number[]
+  count: number
+  /** CLS-05: crop camera của kết quả mới nhất (crop quanh mặt, hay cameraRect với 'region') và chế độ crop. */
+  roiCam: Rect
+  crop: ClassifierCrop
   roiShortPx: number
   /** performance.now() lúc nhận và tuổi kết quả lúc nhận */
   at: number
@@ -107,6 +124,8 @@ export type LoopSnapshot = {
   /** CLS-02: gate phân loại và nhãn đang gắn (null khi chưa có, đóng vùng hay hết hạn). */
   classifyGate: ClassifyGateStats
   subject: SubjectLabel | null
+  /** CLS-06: bộ phát hiện chớp mắt của mặt mục tiêu; live đúng khi mặt vừa chớp trong holdMs. */
+  liveness: LivenessSnapshot & { enabled: boolean; live: boolean }
   /** HAND-01: hand pipeline đang chạy (nguồn cửa sổ là tay) và HandFrame mới nhất. */
   handsActive: boolean
   hands: HandFrame | null
@@ -155,8 +174,15 @@ export type FrameLoopDeps = {
   restricted?: RestrictedFeed
   /** FACE-01: nhận buffer khi rảnh; vòng lặp bật/tắt accepting và rejectAll theo vùng mở. */
   face?: FaceClient
-  /** CLS-02: nhận bitmap thứ hai của cùng crop khi rảnh (3 đến 5 Hz, cạnh ROI ≥ minRoiPx); cùng gate epoch, tuổi, mask. */
+  /**
+   * CLS-02: nhận buffer khi rảnh (3 đến 5 Hz, cạnh crop ≥ minRoiPx); cùng gate epoch, tuổi, mask. CLS-05: buffer là crop
+   * quanh mặt mục tiêu ('face') hay bitmap thứ hai của cả vùng ('region'), theo `classifierCrop`.
+   */
   classifier?: ClassifierClient
+  /** CLS-05 (D-070): chế độ crop của classifier; mặc định DEFAULTS.classifier.crop ('face'). */
+  classifierCrop?: ClassifierCrop
+  /** CLS-06 (D-071): bật tín hiệu sống từ chớp mắt; mặc định DEFAULTS.face.liveness.enabled. */
+  liveness?: boolean
   /** HAND-01: nhận frame gốc mỗi frame khi settings.windowSource là 'hands'; reset khi rời nguồn tay. */
   hands?: HandPipeline
   /** INT-01: lý do đóng theo camera và tab (no-camera, tab-hidden); đóng ngay khi gate báo, không chờ frame kế. */
@@ -192,6 +218,9 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     lang,
     logo,
   } = deps
+  const clsCrop: ClassifierCrop = deps.classifierCrop ?? DEFAULTS.classifier.crop
+  const livenessOn = deps.liveness ?? DEFAULTS.face.liveness.enabled
+  const personIndex = DEFAULTS.classifier.labels.indexOf('person')
   const consume = restricted?.consume ?? ((f: RestrictedFrame) => f.input.close())
   const buildIntervalMs = 1000 / (restricted?.targetHz ?? DEFAULTS.face.targetHz)
   // FACE-02: mặt giữ tới kết quả kế; hết hạn nếu worker ngừng trả (4 lần tuổi tối đa) để overlay không đứng hình.
@@ -236,6 +265,12 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
   // CLS-02: nhãn gần nhất của epoch đang mở; gắn vào mặt qua decideSubject, hết hạn theo classifier.labelMaxAgeMs.
   let subject: SubjectLabel | null = null
   let lastClassifyAt = -Infinity
+  // CLS-05: frame camera của buffer classifier gần nhất (chế độ 'face' dựng buffer riêng, mỗi frame tối đa một lần).
+  let lastClsFrameId = -1
+  const smoother = createSubjectSmoother()
+  // CLS-06: chớp mắt của mặt mục tiêu; lastLive để gắn lại nhãn khi tín hiệu sống vừa bật hay vừa hết hạn.
+  const blink = createBlinkLiveness()
+  let lastLive = false
   const classifyGate: ClassifyGateStats = {
     accepted: 0,
     rejected: { epoch: 0, 'rejected-task': 0, stale: 0, 'no-mask': 0 },
@@ -265,6 +300,9 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     faces = NO_FACES
     facesAt = -Infinity
     subject = null
+    smoother.reset()
+    blink.reset()
+    lastLive = false
     if (face) {
       face.rejectAll()
       face.setAccepting(openEpoch >= 0)
@@ -362,20 +400,49 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
       ageMs: now - result.ts,
       faces: out.faces.length,
     }
+    // CLS-06: điểm nhắm mắt của mặt mục tiêu (chỉ mặt full: mặt bị cắt có thể mất phần mắt) vào bộ phát hiện chớp,
+    // theo ts của frame; kịch bản blink (?debug=1) thay điểm bằng 1 cho frame trong cửa sổ giả lập.
+    if (livenessOn) {
+      const t = pickTargetFace(out.faces)
+      if (t && t.status === 'full' && t.eyesClosed !== undefined) {
+        const w = probes?.blinkWindow
+        const score = w && result.ts >= w.from && result.ts <= w.to ? 1 : t.eyesClosed
+        blink.push(score, result.ts, t.bboxCam)
+      }
+    }
     faces = labelFaces(out.faces)
     facesAt = now
   }
   face?.subscribeResults(onFaceResult)
 
-  /** CLS-02 bước 5: nhãn của epoch hiện tại gắn vào từng mặt qua quy tắc unknown (không dùng chuyển động). */
+  /**
+   * CLS-02 bước 5: nhãn của epoch hiện tại gắn vào từng mặt qua quy tắc unknown (không dùng chuyển động). CLS-05: với
+   * crop 'face' nhãn chỉ gắn vào mặt có tâm nằm trong crop đã phân loại; mặt khác là unknown (chưa có kết quả của nó).
+   */
   function labelFaces(list: ValidatedFace[]): ValidatedFace[] {
     // PERF-04: không có mặt thì trả cùng một mảng rỗng, để kết quả mặt hay nhãn không mặt nào không đổi khóa vẽ
     // (paintGate so mảng faces theo đối tượng) và vòng lặp không vẽ lại hình y hệt ở nhịp worker.
+    const liveNow = livenessOn && blink.live(performance.now())
+    lastLive = liveNow
     if (list.length === 0) return NO_FACES
     return list.map((f) => {
+      // CLS-06 (D-071): mặt mục tiêu vừa chớp mắt là người, bất kể classifier; confidence giữ p(person) đã làm mượt của
+      // classifier khi có (chữ hiển thị không kèm phần trăm, subjectText).
+      if (liveNow && blink.isTarget(f.bboxCam)) {
+        const p =
+          subject && (subject.crop === 'region' || faceInCrop(f.bboxCam, subject.roiCam))
+            ? subject.probs[personIndex]
+            : undefined
+        return { ...f, subjectType: 'person' as const, confidence: p, live: true }
+      }
+      const s =
+        subject && (subject.crop === 'region' || faceInCrop(f.bboxCam, subject.roiCam))
+          ? subject
+          : null
       const d = decideSubject({
-        probs: subject?.probs ?? null,
-        roiShortPx: subject?.roiShortPx ?? 0,
+        probs: s?.probs ?? null,
+        count: s?.count ?? 0,
+        roiShortPx: s?.roiShortPx ?? 0,
         faceStatus: f.status,
         visible: f.visible,
       })
@@ -401,11 +468,18 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
       return
     }
     classifyGate.accepted++
+    // CLS-05 (D-069): gộp với các kết quả cùng mục tiêu trong cửa sổ làm mượt; mục tiêu đổi thì smoother tự bắt đầu lại.
+    smoother.push(result.probs, now, task.roiCam)
+    const smoothed = smoother.current() ?? { probs: [...result.probs], count: 1 }
     subject = {
       epoch: result.epoch,
       taskId: result.taskId,
       frameId: result.frameId,
-      probs: [...result.probs],
+      probs: smoothed.probs,
+      raw: [...result.probs],
+      count: smoothed.count,
+      roiCam: { ...task.roiCam },
+      crop: clsCrop,
       roiShortPx: Math.min(task.roiCam.w, task.roiCam.h),
       at: now,
       ageMs: now - result.ts,
@@ -502,8 +576,11 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
     if (faces.length > 0 && now - facesAt > faceExpiryMs) faces = NO_FACES
     if (subject && now - subject.at > DEFAULTS.classifier.labelMaxAgeMs) {
       subject = null
+      smoother.reset()
       faces = labelFaces(faces)
     }
+    // CLS-06: tín hiệu sống vừa hết hạn (holdMs không chớp): gắn lại nhãn theo classifier.
+    if (livenessOn && blink.live(now) !== lastLive) faces = labelFaces(faces)
     const mask = reveal.kind === 'open' ? reveal.mask : null
     // BRAND-01: lớp logo (null khi công tắc tắt); vùng mở đè video lên phần logo trong ô mở (compositor).
     const logoNow = logo?.() ?? null
@@ -565,11 +642,15 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
       const stamp = frame.lastStamp
       const wantFace = face ? face.canAccept() : false
       const wantProbe = probes?.wantsRestrictedFrame(now) ?? false
-      // CLS-02: bitmap thứ hai của cùng crop cho classifier khi rảnh, đến nhịp 3 đến 5 Hz và cạnh ROI đủ lớn.
+      const clsDue =
+        !!classifier && classifier.canAccept() && now - lastClassifyAt >= classifier.minIntervalMs()
+      // CLS-05: mặt classifier nhìn (full lớn nhất, không thì partial lớn nhất) trong các mặt đã validate của epoch này;
+      // bbox của nó cũng đi vào CropMeta.face của dataset mode ở cả hai chế độ crop.
+      const target = pickTargetFace(faces)
+      // CLS-02 ('region'): bitmap thứ hai của cùng crop cho classifier khi rảnh, đến nhịp 3 đến 5 Hz và cạnh ROI đủ lớn.
       const wantCls =
-        !!classifier &&
-        classifier.canAccept() &&
-        now - lastClassifyAt >= classifier.minIntervalMs() &&
+        clsDue &&
+        clsCrop === 'region' &&
         Math.min(mask.cameraRect.w, mask.cameraRect.h) >= DEFAULTS.classifier.minRoiPx
       const forFace = wantFace || wantProbe || !face
       const copies = (forFace ? 1 : 0) + (wantCls ? 1 : 0)
@@ -583,7 +664,9 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
       ) {
         lastBuiltFrameId = stamp.frameId
         lastBuildAt = now
-        const r = restricted.builder.build(frame, mask, stamp, epoch.current, nextTaskId, copies)
+        const r = restricted.builder.build(frame, mask, stamp, epoch.current, nextTaskId, copies, {
+          faceCam: target?.bboxCam ?? null,
+        })
         if (r.kind === 'ok') {
           nextTaskId++
           let i = 0
@@ -597,6 +680,33 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
           if (wantCls && classifier) {
             const c = r.frames[i]
             if (c && classifier.submit(c) === 'submitted') {
+              lastClassifyAt = now
+              if (probes) probes.counters.classifierSubmitted++
+            }
+          }
+        }
+      }
+      // CLS-05 (D-070, 'face'): buffer riêng từ crop vuông quanh mặt mục tiêu, nằm trong cameraRect (faceCropRect), qua
+      // cùng builder nên ô lỗ vẫn tô xám và probe vẫn đo; crop nhỏ hơn minRoiPx thì không gửi. Không có mặt thì không
+      // phân loại: nhãn chỉ có nghĩa trên một mặt đã validate.
+      if (
+        clsDue &&
+        clsCrop === 'face' &&
+        classifier &&
+        target &&
+        stamp &&
+        frame.drawable &&
+        stamp.frameId !== lastClsFrameId
+      ) {
+        const roi = faceCropRect(target.bboxCam, mask.cameraRect, DEFAULTS.classifier.faceCropScale)
+        if (roi && Math.min(roi.w, roi.h) >= DEFAULTS.classifier.minRoiPx) {
+          const r = restricted.builder.build(frame, mask, stamp, epoch.current, nextTaskId, 1, {
+            roi,
+          })
+          if (r.kind === 'ok') {
+            nextTaskId++
+            lastClsFrameId = stamp.frameId
+            if (classifier.submit(r.frames[0]) === 'submitted') {
               lastClassifyAt = now
               if (probes) probes.counters.classifierSubmitted++
             }
@@ -656,6 +766,11 @@ export function createFrameLoop(deps: FrameLoopDeps): FrameLoop {
         output,
         classifyGate: { ...classifyGate, rejected: { ...classifyGate.rejected } },
         subject,
+        liveness: {
+          ...blink.snapshot(),
+          enabled: livenessOn,
+          live: livenessOn && blink.live(performance.now()),
+        },
         faceGate: {
           ...faceGate,
           rejected: { ...faceGate.rejected },

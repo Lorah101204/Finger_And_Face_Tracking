@@ -227,6 +227,8 @@ export const vi = {
     mannequin: 'Hình nộm',
     unknown: 'Khuôn mặt chưa phân loại',
     demo: ' · demo',
+    /** CLS-06: hậu tố khi nhãn "Người" đến từ tín hiệu sống (chớp mắt). */
+    live: ' · chớp mắt',
   },
   settings: {
     title: 'Cài đặt',

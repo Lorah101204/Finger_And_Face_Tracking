@@ -702,7 +702,7 @@ flowchart TD
 
 ### 5.11 Person / mannequin classification flow
 
-The classifier uses exactly the same crop as the face, receives its own `ImageBitmap` because bitmaps are transferred, runs less often and attaches the label to the validated face of the same epoch.
+Until CLS-05 the classifier used exactly the same crop as the face. Since CLS-05 (D-070) it receives its own buffer: a square crop around the validated target face, built by the same `restrictedFrame` builder inside the reveal-region box (holes padded gray), at 3 to 5 Hz. Its probabilities are smoothed per target and decided by asymmetric thresholds (D-069). Since CLS-06 (D-071) a blink of the target face, read from the face worker's blendshapes on the restricted buffer, labels that face person regardless of the classifier; the absence of a blink is never evidence of a mannequin. `?clsCrop=region` restores the CLS-02 path (second bitmap of the whole-region crop).
 
 ```mermaid
 sequenceDiagram
@@ -710,17 +710,22 @@ sequenceDiagram
   participant RF as restrictedFrame
   participant CC as ClassifierClient
   participant CW as classifier.worker
-  participant FC as FaceClient
-  FRAMELOOP->>RF: buildRestrictedFrame video, mask, stamp
-  RF-->>FRAMELOOP: same crop, a separate ImageBitmap for the classifier
-  opt ClassifierClient idle, due at 3 to 5 Hz, ROI side ≥ 96 px
+  participant FW as face.worker
+  participant BL as blinkLiveness
+  FRAMELOOP->>RF: build whole-region crop for the face worker
+  FW-->>FRAMELOOP: landmarks and eyeBlink scores, validated into faces with bboxCam
+  FRAMELOOP->>BL: eyes-closed score of the target face, frame ts
+  opt ClassifierClient idle, due at 3 to 5 Hz, a target face exists
+    FRAMELOOP->>RF: build face crop, square 1.6 x face bbox inside cameraRect
+    RF-->>FRAMELOOP: RestrictedFrame of the face crop, side at least 96 px
     FRAMELOOP->>CC: submit RestrictedFrame
     CC->>CW: detect, transfer ImageBitmap
     CW-->>CC: ClassifyResult taskId, epoch, probs, inferMs
-    CC->>CC: unknown if max prob below 0.7, small ROI or partial face
-    CC->>FC: attach subjectType to the ValidatedFace of the same epoch, nearest frameId
+    CC-->>FRAMELOOP: result through the epoch, age and region gate
+    FRAMELOOP->>FRAMELOOP: smooth probs of the same target, person needs 0.7, mannequin needs 0.9 over 2 results
   end
-  Note over CC,FC: Closing the region clears the label. A label never outlives the result age. Motion is never used to infer the label.
+  FRAMELOOP->>FRAMELOOP: label the face whose center lies in the classified crop, person when it blinked within 10 s
+  Note over FRAMELOOP,BL: Closing the region or a new epoch clears the label, the smoothing and the blink state. A blink only ever adds evidence for person.
 ```
 
 ### 5.12 Dataset mode flow
@@ -1684,6 +1689,89 @@ Publishing a retrained model: `export_onnx.py --manifest` (prints the reminder),
 
 Tests: section 7.41.
 
+#### CLS-05 Classification on a face crop with asymmetric, smoothed labels
+
+Depends on: CLS-02 (pipeline, unknown rule), CLS-03 (trained model), MASK-02 (restricted builder), FACE-02 (validated faces). Goal: fewer real people labeled mannequin, without new data and without retraining.
+
+Motivation (2026-11-18): users report real people labeled "Hình nộm" (Mannequin). Two causes in the pipeline, besides the first model's tiny dataset (one person, three stand-ins, classifier-report section 6): (1) the classifier saw the whole reveal region. With the hand source that region is the convex hull of the fingertips, so the crop always holds the user's hands at its vertices, shoulders, background and gray holes, while the model was trained on centered crops where the face fills the window and labels hands-only crops mannequin 0.84 to 0.999 (classifier-report section 4.1); (2) one result above 0.7 set the label, symmetrically for both classes.
+
+Measurements (2026-11-18, Chromium headless shell, trained model, `face.png` on the magenta synthetic background, mouse window of N cells around the face, 12 to 24 results each):
+
+| Window | Region crop (CLS-02) | p(person), region crop | Face crop (CLS-05) | p(person), face crop |
+|---|---|---|---|---|
+| 12 cells | 240 × 240 | 1.000 | 234 × 234 | 1.000 |
+| 16 cells | 320 × 320 | 0.979 | 235 × 235 | 1.000 |
+| 24 cells | 480 × 480 | 0.712 | 236 × 236 | 1.000 |
+| 32 cells | 640 × 640 | 0.936 | 229 × 229 | 1.000 |
+
+Design (D-069, D-070):
+
+- `classify/faceCrop.ts`: `pickTargetFace` (largest full face, else largest partial, by `ValidatedFace.bboxCam`), `faceCropRect(bbox, cameraRect, 1.6)` (square of 1.6 × the long side around the center, shifted inside `cameraRect`, cut to it on an axis that does not fit, integer px), `faceInCrop`.
+- `restrictedFrame.build(..., copies, { roi, faceCam })`: `roi` is clipped to `cameraRect` before the 1:1 read, holes it overlaps are padded gray, the probe gets `sub: true`, the dataset tap does not, `subBuilds` and `lastSubRoiCam` count it apart; `faceCam` goes into `CropMeta.face` of whole-region builds.
+- `frameLoop`: in `'face'` mode (default) a classifier buffer is built only when a target face exists and its crop side is ≥ 96 px; the result is smoothed (`classify/subjectSmoother.ts`, 1200 ms, at most 4 results, restart on a new target) and attached only to the face whose bbox center lies inside the classified crop. `SubjectLabel` gains `raw`, `count`, `roiCam`, `crop`.
+- `subjectRule.decideSubject`: thresholds per label `{ person: 0.7, mannequin: 0.9 }`, minimum results `{ person: 1, mannequin: 2 }`, new reason `few-results`.
+- `?clsCrop=face|region` on `#/app` (StagePage).
+- Dataset and training: `SampleMeta.face`; `tools/train/dataset.py` `face_crop_box` and `classifier_view` cut samples like the app (`--crop face` default in `train.py` and `eval.py`, bbox jitter while training, whole crop for older samples), more runtime-like augmentation (white balance, blur, JPEG, gray edge holes); `metrics.THRESHOLDS`, `eval.py --person-threshold --mannequin-threshold`, `compress_select` with the threshold of the winning class; `export_onnx.py` records `train.crop`.
+
+Steps: 1. thresholds, smoother, unit tests; 2. face crop, builder `roi`, loop wiring, unit and e2e tests; 3. dataset metadata and the Python side with a shared fixture and a parity test; 4. measurements above; 5. D-069, D-070, README, classifier-report, dataset.md.
+
+Done criteria: the e2e of section 7.42 pass; on `face.png` the face crop keeps p(person) ≥ 0.95 in a 24-cell window where the region crop gives 0.712; in face mode nothing is classified without a face; the hard gate audit stays clean with the classifier buffer included.
+
+Not done (needs data): calibrating the thresholds on a val split with people, retraining on face crops captured with `SampleMeta.face`.
+
+Tests: section 7.42.
+
+#### CLS-06 One-way liveness from blinking
+
+Depends on: CLS-05 (target face, label attachment), FACE-01 (face worker). Goal: a real person who blinks is labeled person even when the classifier is wrong, with no new data or model.
+
+Requirement change (2026-11-18, the owner's request): section 5.11 and the plan's test "Person standing still and mannequin being moved: classification does not rely on a motion/no-motion rule" forbade motion as an input. D-071 allows a blink as positive evidence for person only: a person standing still still blinks, a mannequin being moved does not, so both special cases stay correct; the absence of a blink is never evidence of a mannequin.
+
+Design (D-071):
+
+- `face.worker`: `outputFaceBlendshapes` when init `blendshapes` is set (`DEFAULTS.face.liveness.enabled`, `?liveness=0|1`), `FaceResult.faces[].blink = [eyeBlinkLeft, eyeBlinkRight]`; `faceValidate` sets `eyesClosed` = their minimum. Same restricted buffer, no new path to the frame (I1).
+- `face/blinkLiveness.ts` (pure): open (≤ 0.3) → closed (≥ 0.5) → open within 500 ms is a blink; hysteresis in between; a longer closure or a closure before any open does not count; a new target, time going backwards, closing or a new epoch resets; `live(now)` for 10 s after a blink.
+- `frameLoop`: feeds the target full face of each validated face result; the target face is labeled person with `live: true` while live; relabels when the state expires; `loop.snapshot().liveness`.
+- Text: `subjectText` shows "Người · chớp mắt" / "Person · blinked" without a percentage (`subject.live` in both dictionaries); the guidance names it.
+- Debug: scenario `blink(ms)` (`probes.blinkWindow`) scores the frames of the next ms as closed.
+
+Measurements (2026-11-18, headless shell, GPU delegate on SwiftShader): face worker p50 136.2 ms with blendshapes, 134.3 ms without; `face.png` (eyes open) stays below the open threshold.
+
+Done criteria: the cases of section 7.43 pass; a still face is never live; a simulated blink labels the face person and closing the region clears it.
+
+Not done (needs a webcam): calibrating `openMax`, `closedMin`, `maxClosedMs` on real blinks and on mannequins being moved; measuring how often a real blink is caught at the face rate (about 12 Hz, a blink lasts 100 to 400 ms).
+
+Tests: section 7.43.
+
+#### CLS-07 Retraining on reviewed Open Images faces
+
+Depends on: CLS-05 (face crop, `SampleMeta.face`, `tools/train --crop face`), CLS-03 (training and evaluation tools), CLS-04 (compression), REL-02 (publishing). Goal: a model that recognizes mannequins and stops calling people mannequins, without participants or mannequins in front of the camera.
+
+Measurements (2026-11-18, reviewed test split of 438 people, 75 mannequins, dolls or statues, 155 unusable faces; details in `docs/classifier-report.md` section 5.4 and `docs/dataset.md` section 9):
+
+| Model and path | People → "mannequin" | Mannequins recognized | Two-class precision person / mannequin |
+|---|---|---|---|
+| CLS-03 model, region crop, 0.7 (before CLS-05) | 15.1 % | 30.7 % | 0.878 / 0.258 |
+| CLS-03 model, face crop, 0.7 / 0.9 (CLS-05) | 5.3 % | 16.0 % | 0.880 / 0.343 |
+| CLS-07 model as shipped, face crop, 0.7 / 0.9 | 2.3 % | 73.3 % | 0.983 / 0.846 |
+
+Design (D-072):
+
+- Index (by hand, once): stream-filter `oidv7-train-annotations-human-imagelabels.csv` (2.6 GB, grouped by `ImageID`) for images with a positive "Mannequin" or "Doll" label, download the val and test image-level labels, keep the val and test "Human face" and "Doll" boxes and image metadata, and stream-filter `oidv6-train-images-with-labels-with-rotation.csv` for the selected train IDs (license, author, landing page), all into `data/openimages/index/`.
+- `tools/openimages.mjs`: `select`, `download`, `faces` (the app's Face Landmarker in Chromium headless on 256 px gray letterboxes, box-guided or whole image plus five tiles; region 2.4 × the face, ≤ 448 px, `face` in region coordinates, one subject per image), `sheets` (numbered contact sheets of the crop the classifier sees, `--split`), `label` (review results as `labelFinal`, logged to `data/openimages/review.log`), `reject`, `attribute`.
+- `tools/dataset`: `check` accepts `source: "openimages"` sessions with a `license` instead of `participantConsent` and requires `oi.imageId`; `split.py` checks leakage by subject for public sessions and assigns per sample; `stats.py` counts `unknown` lighting, `doll` and `unknown` mannequin types and a `source` dimension.
+- `tools/train`: `metrics.rates` adds `personAsMannequinRate`; `compress.py` keeps at most 250 real samples per class in the gate pack; `compress_select` skips fp32 ties (`tieBand` 0.01) in the argmax gate.
+- Review policy: real people found in "Mannequin" or "Doll" images become person; statues, wax figures and realistic sculptures are mannequin; prints, paintings, screens, cartoons, plush toys and masks are `unknown`. Every face of the mannequin and doll sessions and every person face of the test split was reviewed; the other person faces were spot-checked (4 to 10 % noise that leans toward person).
+- Model: MobileNetV3-small fine-tuned in full, 15 epochs, lr 5e-4, `--crop face`, epoch 7 by val balanced accuracy (0.939); export `int8+fp16w`, 2.34 MB; published to the `models` branch (commit `7a1581df`), `classifier.source` pinned.
+
+Steps: 1. index and selection; 2. download (1.37 GB) and face detection (3938 faces, about 0.3 s per image); 3. review (36 contact sheets) and split; 4. baseline of the CLS-03 model; 5. training, export, compression, evaluation, e2e; 6. D-072, documentation; 7. publishing: `npm run models:publish` on 2026-11-18 at the owner's request (`models` branch commit `7a1581df`).
+
+Done criteria: on the reviewed test split, people labeled mannequin below the CLS-05 baseline (5.3 %) and mannequin recall above it (16 %); `face.png` stays person ≥ 0.95 in the app; the hard gate audit stays clean.
+
+Not done: a webcam evaluation (the model has seen no webcam frame), a third class for prints and toys, silicone mannequins (none identifiable in the set), the section 7.3 target for mannequins (two-class precision 0.846, recall 0.733).
+
+Tests: section 7.44.
+
 ## 7. Mandatory test suite
 
 ### 7.1 Mapping the plan's test table to how it is carried out
@@ -2195,6 +2283,41 @@ After ROI-03 the quadrilateral is a special case of the convex hull (`polygon`):
 | Public build uses the model | `sw.spec` on CI: with a source set, the production build loads `classifier.onnx`; `classifierModel.spec` case 1 (the build default is `classifier.onnx`) runs on CI | deploy, e2e | REL-02 |
 | First publish | `npm run models:publish`; the raw URL returns the sha256 of `models.json`; `models:fetch` into an empty folder downloads it (2026-10-06) | manual | REL-02 |
 
+### 7.42 Face crop and asymmetric label tests (CLS-05)
+
+| Case | Expected | How | Package |
+|---|---|---|---|
+| Asymmetric rule | Unit `subjectRule`: person from 0.7 and one result; mannequin needs ≥ 0.9 and two results (`[0.2, 0.8]` is unknown `low-confidence`, one result at 0.95 is `few-results`); thresholds and minimum results overridable per label | unit | CLS-05 |
+| Smoothing | Unit `subjectSmoother`: mean per label over the same target within 1200 ms of the newest result, at most 4; a new target or time going backwards restarts; no reference kept to the caller's arrays | unit | CLS-05 |
+| Face crop | Unit `faceCrop`: the shared cases of `fixtures/face-crop-cases.json`; always integer and inside `cameraRect` over a sweep of positions and sizes; target is the largest full face, else the largest partial | unit | CLS-05 |
+| Builder sub-crop | Unit `restrictedFrame`: 1:1 read of the sub-crop from the video, clipped to `cameraRect`, holes padded relative to the sub-crop, no dataset tap, probe with `sub: true`, whole-region statistics unchanged; `CropMeta.face` in crop coordinates | unit | CLS-05 |
+| Python parity | `test_face_crop`: `face_crop_box` gives the same rects as the app on the shared cases (JS rounding), stays inside the image, `classifier_view` keeps the whole crop without a bbox; unit `trainParity`: `THRESHOLDS`, `FACE_CROP_SCALE`, normalization and pad gray of `tools/train` equal `config.ts`; `test_metrics`, `test_compress` with the per-class thresholds | unit (Python, Node) | CLS-05 |
+| Region path kept | `classify.spec` case 1 with `?clsCrop=region`: the CLS-02 assertions on the synthetic source | e2e | CLS-05 |
+| Face crop in the app | `classify.spec` (local `face.png`): `subject.crop` is `face`, the crop lies inside `cameraRect`, contains the face center, is smaller than the region, `subBuilds` > 0, confidence equals the max of the smoothed probabilities, gate audit clean | e2e | CLS-05 |
+| No face, no classification | `classify.spec`: a 10-cell window on the synthetic source sends nothing to the classifier in 2 s | e2e | CLS-05 |
+| Trained model on a large window | `classifierModel.spec` (local model and `face.png`): in a 24-cell window the face crop gives p(person) ≥ 0.95 and labels every result person, at least the region crop's value | e2e | CLS-05 |
+
+### 7.43 Blink liveness tests (CLS-06)
+
+| Case | Expected | How | Package |
+|---|---|---|---|
+| Detector | Unit `blinkLiveness`: open → closed → open within 500 ms is one blink, live for 10 s; a still open face never; noise between the thresholds, a long closure, a closure before any open do not count; a new target or time going backwards resets | unit | CLS-06 |
+| Text | Unit `blinkLiveness`: "Người · chớp mắt" without a percentage, English "Person · blinked", the flag only applies to person | unit | CLS-06 |
+| Still face | `classify.spec` (local `face.png`): `eyesClosed` is present and the face is never `live` | e2e | CLS-06 |
+| Simulated blink | `classify.spec`: `face.png` sits below the open threshold, `blink(300)` counts a blink, the face becomes person with `live`, the guidance says "chớp mắt"; closing the region resets the detector | e2e | CLS-06 |
+
+### 7.44 Open Images data and retrained model tests (CLS-07)
+
+| Case | Expected | How | Package |
+|---|---|---|---|
+| Public sessions | `test_dataset`: a session with `source: "openimages"` needs a `license`, not `participantConsent`, and every sample needs `oi.imageId` | unit (Python) | CLS-07 |
+| Split of public sessions | `split.py` on the Open Images sessions: subjects (images) never cross splits, each sample goes to its own subject's split (a public session spans train, val and test) | manual run, `splits.json` per session | CLS-07 |
+| People as mannequins | `test_metrics`: `personAsMannequinRate` counts real people labeled mannequin | unit (Python) | CLS-07 |
+| Compression gate | `test_compress`: an argmax change at a 0.52 → 0.48 output still fails; an fp32 tie (0.501 → 0.499) is skipped (`nTies`) and passes | unit (Python) | CLS-07 |
+| Reviewed test split | `eval.py --split test --crop face` and the confusion matrix of classifier-report section 5.4: people → mannequin 2.3 %, mannequins recognized 73.3 % with the shipped model | manual run | CLS-07 |
+| Model in the app | `classifierModel.spec` (local model and `face.png`): person 1.000 on the face crop and on the 24-cell region crop, wasm, gate audit clean | e2e | CLS-07 |
+| Publishing | Unit `classifierSource` failed while `models.json` named the new sha256 with the CLS-03 source and passes after `npm run models:publish`; the raw URL returns sha256 `d33781a8…`; `models:fetch` reports the local file as matching (2026-11-18) | unit, manual | CLS-07, REL-02 |
+
 ## 8. Handover
 
 - Web source, static build, run and configuration guide.
@@ -2219,8 +2342,10 @@ export const DEFAULTS = {
   hands: { numHands: 2, fingers: [4, 8, 12, 16, 20], minHands: 2, matchCostMax: 0.15, ambiguityDelta: 0.03, trackDropMs: 600, trackDropFrames: 2,
            handednessPenalty: 0.1, relabelFrames: 3, minTrackScore: 0.5, delegate: 'auto', handednessSwap: false },
   freshness: { pointMaxAgeMs: 600, pointMaxAgeMsCpu: 600, faceResultMaxAgeMs: 250 },  // 600 since UX-05 (D-059); D-045 had 150 / 250
-  face: { minRoiPx: 64, inputSize: 256, padGray: 128, numFaces: 2, targetHz: 12, fullFaceMarginRatio: 0.04 },
-  classifier: { targetHz: 4, unknownThreshold: 0.7, minRoiPx: 96,  // EP: wasm only since PERF-03 (D-062; D-013 had ['webgpu', 'wasm'])
+  face: { minRoiPx: 64, inputSize: 256, padGray: 128, numFaces: 2, targetHz: 12, fullFaceMarginRatio: 0.04,
+          liveness: { enabled: true, openMax: 0.3, closedMin: 0.5, maxClosedMs: 500, holdMs: 10000 } },  // CLS-06 (D-071)
+  classifier: { targetHz: 4, thresholds: { person: 0.7, mannequin: 0.9 }, minResults: { person: 1, mannequin: 2 }, minRoiPx: 96,  // CLS-05 (D-069; CLS-02 had unknownThreshold 0.7); EP: wasm only since PERF-03 (D-062)
+                smoothing: { windowMs: 1200, maxResults: 4 }, crop: 'face', faceCropScale: 1.6,  // CLS-05 (D-070)
                 resultMaxAgeMs: 600, labelMaxAgeMs: 1500, partialMinVisible: 0.6,
                 stubPath: '/models/classifier-stub.onnx', trainedPath: '/models/classifier.onnx' },  // modelPath = trainedPath when the build has a matching model (CLS-03, D-061)
   brand: { logo: { enabled: true, widthRatio: 0.3, maxHeightRatio: 0.6, marginRatio: 0.025, anchor: 'top-left', snapMaxWidthRatio: 0.5, textLength: 268 } },  // BRAND-01 (D-056 to D-058)

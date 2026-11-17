@@ -15,14 +15,16 @@ import {
 // CLS-02 (mục 7.23, I1, mục 5.11): worker phân loại (ONNX Runtime Web, model stub D-044) trên nguồn tổng hợp: chỉ nhận
 // buffer giới hạn khi vùng mở và cạnh ROI ≥ 96 px, nhịp 3 đến 5 Hz; xanh lá → person, magenta → mannequin, đóng vùng
 // thì nhãn xóa và không gửi thêm; nhãn không đổi khi cảnh chuyển động (không dùng chuyển động). Phần gắn nhãn vào
-// mặt chạy cục bộ với public/spike-assets/face.png.
+// mặt chạy cục bộ với public/spike-assets/face.png. CLS-05 (D-070, mục 7.42): mặc định classifier nhìn crop quanh mặt;
+// ca đầu (nguồn tổng hợp không có mặt) ghim `clsCrop=region` để giữ kiểm đường của CLS-02. CLS-06 (D-071, mục 7.43):
+// chớp mắt giả lập (kịch bản blink) trên face.png cho nhãn "Người · chớp mắt".
 const FACE_FILE = 'public/spike-assets/face.png'
 const FACE_SRC = '/spike-assets/face.png'
 
-async function openSynthetic(page: Page) {
+async function openSynthetic(page: Page, extra = '') {
   await installGumCounter(page)
   await seedConsent(page)
-  await openApp(page, '?debug=1&source=synthetic')
+  await openApp(page, `?debug=1&source=synthetic${extra}`)
   await expect(page.locator('canvas#stage')).toBeVisible()
   const st = await readStage(page)
   await installGateAudit(page)
@@ -59,7 +61,7 @@ test('worker phân loại: sẵn sàng (wasm, D-062), đóng thì không gửi; 
   page,
 }) => {
   test.setTimeout(180_000)
-  const st = await openSynthetic(page)
+  const st = await openSynthetic(page, '&clsCrop=region')
   await waitFaceReady(page)
   // Chưa mở vùng: worker phân loại chưa khởi tạo (lười), không gửi gì.
   const c0 = await readCls(page)
@@ -171,15 +173,13 @@ test('worker phân loại: sẵn sàng (wasm, D-062), đóng thì không gửi; 
   await expectGateClean(page)
 })
 
-test('nhãn gắn vào mặt đã validate (face.png cục bộ): cùng epoch, subjectType theo quy tắc, xóa khi đóng', async ({
-  page,
-}) => {
-  test.skip(!existsSync(FACE_FILE), `thiếu ${FACE_FILE} (asset spike cục bộ, không commit)`)
-  test.setTimeout(180_000)
-  const st = await openSynthetic(page)
-  // Như faceGate.spec: ảnh 958 × 1358 vẽ tỉ lệ 0,5 tại IMG trên nền magenta; mặt khoảng FACE_CAM (px camera).
-  const IMG = { x: 400, y: 20, w: 479, h: 679 }
-  const FACE_CAM = { x: 560, y: 70, w: 170, h: 210 }
+// Như faceGate.spec: ảnh 958 × 1358 vẽ tỉ lệ 0,5 tại IMG trên nền magenta; mặt khoảng FACE_CAM (px camera).
+const IMG = { x: 400, y: 20, w: 479, h: 679 }
+const FACE_CAM = { x: 560, y: 70, w: 170, h: 210 }
+
+/** Cảnh face.png và cửa sổ chuột N ô quanh mặt; chờ worker mặt và classifier sẵn sàng. */
+async function openFaceWindow(page: Page, N = 16, extra = '') {
+  const st = await openSynthetic(page, extra)
   await page.evaluate(
     ([src, img]) => window.__scenario!.scene({ person: null, face: { src, ...img } }),
     [FACE_SRC, IMG] as const,
@@ -189,7 +189,6 @@ test('nhãn gắn vào mặt đã validate (face.png cục bộ): cùng epoch, s
   const center = { x: FACE_CAM.x + FACE_CAM.w / 2, y: FACE_CAM.y + FACE_CAM.h / 2 }
   const sx = (st.settings.mirror ? L.cam.w - center.x : center.x) * L.scale + L.board.x
   const sy = center.y * L.scale + L.board.y
-  const N = 16
   const clamp = (v: number, hi: number) => Math.max(0, Math.min(hi, v))
   const col = clamp(Math.round((sx - L.board.x) / L.c - N / 2), L.cols - N)
   const row = clamp(Math.round((sy - L.board.y) / L.c - N / 2), L.rows - N)
@@ -198,39 +197,156 @@ test('nhãn gắn vào mặt đã validate (face.png cục bộ): cùng epoch, s
     [col, row, N],
   )
   await waitClassifierReady(page)
-  // Đọc ngay trong trang theo rAF tới khi cùng một snapshot có mặt và nhãn: mặt chỉ được giữ 1 s sau mỗi kết quả nên
-  // hai vòng poll từ Node có thể lệch nhau dưới tải của cả bộ e2e.
-  const l = await page.evaluate(
-    () =>
+}
+
+type Box = { x: number; y: number; w: number; h: number }
+
+/**
+ * Đọc ngay trong trang theo rAF tới khi cùng một snapshot có mặt và nhãn của ít nhất `minAccepted` kết quả: mặt chỉ được
+ * giữ 1 s sau mỗi kết quả nên hai vòng poll từ Node có thể lệch nhau dưới tải của cả bộ e2e.
+ */
+function readFaceWithLabel(page: Page, minAccepted: number) {
+  return page.evaluate(
+    (min) =>
       new Promise<{
         epoch: number
-        subject: { epoch: number; probs: number[] } | null
-        face: { status: string; subjectType: string; confidence?: number; visible: number } | null
+        mask: Box
+        subject: {
+          epoch: number
+          probs: number[]
+          raw: number[]
+          count: number
+          roiCam: Box
+          crop: string
+        }
+        face: {
+          status: string
+          subjectType: string
+          confidence?: number
+          visible: number
+          bboxCam: Box
+          eyesClosed?: number
+          live?: boolean
+        }
+        subBuilds: number
       }>((resolve, reject) => {
         const t0 = performance.now()
         const poll = () => {
           const s = window.__wct!.loop!.snapshot()
           const face = s.output.faces[0]
-          if (face && s.subject && s.classifyGate.accepted >= 2)
-            return resolve({ epoch: s.epoch, subject: s.subject, face })
+          if (face && s.subject && s.mask && s.classifyGate.accepted >= min)
+            return resolve({
+              epoch: s.epoch,
+              mask: s.mask.cameraRect,
+              subject: s.subject,
+              face,
+              subBuilds: s.restricted?.subBuilds ?? 0,
+            })
           if (performance.now() - t0 > 90_000)
             return reject(new Error('hết 90 s chờ mặt có nhãn trong cùng snapshot'))
           requestAnimationFrame(poll)
         }
         poll()
       }),
+    minAccepted,
   )
-  expect(l.face).not.toBeNull()
-  expect(['person', 'mannequin', 'unknown']).toContain(l.face!.subjectType)
-  expect(l.subject?.epoch).toBe(l.epoch)
-  // Stub: nhãn theo màu trung bình của crop; độ tin cậy = max(prob) của kết quả gần nhất khi có nhãn.
-  const maxProb = Math.max(...l.subject!.probs)
-  if (l.face!.subjectType !== 'unknown') expect(l.face!.confidence).toBeCloseTo(maxProb, 6)
+}
+
+test('nhãn gắn vào mặt đã validate (face.png cục bộ): crop quanh mặt trong cameraRect, cùng epoch, subjectType theo quy tắc, xóa khi đóng', async ({
+  page,
+}) => {
+  test.skip(!existsSync(FACE_FILE), `thiếu ${FACE_FILE} (asset spike cục bộ, không commit)`)
+  test.setTimeout(180_000)
+  await openFaceWindow(page)
+  const l = await readFaceWithLabel(page, 2)
+  expect(['person', 'mannequin', 'unknown']).toContain(l.face.subjectType)
+  expect(l.subject.epoch).toBe(l.epoch)
+  // CLS-05 (D-070): classifier nhìn crop vuông quanh mặt, nằm trọn trong cameraRect của mask, chứa tâm mặt; buffer
+  // của nó là crop con của builder.
+  const c = l.subject.roiCam
+  expect(l.subject.crop).toBe('face')
+  expect(l.subBuilds).toBeGreaterThan(0)
+  expect(c.x).toBeGreaterThanOrEqual(l.mask.x)
+  expect(c.y).toBeGreaterThanOrEqual(l.mask.y)
+  expect(c.x + c.w).toBeLessThanOrEqual(l.mask.x + l.mask.w)
+  expect(c.y + c.h).toBeLessThanOrEqual(l.mask.y + l.mask.h)
+  const b = l.face.bboxCam
+  const cx = b.x + b.w / 2
+  const cy = b.y + b.h / 2
+  expect(cx).toBeGreaterThanOrEqual(c.x)
+  expect(cx).toBeLessThanOrEqual(c.x + c.w)
+  expect(cy).toBeGreaterThanOrEqual(c.y)
+  expect(cy).toBeLessThanOrEqual(c.y + c.h)
+  expect(c.w * c.h).toBeLessThan(l.mask.w * l.mask.h)
+  // Stub: nhãn theo màu trung bình của crop; độ tin cậy = max của xác suất đã làm mượt khi có nhãn (CLS-05, D-069).
+  expect(l.subject.count).toBeGreaterThanOrEqual(1)
+  const maxProb = Math.max(...l.subject.probs)
+  if (l.face.subjectType !== 'unknown') expect(l.face.confidence).toBeCloseTo(maxProb, 6)
+  // CLS-06: ảnh tĩnh có điểm nhắm mắt (blendshapes) và không bao giờ là tín hiệu sống.
+  expect(l.face.eyesClosed).toBeDefined()
+  expect(l.face.live).toBeUndefined()
   await page.evaluate(() => window.__scenario!.run('coverAll'))
   await expect.poll(async () => (await readLoop(page)).output.faces.length).toBe(0)
   expect((await readLoop(page)).subject).toBeNull()
   note(
-    `mặt ${l.face!.status} (nhìn thấy ${(l.face!.visible * 100).toFixed(0)} %), subjectType ${l.face!.subjectType}, độ tin cậy ${(l.face!.confidence ?? 0).toFixed(3)}, probs ${l.subject!.probs.map((p) => p.toFixed(3)).join('/')}`,
+    `mặt ${l.face.status} (nhìn thấy ${(l.face.visible * 100).toFixed(0)} %), subjectType ${l.face.subjectType}, độ tin cậy ${(l.face.confidence ?? 0).toFixed(3)}, probs ${l.subject.probs.map((p) => p.toFixed(3)).join('/')} (gộp ${l.subject.count}), crop mặt ${c.w}×${c.h} tại (${c.x}, ${c.y}) trong vùng ${l.mask.w}×${l.mask.h}, điểm nhắm mắt ${(l.face.eyesClosed ?? -1).toFixed(3)}`,
+  )
+  await expectGateClean(page)
+})
+
+test('CLS-05: chế độ crop mặt không phân loại khi vùng mở không có mặt (nguồn tổng hợp), dù cửa sổ đủ lớn', async ({
+  page,
+}) => {
+  test.setTimeout(180_000)
+  const st = await openSynthetic(page)
+  await waitFaceReady(page)
+  await page.evaluate((c) => window.__scenario!.run(`windowAt(${c - 14},8,10)`), st.layout.cols)
+  await expect.poll(async () => (await readLoop(page)).reveal.kind).toBe('open')
+  await waitClassifierReady(page)
+  await page.waitForTimeout(2000)
+  const l = await readLoop(page)
+  const c = await readCls(page)
+  expect(l.output.faces).toHaveLength(0)
+  expect(c.stats.submitted).toBe(0)
+  expect(l.subject).toBeNull()
+  expect(l.restricted!.subBuilds).toBe(0)
+  note(
+    `vùng ${l.mask!.cameraRect.w}×${l.mask!.cameraRect.h} không mặt: gửi classifier ${c.stats.submitted}`,
+  )
+  await expectGateClean(page)
+})
+
+test('CLS-06: chớp mắt (kịch bản blink trên face.png) cho nhãn "Người · chớp mắt" bất kể classifier; đóng vùng xóa tín hiệu sống', async ({
+  page,
+}) => {
+  test.skip(!existsSync(FACE_FILE), `thiếu ${FACE_FILE} (asset spike cục bộ, không commit)`)
+  test.setTimeout(180_000)
+  await openFaceWindow(page)
+  const before = await readFaceWithLabel(page, 2)
+  // Ảnh tĩnh mắt mở: dưới ngưỡng mở 0,3 nên bộ phát hiện ở trạng thái open, chưa chớp.
+  expect(before.face.eyesClosed!).toBeLessThanOrEqual(0.3)
+  await expect.poll(async () => (await readLoop(page)).liveness.state).toBe('open')
+  const l0 = await readLoop(page)
+  expect(l0.liveness).toMatchObject({ enabled: true, live: false, blinks: 0 })
+  // Giả lập một lần chớp (frame trong 300 ms tới có điểm nhắm 1), rồi mắt mở lại theo ảnh thật.
+  await page.evaluate(() => window.__scenario!.run('blink(300)'))
+  await expect
+    .poll(async () => (await readLoop(page)).liveness.blinks, { timeout: 20_000 })
+    .toBeGreaterThanOrEqual(1)
+  await expect
+    .poll(async () => (await readLoop(page)).output.faces[0]?.live ?? false, { timeout: 10_000 })
+    .toBe(true)
+  const l1 = await readLoop(page)
+  expect(l1.liveness.live).toBe(true)
+  expect(l1.output.faces[0].subjectType).toBe('person')
+  await expect(page.getByTestId('guide')).toContainText('chớp mắt')
+  // Đóng vùng: epoch mới, không mang tín hiệu sống của lần mở trước sang lần mở sau (mục 5.10).
+  await page.evaluate(() => window.__scenario!.run('coverAll'))
+  await expect.poll(async () => (await readLoop(page)).reveal.kind).toBe('closed')
+  const closed = await readLoop(page)
+  expect(closed.liveness).toMatchObject({ live: false, blinks: 0, samples: 0 })
+  note(
+    `trước chớp: ${before.face.subjectType} (điểm nhắm mắt ${before.face.eyesClosed!.toFixed(3)}, probs ${before.subject.probs.map((p) => p.toFixed(3)).join('/')}); sau chớp: ${l1.output.faces[0].subjectType} live, ${l1.liveness.blinks} lần chớp`,
   )
   await expectGateClean(page)
 })

@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from metrics import apply_unknown_rule, by_group, meets_target, precision_recall, rates, render_markdown  # noqa: E402
+from metrics import THRESHOLDS, apply_unknown_rule, by_group, meets_target, precision_recall, rates, render_markdown  # noqa: E402
 
 
 def rec(label: str, pred: str, prob: float = 0.9, **extra) -> dict:
@@ -18,9 +18,15 @@ def rec(label: str, pred: str, prob: float = 0.9, **extra) -> dict:
 
 class MetricsTest(unittest.TestCase):
     def test_unknown_rule_matches_app(self) -> None:
+        self.assertEqual(THRESHOLDS, {"person": 0.7, "mannequin": 0.9})
         self.assertEqual(apply_unknown_rule([0.93, 0.07]), ("person", 0.93))
-        self.assertEqual(apply_unknown_rule([0.2, 0.8]), ("mannequin", 0.8))
+        # CLS-05 (D-069): hình nộm cần ≥ 0,9; 0,8 là chưa phân loại.
+        self.assertEqual(apply_unknown_rule([0.2, 0.8]), ("unknown", 0.8))
+        self.assertEqual(apply_unknown_rule([0.05, 0.95]), ("mannequin", 0.95))
         self.assertEqual(apply_unknown_rule([0.69, 0.31]), ("unknown", 0.69))
+        # Ngưỡng chung một số (cách CLS-02) vẫn dùng được.
+        self.assertEqual(apply_unknown_rule([0.2, 0.8], 0.7), ("mannequin", 0.8))
+        self.assertEqual(apply_unknown_rule([0.2, 0.8], {"person": 0.7, "mannequin": 0.75}), ("mannequin", 0.8))
         self.assertEqual(apply_unknown_rule([0.99, 0.01], roi_short_px=95), ("unknown", 0.99))
         self.assertEqual(apply_unknown_rule([0.99, 0.01], roi_short_px=96), ("person", 0.99))
 
@@ -44,6 +50,7 @@ class MetricsTest(unittest.TestCase):
         r = rates(records)
         self.assertEqual(r["n"], 9)
         self.assertAlmostEqual(r["mannequinAsPersonRate"], 1 / 3)
+        self.assertAlmostEqual(r["personAsMannequinRate"], 1 / 4)
         self.assertAlmostEqual(r["unknownRate"], 2 / 9)
 
     def test_target_and_groups_and_markdown(self) -> None:

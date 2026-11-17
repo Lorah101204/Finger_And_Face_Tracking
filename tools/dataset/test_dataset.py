@@ -112,6 +112,25 @@ class DatasetToolsTest(unittest.TestCase):
         self.assertEqual(len(all_samples(sessions)), 20)
         self.assertEqual(check(sessions), [])
 
+    def test_check_public_dataset_session_needs_license_not_consent(self) -> None:
+        # CLS-07 (D-072): phiên Open Images không có phiếu đồng ý nhưng phải có license và nguồn ảnh của từng mẫu.
+        make_session(self.root, "ses-oi-mannequin-test", "oi-x", "mannequin", 2, consent=None)
+        sj = self.root / "ses-oi-mannequin-test" / "session.json"
+        meta = json.loads(sj.read_text(encoding="utf-8"))
+        meta["source"] = "openimages"
+        sj.write_text(json.dumps(meta), encoding="utf-8")
+        joined = "\n".join(check(load_root(self.root)))
+        self.assertNotIn("participantConsent", joined)
+        self.assertIn("thiếu license", joined)
+        self.assertIn("thiếu oi.imageId", joined)
+        meta["license"] = "CC BY 2.0 per image"
+        sj.write_text(json.dumps(meta), encoding="utf-8")
+        for j in (self.root / "ses-oi-mannequin-test").glob("ses-oi-*.json"):
+            m = json.loads(j.read_text(encoding="utf-8"))
+            m["oi"] = {"imageId": "abc"}
+            j.write_text(json.dumps(m), encoding="utf-8")
+        self.assertEqual([e for e in check(load_root(self.root)) if "ses-oi" in e], [])
+
     def test_check_detects_full_frame_missing_consent_and_orphans(self) -> None:
         make_session(self.root, "ses-x1", "S-9", "person", 2, full_frame=True, consent=False)
         (self.root / "ses-x1" / "ses-x1-0002.png").unlink()

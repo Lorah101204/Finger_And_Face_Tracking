@@ -232,6 +232,7 @@ export const en: Strings = {
     mannequin: 'Mannequin',
     unknown: 'Unclassified face',
     demo: ' · demo',
+    live: ' · blinked',
   },
   settings: {
     title: 'Settings',

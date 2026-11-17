@@ -77,10 +77,12 @@ export function validateFace(
       .filter((p) => stagePointInCells(p, mask, ctx.layout))
     faces.push({
       status,
+      bboxCam: bbox,
       bboxStage,
       landmarksStage,
       visible: pts.length ? landmarksStage.length / pts.length : 0,
       subjectType: 'unknown',
+      ...(f.blink ? { eyesClosed: Math.min(f.blink[0], f.blink[1]) } : {}),
     })
   }
   return { kind: 'ok', faces, dropped }

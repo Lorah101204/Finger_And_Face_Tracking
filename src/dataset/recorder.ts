@@ -59,6 +59,11 @@ export type SampleMeta = {
   edges: Edge[]
   grid: Size
   mirror: boolean
+  /**
+   * CLS-05 (D-070): bbox của mặt mà classifier nhìn lúc lưu, tọa độ theo crop của mẫu (có thể vượt mép crop); null khi
+   * chưa có mặt. tools/train (--crop face) dựng lại đúng crop vuông quanh mặt như app từ trường này.
+   */
+  face: Rect | null
 }
 
 export type Sample = { meta: SampleMeta; png: Blob }
@@ -265,6 +270,7 @@ export function createRecorder(opts: RecorderOptions): Recorder {
       edges,
       grid: { ...ctx.grid },
       mirror: ctx.mirror,
+      face: meta.face ? { ...meta.face } : null,
     }
     emit()
     opts

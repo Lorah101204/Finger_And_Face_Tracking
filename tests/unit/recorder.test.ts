@@ -27,6 +27,7 @@ const meta = (ts: number, patch: Partial<CropMeta> = {}): CropMeta => ({
   box: { w: 16, h: 16 },
   cells: 256,
   holes: 0,
+  face: null,
   ...patch,
 })
 

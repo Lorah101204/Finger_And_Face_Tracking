@@ -25,9 +25,23 @@ function create(
     baseOptions: { modelAssetPath: msg.modelPath, delegate },
     runningMode: 'IMAGE',
     numFaces: msg.numFaces,
-    outputFaceBlendshapes: false,
+    // CLS-06 (D-071): blendshapes chạy trên landmark của chính buffer giới hạn này; chỉ lấy hai điểm nhắm mắt.
+    outputFaceBlendshapes: msg.blendshapes === true,
     outputFacialTransformationMatrixes: false,
   })
+}
+
+/** CLS-06: [eyeBlinkLeft, eyeBlinkRight] của một mặt; thiếu (tắt blendshapes, model không trả) thì undefined. */
+function blinkOf(res: FaceLandmarkerResult, i: number): [number, number] | undefined {
+  const cats = res.faceBlendshapes?.[i]?.categories
+  if (!cats || cats.length === 0) return undefined
+  let left = -1
+  let right = -1
+  for (const c of cats) {
+    if (c.categoryName === 'eyeBlinkLeft') left = c.score
+    else if (c.categoryName === 'eyeBlinkRight') right = c.score
+  }
+  return left >= 0 && right >= 0 ? [left, right] : undefined
 }
 
 async function init(msg: FaceInitMessage): Promise<void> {
@@ -70,9 +84,13 @@ function toResult(frame: RestrictedFrame, res: FaceLandmarkerResult, inferMs: nu
     frameId: frame.frameId,
     ts: frame.ts,
     inferMs,
-    faces: res.faceLandmarks.map((lm) => ({
-      landmarksNorm: lm.map((p) => [p.x, p.y, p.z] as [number, number, number]),
-    })),
+    faces: res.faceLandmarks.map((lm, i) => {
+      const blink = blinkOf(res, i)
+      return {
+        landmarksNorm: lm.map((p) => [p.x, p.y, p.z] as [number, number, number]),
+        ...(blink ? { blink } : {}),
+      }
+    }),
   }
 }
 

@@ -121,6 +121,13 @@ export function StagePage() {
   const logoParam = searchParams.get('logo')
   // CLS-03 (D-061): `classifier=stub|model` đè model phân loại mặc định của build cho lần mở này (e2e ghim stub).
   const classifierParam = searchParams.get('classifier')
+  // CLS-05 (D-070): `clsCrop=face|region` đè chế độ crop của classifier cho lần mở này (so sánh; e2e của stub trên
+  // nguồn tổng hợp không có mặt dùng region); không có thì DEFAULTS.classifier.crop.
+  const clsCropParam = searchParams.get('clsCrop')
+  // CLS-06 (D-071): `liveness=0|1` tắt hay bật tín hiệu sống từ chớp mắt (blendshapes của worker mặt) cho lần mở này.
+  const livenessParam = searchParams.get('liveness')
+  const livenessOn =
+    livenessParam === '0' ? false : livenessParam === '1' ? true : DEFAULTS.face.liveness.enabled
   const [runtime] = useState(() => {
     setClassifierChoice(
       classifierParam === 'stub' || classifierParam === 'model' ? classifierParam : null,
@@ -155,8 +162,11 @@ export function StagePage() {
       },
     })
     const restricted = createRestrictedFrameBuilder({ probes, crops: recorder.tap })
-    const face = new FaceClient({ resultDelayMs: () => probes.workerDelayMs })
-    // CLS-02: worker phân loại (ONNX Runtime Web) nhận bitmap thứ hai của cùng crop, 3 đến 5 Hz.
+    const face = new FaceClient({
+      resultDelayMs: () => probes.workerDelayMs,
+      init: { blendshapes: livenessOn },
+    })
+    // CLS-02: worker phân loại (ONNX Runtime Web), 3 đến 5 Hz; CLS-05: nhận crop quanh mặt mục tiêu (mặc định).
     const classifier = new ClassifierClient()
     const hands = createHandPipeline({
       client: new HandClient({ init: { delegate: handDelegate } }),
@@ -188,6 +198,11 @@ export function StagePage() {
       face,
       hands,
       classifier,
+      classifierCrop:
+        clsCropParam === 'face' || clsCropParam === 'region'
+          ? clsCropParam
+          : DEFAULTS.classifier.crop,
+      liveness: livenessOn,
       gate: synthetic ? visibilityGate() : cameraGate(camera),
       lang: () => langStore.get(),
       logo: () => (logo.enabled ? logo : null),
@@ -535,6 +550,7 @@ export function StagePage() {
             ? {
                 subjectType: l.output.faces[0].subjectType,
                 confidence: l.output.faces[0].confidence,
+                live: l.output.faces[0].live,
               }
             : null,
         },

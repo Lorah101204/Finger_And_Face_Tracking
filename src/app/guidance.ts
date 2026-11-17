@@ -51,7 +51,7 @@ export type GuidanceInput = {
   /** Đầu ngón đã chọn (để nêu tên khi chưa thấy tay). */
   fingerConfig?: readonly FingerTip[]
   /** CLS-02 (UC-07): nhãn của mặt đầu tiên khi có; null khi không có mặt. */
-  subject?: { subjectType: SubjectType; confidence?: number } | null
+  subject?: { subjectType: SubjectType; confidence?: number; live?: boolean } | null
 }
 
 import { GUIDE_STEP_IDS, type GuidanceStep } from './guideSteps'

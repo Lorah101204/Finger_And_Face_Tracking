@@ -15,6 +15,8 @@ export type FaceInitMessage = {
   useModuleLoader: boolean
   /** Cạnh ảnh xám warm-up ngay sau init. */
   warmupSize: number
+  /** CLS-06 (D-071): xuất blendshapes để lấy eyeBlinkLeft/Right (tín hiệu sống); thiếu coi là false. */
+  blendshapes?: boolean
 }
 export type FaceDetectMessage = { type: 'detect'; frame: RestrictedFrame }
 export type FaceWorkerIn = FaceInitMessage | FaceDetectMessage

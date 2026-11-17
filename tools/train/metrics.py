@@ -13,19 +13,30 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 
 CLASSES = ("person", "mannequin")
-UNKNOWN_THRESHOLD = 0.7
+# CLS-05 (D-069): ngưỡng theo nhãn, bất đối xứng, bằng DEFAULTS.classifier.thresholds của app
+# (tests/unit/trainParity.test.ts đọc file này và so với src/core/config.ts).
+THRESHOLDS = {"person": 0.7, "mannequin": 0.9}
+UNKNOWN_THRESHOLD = THRESHOLDS["person"]
 
 
-def apply_unknown_rule(probs: list[float], threshold: float = UNKNOWN_THRESHOLD, roi_short_px: int | None = None,
-                       min_roi_px: int = 96) -> tuple[str, float]:
-    """Cùng quy tắc với src/classify/subjectRule.ts (không có phần mặt partial vì dataset không có landmark)."""
+def apply_unknown_rule(probs: list[float], threshold: float | dict[str, float] | None = None,
+                       roi_short_px: int | None = None, min_roi_px: int = 96) -> tuple[str, float]:
+    """Cùng quy tắc với src/classify/subjectRule.ts trên một ảnh (không có phần mặt partial vì dataset không có landmark).
+
+    `threshold` là dict theo nhãn (mặc định THRESHOLDS) hay một số chung cho mọi nhãn (cách của CLS-02). Số kết quả tối
+    thiểu và làm mượt (minResults, smoothing của app) là theo thời gian nên không áp cho từng mẫu: đánh giá coi mỗi mẫu
+    như một mặt đứng yên đủ lâu để gộp đủ kết quả của chính ảnh đó.
+    """
+    th = THRESHOLDS if threshold is None else threshold
     best = max(range(len(probs)), key=lambda i: probs[i])
     conf = probs[best]
     if roi_short_px is not None and roi_short_px < min_roi_px:
         return "unknown", conf
-    if conf < threshold:
+    label = CLASSES[best]
+    need = th.get(label, UNKNOWN_THRESHOLD) if isinstance(th, dict) else th
+    if conf < need:
         return "unknown", conf
-    return CLASSES[best], conf
+    return label, conf
 
 
 def precision_recall(records: list[dict]) -> dict[str, dict[str, float | int]]:
@@ -61,10 +72,14 @@ def precision_recall(records: list[dict]) -> dict[str, dict[str, float | int]]:
 def rates(records: list[dict]) -> dict[str, float | int | None]:
     mann = [r for r in records if r["label"] == "mannequin"]
     mann_as_person = sum(1 for r in mann if r["pred"] == "person")
+    # CLS-07: lỗi người dùng phản ánh (người thật bị gắn "Hình nộm"), tính riêng vì nó đắt hơn chiều ngược lại.
+    people = [r for r in records if r["label"] == "person"]
+    person_as_mann = sum(1 for r in people if r["pred"] == "mannequin")
     unknown = sum(1 for r in records if r["pred"] == "unknown")
     return {
         "n": len(records),
         "mannequinAsPersonRate": mann_as_person / len(mann) if mann else None,
+        "personAsMannequinRate": person_as_mann / len(people) if people else None,
         "unknownRate": unknown / len(records) if records else 0.0,
     }
 
@@ -109,7 +124,8 @@ def render_markdown(records: list[dict], title: str = "Test set") -> str:
         f"not measurable (no {', '.join(missing)} samples in this split)" if missing else "pass" if meets_target(pr) else "fail"
     )
     lines.append(f"Target ≥ 0.90 for both precision and recall of both classes: {verdict}. "
-                 f"Mannequins labelled as person: {fmt(rt['mannequinAsPersonRate'])}; unknown rate: {fmt(rt['unknownRate'])}.")
+                 f"People labelled as mannequin: {fmt(rt['personAsMannequinRate'])}; mannequins labelled as person: "
+                 f"{fmt(rt['mannequinAsPersonRate'])}; unknown rate: {fmt(rt['unknownRate'])}.")
     for key, label in (("sizeClass", "By window size"), ("position", "By position (edge cropping)"), ("mannequinType", "By mannequin type (silicone reported separately)")):
         groups = by_group(records, key)
         if len(groups) <= 1 and "?" in groups:

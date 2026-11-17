@@ -6,8 +6,11 @@ Model nén chỉ đổi cách LƯU trọng số (int8 theo kênh hay fp16 + Cast
 session, nên phép tính giống fp32 và sai khác chỉ đến từ việc làm tròn trọng số. Cổng so logits của model nén với fp32
 trên bộ đầu vào gồm mẫu thật, bản augment giữ lại (seed khác huấn luyện), ảnh spike ngoài dataset và ảnh trộn
 person ↔ mannequin (để xác suất đi qua ngưỡng 0,7 thay vì bão hòa ở 0 hay 1):
-- argmax khớp 100 %;
-- không lật nhãn hiển thị (quy tắc unknown 0,7 của app) trừ khi p của fp32 nằm trong ±0,01 quanh ngưỡng;
+- argmax khớp 100 % trên các đầu vào mà fp32 không hòa (CLS-07, D-072: hai xác suất đầu cách nhau quá 2 × tieBand
+  0,01; một đầu vào p 0,5015 → 0,4993 trong bộ 2057 đầu vào của dataset Open Images là tung đồng xu và hiển thị
+  "chưa phân loại" ở cả hai model, nên không còn chặn; p 0,52 → 0,48 vẫn chặn);
+- không lật nhãn hiển thị (quy tắc unknown của app: person 0,7, mannequin 0,9 từ CLS-05) trừ khi p của fp32 nằm trong
+  ±0,01 quanh ngưỡng của lớp thắng;
 - |Δp(person)| tối đa ≤ 0,02;
 - |Δ(l0 − l1)| tối đa ≤ 0,25 trên đầu vào giữ lại (thật, spike, trộn) và ≤ 0,5 trên bản augment.
 """
@@ -15,12 +18,16 @@ person ↔ mannequin (để xác suất đi qua ngưỡng 0,7 thay vì bão hòa
 from __future__ import annotations
 
 import math
+import sys
 from collections.abc import Sequence
+from pathlib import Path
 
-UNKNOWN_THRESHOLD = 0.7
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from metrics import CLASSES, THRESHOLDS, UNKNOWN_THRESHOLD  # noqa: E402
 
 GATES = {
     "argmax": 1.0,
+    "tieBand": 0.01,
     "flipBand": 0.01,
     "maxAbsDp": 0.02,
     "maxAbsDMarginHeld": 0.25,
@@ -36,10 +43,18 @@ def softmax(z: Sequence[float]) -> list[float]:
     return [v / s for v in e]
 
 
-def shown(probs: Sequence[float], threshold: float = UNKNOWN_THRESHOLD) -> int:
-    """Nhãn hiển thị như subjectRule của app (không xét cỡ ROI): -1 là unknown, không thì chỉ số lớp."""
+def threshold_of(probs: Sequence[float]) -> float:
+    """CLS-05: ngưỡng của lớp thắng (THRESHOLDS theo nhãn của metrics.py)."""
     best = max(range(len(probs)), key=lambda i: probs[i])
-    return -1 if probs[best] < threshold else best
+    return THRESHOLDS.get(CLASSES[best], UNKNOWN_THRESHOLD) if best < len(CLASSES) else UNKNOWN_THRESHOLD
+
+
+def shown(probs: Sequence[float], threshold: float | None = None) -> int:
+    """Nhãn hiển thị như subjectRule của app (không xét cỡ ROI): -1 là unknown, không thì chỉ số lớp. Thiếu `threshold`
+    thì dùng ngưỡng của lớp thắng (CLS-05)."""
+    best = max(range(len(probs)), key=lambda i: probs[i])
+    th = threshold_of(probs) if threshold is None else threshold
+    return -1 if probs[best] < th else best
 
 
 def agreement(
@@ -52,14 +67,19 @@ def agreement(
     g = {**GATES, **(gates or {})}
     if not (len(ref) == len(cand) == len(tags)):
         raise ValueError("ref, cand, tags phải cùng độ dài")
-    argmax = flips = 0
+    argmax = flips = ties = 0
     dp = dm_held = dm_aug = 0.0
     n_aug = n_border = 0
     for r, c, t in zip(ref, cand, tags):
         pr, pc = softmax(r), softmax(c)
-        argmax += int(max(range(len(pr)), key=lambda i: pr[i]) == max(range(len(pc)), key=lambda i: pc[i]))
-        in_band = abs(max(pr) - UNKNOWN_THRESHOLD) <= g["flipBand"]
-        n_border += int(abs(max(pr) - UNKNOWN_THRESHOLD) <= 0.15)
+        top = sorted(pr, reverse=True)
+        if len(top) > 1 and top[0] - top[1] <= 2 * g["tieBand"]:
+            ties += 1  # fp32 hòa: argmax là tung đồng xu, không tính (nhãn hiển thị vẫn được cổng lật nhãn kiểm)
+        else:
+            argmax += int(max(range(len(pr)), key=lambda i: pr[i]) == max(range(len(pc)), key=lambda i: pc[i]))
+        th = threshold_of(pr)
+        in_band = abs(max(pr) - th) <= g["flipBand"]
+        n_border += int(abs(max(pr) - th) <= 0.15)
         if shown(pr) != shown(pc) and not in_band:
             flips += 1
         dp = max(dp, abs(pc[0] - pr[0]))
@@ -75,7 +95,8 @@ def agreement(
         "nHeld": n - n_aug,
         "nAug": n_aug,
         "nBorderline": n_border,
-        "argmax": argmax / n if n else 0.0,
+        "argmax": argmax / (n - ties) if n > ties else 0.0,
+        "nTies": ties,
         "decisionFlips": flips,
         "maxAbsDp": dp,
         "maxAbsDMarginHeld": dm_held,
@@ -90,7 +111,7 @@ def passes(a: dict, gates: dict | None = None) -> tuple[bool, list[str]]:
     if a["argmax"] < g["argmax"]:
         why.append(f"argmax {a['argmax']:.4f} < {g['argmax']}")
     if a["decisionFlips"] > 0:
-        why.append(f"{a['decisionFlips']} lần lật nhãn hiển thị ngoài ±{g['flipBand']} quanh {UNKNOWN_THRESHOLD}")
+        why.append(f"{a['decisionFlips']} lần lật nhãn hiển thị ngoài ±{g['flipBand']} quanh ngưỡng {THRESHOLDS}")
     if a["maxAbsDp"] > g["maxAbsDp"]:
         why.append(f"max|Δp| {a['maxAbsDp']:.4f} > {g['maxAbsDp']}")
     if a["maxAbsDMarginHeld"] > g["maxAbsDMarginHeld"]:

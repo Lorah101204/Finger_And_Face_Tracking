@@ -89,6 +89,7 @@ const maskMirror = buildMask(windowShape({ col: 3, row: 4, n: 5 }), L, true, 1)
 const FACES = [
   {
     status: 'full' as const,
+    bboxCam: { x: 300, y: 200, w: 50, h: 40 },
     bboxStage: { x: 300.4, y: 200.6, w: 50, h: 40 },
     landmarksStage: [
       { x: 310.2, y: 210.7 },
@@ -99,6 +100,7 @@ const FACES = [
   },
   {
     status: 'partial' as const,
+    bboxCam: { x: 100, y: 100, w: 500, h: 400 },
     bboxStage: { x: 100, y: 100, w: 500, h: 400 },
     landmarksStage: [{ x: 320, y: 220 }],
     visible: 1,

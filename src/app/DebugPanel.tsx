@@ -100,10 +100,12 @@ export function DebugPanel({
   )
 
   // FACE-01 bước 5: thumbnail buffer vừa gửi (bằng chứng trực quan của I1), chỉ khi ?debug=1; putImageData, không
-  // drawImage. Listener này cũng là lý do probe đọc ngược ở nhịp mặc định (D-012, tối đa 2 Hz).
+  // drawImage. Listener này cũng là lý do probe đọc ngược ở nhịp mặc định (D-012, tối đa 2 Hz). CLS-05: chỉ buffer cả
+  // vùng của worker mặt; crop quanh mặt của classifier (meta.sub) không thay thumbnail.
   useEffect(() => {
     if (!probes.enabled) return
-    return probes.onRestrictedFrame((img) => {
+    return probes.onRestrictedFrame((img, meta) => {
+      if (meta.sub) return
       const c = thumbRef.current
       if (!c) return
       if (c.width !== img.width || c.height !== img.height) {
