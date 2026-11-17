@@ -1,0 +1,57 @@
+{
+  "file": "classifier-d33781a8831c.onnx",
+  "sha256": "d33781a8831c85827f5d70b935e556741af8c5a9925c0175a0aaeda9cf932a1a",
+  "bytes": 2339997,
+  "inputSize": 128,
+  "labels": [
+    "person",
+    "mannequin"
+  ],
+  "norm": {
+    "mean": 0.45,
+    "std": 0.225
+  },
+  "opset": 17,
+  "train": {
+    "backbone": "mobilenet_v3_small",
+    "epoch": 7,
+    "freeze": false,
+    "select": "val",
+    "crop": "face",
+    "valAcc": 0.9551971326164874,
+    "valBalancedAcc": 0.9387860082304527,
+    "samples": {
+      "train": {
+        "person": 2244,
+        "mannequin": 332
+      },
+      "val": {
+        "person": 486,
+        "mannequin": 72
+      }
+    },
+    "torch": "2.15.0+cpu"
+  },
+  "compression": {
+    "mode": "int8+fp16w",
+    "fp32Sha256": "b422a5c729b78ed704c1a191f2e490b14a3a95291f274e1595f4d29f3646c7ce",
+    "fp32Bytes": 6089235,
+    "layers": {
+      "int8": 6,
+      "fp16": 40
+    },
+    "agreement": {
+      "n": 2057,
+      "nHeld": 557,
+      "nAug": 1500,
+      "nBorderline": 955,
+      "argmax": 1,
+      "decisionFlips": 0,
+      "maxAbsDp": 0.0199,
+      "maxAbsDMarginHeld": 0.1149,
+      "maxAbsDMarginAug": 0.1264
+    }
+  },
+  "repoHead": "111341b5271e300ffe3914f3ef587cd5bf904a8d",
+  "publishedAt": "2026-11-17T19:21:58.358Z"
+}
